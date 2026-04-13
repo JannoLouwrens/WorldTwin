@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="description" content="WorldTwin — real-time global intelligence on a 3D globe. Weather, war, economy, resources, transit and more, from 38 live data sources.">
+<meta property="og:title" content="WorldTwin — State of the World, live.">
+<meta property="og:description" content="38 live data sources on a 3D globe. Weather, war, economy, resources, transit and more.">
+<meta property="og:type" content="website">
+<title>WorldTwin — State of the World</title>
+<link rel="preconnect" href="https://rsms.me/">
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN SYSTEM — tokens, type, panels, legend, motion
+   ============================================================ */
+:root {
+  /* Base palette */
+  --bg:         #05070d;
+  --surface-1:  #0e1320;
+  --surface-2:  #161d2e;
+  --surface-3:  #212a3f;
+  --border:     rgba(255,255,255,0.07);
+  --border-hi:  rgba(255,255,255,0.14);
+  --text-hi:    #f5f7fa;
+  --text-md:    #b8c1d1;
+  --text-lo:    #6b7790;
+  --accent:     #4cc2ff;
+  --glass:      rgba(14, 19, 32, 0.82);
+  --blur:       blur(14px);
+
+  /* Mode hues */
+  --mode-world:        #4cc2ff;
+  --mode-weather:      #7ad7ff;
+  --mode-nature:       #ff8c2a;
+  --mode-war:          #ef3b3b;
+  --mode-economy:      #f4c84a;
+  --mode-resources:    #9aa5b1;
+  --mode-gaming:       #a76bff;
+  --mode-sports:       #ffd23f;
+  --mode-social:       #34d399;
+  --mode-space:        #7c8cff;
+
+  /* Okabe-Ito categorical (commodity palette) */
+  --okabe-orange:   #E69F00;
+  --okabe-sky:      #56B4E9;
+  --okabe-green:    #009E73;
+  --okabe-yellow:   #F0E442;
+  --okabe-blue:     #0072B2;
+  --okabe-vermillion:#D55E00;
+  --okabe-purple:   #CC79A7;
+  --okabe-grey:     #999999;
+
+  /* Category (commodity-parent) colours */
+  --cat-energy:        #E69F00;
+  --cat-agri:          #009E73;
+  --cat-metals:        #D55E00;
+  --cat-tech:          #0072B2;
+  --cat-chemicals:     #CC79A7;
+  --cat-manufactures:  #56B4E9;
+  --cat-textiles:      #F0E442;
+  --cat-other:         #999999;
+
+  /* Fuel colours (power plants) */
+  --fuel-coal:         #3b3b3b;
+  --fuel-gas:          #56B4E9;
+  --fuel-oil:          #2a2a2a;
+  --fuel-nuclear:      #5eead4;
+  --fuel-hydro:        #3b82f6;
+  --fuel-solar:        #fbbf24;
+  --fuel-wind:         #a5f3fc;
+  --fuel-geothermal:   #f97316;
+  --fuel-biomass:      #84cc16;
+  --fuel-other:        #6b7790;
+
+  /* Spacing, radius, shadow */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --shadow-md: 0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); }
+body {
+  font-family: 'Inter', 'Inter var', -apple-system, system-ui, sans-serif;
+  color: var(--text-hi);
+  font-feature-settings: "tnum" 1, "cv11" 1, "ss01" 1;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+/* Hide Cesium default UI */
+.cesium-viewer-toolbar,
+.cesium-viewer-animationContainer,
+.cesium-viewer-timelineContainer,
+.cesium-viewer-fullscreenContainer,
+.cesium-viewer-selectionIndicatorContainer,
+.cesium-viewer-bottom,
+.cesium-credit-logoContainer,
+.cesium-credit-textContainer,
+.cesium-widget-credits { display: none !important; }
+.cesium-infoBox {
+  background: var(--glass) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--r-md) !important;
+  backdrop-filter: var(--blur) !important;
+  box-shadow: var(--shadow-md) !important;
+  max-height: 50vh !important;
+  overflow-y: auto !important;
+  top: 116px !important;
+  right: 16px !important;
+  max-width: 340px !important;
+  z-index: 130 !important;
+}
+.cesium-infoBox-title {
+  background: rgba(0,0,0,0.4) !important;
+  color: var(--text-hi) !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  padding: 10px 12px !important;
+  border-radius: var(--r-md) var(--r-md) 0 0 !important;
+  font-weight: 600 !important;
+}
+.cesium-infoBox-iframe { background: transparent !important; }
+
+#globe { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+
+/* ============================================================
+   BOOT SPLASH
+   ============================================================ */
+#boot {
+  position: fixed; inset: 0; z-index: 1000;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 800ms ease;
+}
+#boot.hidden { opacity: 0; pointer-events: none; }
+#boot .boot-inner {
+  text-align: center;
+  color: var(--text-md);
+}
+#boot .boot-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-hi);
+  margin-bottom: 6px;
+}
+#boot .boot-sub { font-size: 12px; text-transform: uppercase; letter-spacing: 0.2em; opacity: 0.6; }
+#boot .boot-spinner {
+  width: 40px; height: 40px;
+  border: 2px solid var(--border-hi);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 20px auto 0;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   MODE BAR — the 10 top-level modes
+   ============================================================ */
+.modes {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  gap: 4px;
+  background: linear-gradient(0deg, rgba(5,7,13,0.95), rgba(5,7,13,0.85));
+  padding: 6px 10px;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+  max-width: 96%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.modes::-webkit-scrollbar { display: none; }
+.mode {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--text-lo);
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+  min-width: 52px;
+}
+.mode:hover { background: rgba(255,255,255,0.04); color: var(--text-md); }
+.mode .ico { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+.mode .ico svg { width: 18px; height: 18px; stroke-width: 1.75; }
+.mode .ttl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8; }
+.mode.active { background: rgba(76,194,255,0.14); border-color: rgba(76,194,255,0.3); color: var(--text-hi); }
+.mode.active .ttl { opacity: 1; }
+
+.mode[data-mode="world"].active     { background: rgba(76,194,255,0.14);  border-color: rgba(76,194,255,0.3);  color: var(--text-hi); }
+.mode[data-mode="weather"].active   { background: rgba(122,215,255,0.14); border-color: rgba(122,215,255,0.3); color: #e0f4ff; }
+.mode[data-mode="nature"].active    { background: rgba(255,140,42,0.14);  border-color: rgba(255,140,42,0.35); color: #ffd9b3; }
+.mode[data-mode="war"].active       { background: rgba(239,59,59,0.14);   border-color: rgba(239,59,59,0.35);  color: #ffb3b3; }
+.mode[data-mode="economy"].active   { background: rgba(244,200,74,0.14);  border-color: rgba(244,200,74,0.35); color: #ffebb3; }
+.mode[data-mode="energy"].active     { background: rgba(250,204,21,0.15);  border-color: rgba(250,204,21,0.35); color: #fef08a; }
+.mode[data-mode="resources"].active { background: rgba(154,165,177,0.18); border-color: rgba(154,165,177,0.4); color: #e8edf3; }
+.mode[data-mode="health"].active    { background: rgba(6,182,212,0.15);  border-color: rgba(6,182,212,0.35);  color: #bef6ff; }
+.mode[data-mode="gaming"].active    { background: rgba(167,107,255,0.15); border-color: rgba(167,107,255,0.35); color: #e0cfff; }
+.mode[data-mode="sports"].active    { background: rgba(255,210,63,0.14);  border-color: rgba(255,210,63,0.35); color: #ffeeb3; }
+.mode[data-mode="social"].active    { background: rgba(52,211,153,0.14);  border-color: rgba(52,211,153,0.35); color: #bdf6dc; }
+.mode[data-mode="space"].active     { background: rgba(124,140,255,0.15); border-color: rgba(124,140,255,0.35); color: #c8d2ff; }
+
+/* ============================================================
+   LEGEND STRIP — always-on bottom-centre capsule
+   ============================================================ */
+.legend-strip {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 16px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-md);
+  font-size: 11px;
+  color: var(--text-md);
+  max-width: min(720px, 92vw);
+}
+.legend-strip .lg-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  box-shadow: 0 0 10px currentColor;
+}
+.legend-strip .lg-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--text-hi);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.legend-strip .lg-ramp {
+  width: 200px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg, #1e3a8a, #2563eb, #06b6d4, #84cc16, #fde047, #fb923c, #ef4444);
+  flex-shrink: 0;
+}
+.legend-strip .lg-min, .legend-strip .lg-max {
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  color: var(--text-lo);
+  white-space: nowrap;
+}
+.legend-strip .lg-freshness {
+  font-size: 10px;
+  color: var(--text-lo);
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   LEGEND CARD — top-right dismissable explainer
+   ============================================================ */
+.legend-card {
+  position: fixed;
+  top: 90px;
+  right: 16px;
+  z-index: 80;
+  width: 300px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  backdrop-filter: var(--blur);
+  padding: 16px;
+  box-shadow: var(--shadow-md);
+  color: var(--text-md);
+  font-size: 12px;
+  line-height: 1.5;
+  display: none;
+}
+.legend-card.show { display: block; animation: slideInRight 240ms ease; }
+@keyframes slideInRight { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+.legend-card h3 {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-hi);
+  margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+}
+.legend-card h3 .close { margin-left: auto; cursor: pointer; opacity: 0.4; font-size: 16px; }
+.legend-card h3 .close:hover { opacity: 1; }
+.legend-card .lg-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 11px; }
+.legend-card .lg-row .swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+.legend-card .lg-row .swatch.round { border-radius: 50%; }
+.legend-card .lg-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.legend-card .lg-section-label {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+  opacity: 0.5; margin-bottom: 6px;
+}
+.legend-card .attribution { font-size: 9px; opacity: 0.5; margin-top: 8px; }
+
+/* ============================================================
+   COUNTRY CARD — opens on country click (right side)
+   ============================================================ */
+.country-card {
+  position: fixed;
+  top: 90px;
+  right: 16px;
+  z-index: 85;
+  width: 340px;
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--glass);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r-md);
+  backdrop-filter: var(--blur);
+  padding: 18px;
+  box-shadow: var(--shadow-md);
+  display: none;
+}
+.country-card.show { display: block; animation: slideInRight 240ms ease; }
+.country-card .cc-close {
+  position: absolute; top: 12px; right: 14px;
+  cursor: pointer; opacity: 0.5; font-size: 18px;
+  background: none; border: none; color: var(--text-md);
+}
+.country-card .cc-close:hover { opacity: 1; }
+.country-card .cc-flag { font-size: 2rem; margin-bottom: 6px; line-height: 1; }
+.country-card .cc-name {
+  font-size: 18px; font-weight: 700; color: var(--text-hi);
+  letter-spacing: -0.01em; margin-bottom: 2px;
+}
+.country-card .cc-subtitle {
+  font-size: 10px; color: var(--text-lo); text-transform: uppercase;
+  letter-spacing: 0.1em; margin-bottom: 14px;
+}
+.country-card .cc-section {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.country-card .cc-section-title {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-md); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.country-card .cc-kpis {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  margin-bottom: 8px;
+}
+.country-card .cc-kpi {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+}
+.country-card .cc-kpi .label { font-size: 9px; text-transform: uppercase; color: var(--text-lo); letter-spacing: 0.1em; }
+.country-card .cc-kpi .value { font-size: 14px; font-weight: 600; color: var(--text-hi); font-variant-numeric: tabular-nums; }
+.country-card .cc-list { font-size: 11px; }
+.country-card .cc-list .row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+.country-card .cc-list .row .swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.country-card .cc-list .row .name { flex: 1; color: var(--text-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.country-card .cc-list .row .val { color: var(--text-hi); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 11px; }
+.country-card .cc-bar {
+  height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden;
+  margin-top: 3px;
+}
+.country-card .cc-bar .fill { height: 100%; transition: width 300ms ease; }
+
+/* Power mix donut / list */
+.country-card .fuel-list .row .swatch { border-radius: 50%; }
+
+/* ============================================================
+   COMMODITY FILTER — top-left panel on Resources mode
+   ============================================================ */
+.commodity-panel {
+  position: fixed;
+  top: 90px;
+  left: 16px;
+  z-index: 85;
+  width: 280px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  backdrop-filter: var(--blur);
+  padding: 14px;
+  box-shadow: var(--shadow-md);
+  display: none;
+}
+.commodity-panel.show { display: block; animation: slideInLeft 240ms ease; }
+@keyframes slideInLeft { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+.commodity-panel h3 {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-hi); margin-bottom: 8px;
+}
+.commodity-panel .cp-search {
+  width: 100%;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 7px 10px;
+  font-size: 11px;
+  color: var(--text-hi);
+  margin-bottom: 10px;
+  font-family: inherit;
+}
+.commodity-panel .cp-search:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.commodity-panel .cp-cat {
+  margin-top: 10px;
+}
+.commodity-panel .cp-cat-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--text-md); margin-bottom: 6px;
+  padding: 4px 0;
+}
+.commodity-panel .cp-cat-head .dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+}
+.commodity-panel .cp-items { display: flex; flex-wrap: wrap; gap: 4px; }
+.commodity-panel .cp-item {
+  font-size: 10px;
+  padding: 5px 9px;
+  border-radius: 14px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  color: var(--text-md);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.commodity-panel .cp-item:hover { background: var(--surface-2); color: var(--text-hi); }
+.commodity-panel .cp-item.active {
+  background: var(--accent);
+  color: #061018;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.commodity-panel .cp-all {
+  width: 100%;
+  padding: 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-md);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+.commodity-panel .cp-all.active { background: var(--accent); color: #061018; }
+
+/* ============================================================
+   TICKER STRIP — bottom of Economy / Resources modes
+   ============================================================ */
+.ticker-strip {
+  position: fixed;
+  top: 72px;
+  left: 0; right: 0;
+  z-index: 70;
+  background: rgba(0,0,0,0.55);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: var(--blur);
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--text-md);
+  display: none;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ticker-strip.show { display: block; }
+.ticker-strip .ticker-inner {
+  display: inline-block;
+  animation: tickerScroll 80s linear infinite;
+  padding-left: 100%;
+}
+.ticker-strip .ticker-item {
+  display: inline-block;
+  margin-right: 36px;
+  font-variant-numeric: tabular-nums;
+}
+.ticker-strip .ticker-item .sym {
+  font-weight: 700;
+  color: var(--text-hi);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.ticker-strip .ticker-item .px {
+  color: var(--text-hi);
+  margin-left: 6px;
+}
+.ticker-strip .ticker-item .unit {
+  color: var(--text-lo);
+  margin-left: 3px;
+  font-size: 9px;
+}
+@keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+/* ============================================================
+   HELP BUTTON (bottom-left)
+   ============================================================ */
+.help-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 90;
+  width: 36px; height: 36px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  backdrop-filter: var(--blur);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-md);
+  font-size: 16px;
+  box-shadow: var(--shadow-md);
+}
+.help-btn:hover { color: var(--text-hi); }
+
+/* ============================================================
+   LOADING INDICATOR (bottom-right)
+   ============================================================ */
+.loading {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 90;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  backdrop-filter: var(--blur);
+  font-size: 10px;
+  color: var(--text-lo);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.loading.show { opacity: 1; }
+.loading .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+/* ============================================================
+   KPI BADGES (mode-dependent, top-right of globe area)
+   ============================================================ */
+.kpi-row {
+  position: fixed;
+  top: 72px;
+  left: 16px;
+  z-index: 75;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+.kpi-row .kpi {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 12px;
+  font-size: 10px;
+  color: var(--text-md);
+  backdrop-filter: var(--blur);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-row .kpi strong { color: var(--text-hi); font-weight: 600; }
+.kpi-row .kpi.glow { box-shadow: 0 0 12px rgba(76,194,255,0.3); }
+
+/* ============================================================
+   MAPMODE BAR — EU4-style mapmode selector (top of screen)
+   ============================================================ */
+.mmbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 96;
+  height: 32px;
+  background: linear-gradient(180deg, rgba(5,7,13,0.95), rgba(5,7,13,0.8));
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: var(--blur);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mmbar::-webkit-scrollbar { display: none; }
+.mmbar .mmbar-label {
+  flex-shrink: 0;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+  margin-right: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-hi);
+}
+.mmbar-btn {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--text-lo);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 160ms ease;
+}
+.mmbar-btn:hover { background: rgba(255,255,255,0.04); color: var(--text-md); }
+.mmbar-btn.active {
+  background: rgba(76,194,255,0.14);
+  border-color: rgba(76,194,255,0.35);
+  color: var(--text-hi);
+}
+
+/* ============================================================
+   LAYER TOGGLE BAR — all layers as selectable icons (top strip)
+   ============================================================ */
+#layerToggles {
+  position: fixed;
+  top: 32px; left: 0; right: 0;
+  z-index: 95;
+  height: 26px;
+  background: linear-gradient(180deg, rgba(5,7,13,0.88), rgba(5,7,13,0.7));
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 1px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#layerToggles::-webkit-scrollbar { display: none; }
+.lt-label {
+  flex-shrink: 0;
+  padding-right: 8px;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-lo);
+}
+.lt-sep {
+  flex-shrink: 0;
+  color: var(--border);
+  font-size: 10px;
+  padding: 0 3px;
+}
+.lt-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-lo);
+  font-size: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 120ms ease;
+}
+.lt-btn:hover { background: rgba(255,255,255,0.04); color: var(--text-md); }
+.lt-btn.lt-active {
+  background: rgba(94,234,212,0.12);
+  border-color: rgba(94,234,212,0.3);
+  color: var(--text-hi);
+}
+.lt-ico { font-size: 11px; }
+.lt-name { font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Phase 2 cleanup: this block was dead code — later overrides at line 735+
+   won the cascade. Removed to reduce confusion. Phase 7 will replace the whole
+   !important stacking system with a proper chrome grid. */
+
+/* ============================================================
+   NARRATIVE STRIP — "Editor's desk" above the events ticker
+   ============================================================ */
+.narrative-strip {
+  position: fixed;
+  top: 36px;
+  left: 0; right: 0;
+  z-index: 94;
+  height: 32px;
+  background: linear-gradient(180deg, rgba(5,7,13,0.92), rgba(5,7,13,0.7));
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: var(--blur);
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-md);
+  overflow: hidden;
+}
+.narrative-strip .ns-label {
+  flex-shrink: 0;
+  padding: 0 14px;
+  border-right: 1px solid var(--border);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 9px;
+  font-weight: 700;
+  color: #5eead4;
+  background: rgba(94,234,212,0.04);
+}
+.narrative-strip .ns-text {
+  flex: 1;
+  padding: 0 14px;
+  color: var(--text-md);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.narrative-strip .ns-text:hover { color: var(--text-hi); }
+.narrative-expanded {
+  position: fixed;
+  top: 116px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 145;
+  width: min(700px, 92vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  backdrop-filter: var(--blur);
+  padding: 18px 22px;
+  box-shadow: var(--shadow-md);
+  display: none;
+  font-size: 13px;
+  color: var(--text-md);
+  line-height: 1.6;
+}
+.narrative-expanded.show { display: block; animation: slideInRight 240ms ease; }
+.narrative-expanded h4 {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #5eead4;
+  margin: 12px 0 4px;
+}
+.narrative-expanded h4:first-child { margin-top: 0; }
+.narrative-expanded .ne-close {
+  position: absolute; top: 10px; right: 14px;
+  cursor: pointer; opacity: 0.5; font-size: 18px;
+}
+
+/* ============================================================
+   MASTER LAYOUT — single source of truth for all panel positions.
+   Verified against 9-scenario Puppeteer overlap test.
+
+   TOP (4 compact rows, 110px total):
+     mmbar:           0  → 32    (mapmode selector)
+     layerToggles:   32  → 58    (all-layer icon strip)
+     narrative:      58  → 84    (Gemini analyst)
+     events-ticker:  84  → 110   (live events)
+
+   GLOBE fills middle.
+
+   LEFT RAIL:  planet-rail at left:12, vertically centered (~60px wide)
+   RIGHT RAIL: panels at right:16
+
+   BOTTOM STACK (from bottom up):
+     modes:         bottom: 0    (h≈58)     — World/Weather/Nature/...
+     legend-strip:  bottom: 62   (h≈32)     — colour ramp, centered
+     kpi-row:       bottom: 62   (left:80)  — stats, right of planet rail
+     ticker-strip:  bottom: 96   (h≈28)     — commodity ticker, above legend
+
+   LEFT PANELS (commodity/pulse) start at left:80 to clear planet rail.
+   BOTTOM-LEFT panels (diagnostics/help) also clear planet rail.
+   ============================================================ */
+.narrative-strip { top: 58px !important; height: 26px !important; }
+.events-ticker   { top: 84px !important; height: 26px !important; }
+.modes           { bottom: 0 !important; top: auto !important; }
+.legend-strip    { bottom: 62px !important; }
+.kpi-row         { top: auto !important; bottom: 62px !important; left: 96px !important; max-height: 36px !important; overflow: hidden !important; max-width: 400px !important; }
+.ticker-strip    { top: auto !important; bottom: 100px !important; left: 96px !important; max-width: 500px !important; }
+.commodity-panel { top: 120px !important; left: 96px !important; bottom: 140px !important; max-height: none !important; overflow-y: auto !important; }
+.legend-card, .country-card, .body-card { top: 120px !important; }
+.pulse-panel     { top: 120px !important; left: 96px !important; }
+.layer-browser   { top: 110px !important; }
+.help-btn        { bottom: 68px !important; left: 14px !important; }
+#diagnostics     { bottom: 68px !important; left: 96px !important; }
+
+/* ============================================================
+   LAYER BROWSER — right-side individual toggle panel (press L)
+   ============================================================ */
+.layer-browser {
+  position: fixed;
+  top: 60px;
+  right: 12px;
+  bottom: 60px;
+  width: 340px;
+  z-index: 140;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-md);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.layer-browser.show { display: flex; animation: slideInRight 240ms ease; }
+.layer-browser .lb-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-hi);
+}
+.layer-browser .lb-close { cursor: pointer; opacity: 0.5; font-size: 18px; }
+.layer-browser .lb-close:hover { opacity: 1; }
+.layer-browser .lb-search {
+  margin: 10px 14px;
+  padding: 7px 10px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  color: var(--text-hi);
+  font-family: inherit;
+}
+.layer-browser .lb-search:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.layer-browser .lb-quick {
+  margin: 0 14px 10px;
+  display: flex;
+  gap: 6px;
+}
+.layer-browser .lb-btn {
+  flex: 1;
+  padding: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text-md);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.layer-browser .lb-btn:hover { background: var(--surface-2); color: var(--text-hi); }
+.layer-browser .lb-groups {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 14px 14px;
+}
+.layer-browser .lb-cat { margin-top: 14px; }
+.layer-browser .lb-cat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-md);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.layer-browser .lb-cat-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+.layer-browser .lb-cat-count { margin-left: auto; }
+.layer-browser .lb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.layer-browser .lb-row:hover { background: rgba(255,255,255,0.025); }
+.layer-browser .lb-toggle {
+  display: block;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+.layer-browser .lb-toggle input { display: none; }
+.layer-browser .lb-swatch {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid;
+  transition: background 150ms ease;
+}
+.layer-browser .lb-row-main { flex: 1; min-width: 0; }
+.layer-browser .lb-row-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.layer-browser .lb-row-sub {
+  font-size: 9px;
+  color: var(--text-lo);
+  margin-top: 1px;
+}
+.layer-browser .lb-opacity {
+  width: 60px;
+  flex-shrink: 0;
+  height: 4px;
+  accent-color: var(--accent);
+}
+
+/* ============================================================
+   EVENTS TICKER — top-of-screen breaking events strip
+   ============================================================ */
+.events-ticker {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 95;
+  height: 36px;
+  background: linear-gradient(180deg, rgba(5,7,13,0.95), rgba(5,7,13,0.8));
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: var(--blur);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--text-md);
+}
+.events-ticker .et-label {
+  flex-shrink: 0;
+  padding: 0 14px;
+  border-right: 1px solid var(--border);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-hi);
+  background: rgba(255,255,255,0.03);
+}
+.events-ticker .et-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #ef3b3b;
+  box-shadow: 0 0 10px #ef3b3b;
+  animation: pulseLive 2s ease-in-out infinite;
+}
+@keyframes pulseLive { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+.events-ticker .et-scroll {
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+  position: relative;
+}
+.events-ticker .et-inner {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  gap: 28px;
+  padding-left: 20px;
+  animation: etSlide 120s linear infinite;
+  white-space: nowrap;
+}
+.events-ticker .et-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+.events-ticker .et-item:hover { color: var(--text-hi); }
+.events-ticker .et-item .sev {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.events-ticker .et-item .sev-1 { background: #5eead4; }
+.events-ticker .et-item .sev-2 { background: #84cc16; }
+.events-ticker .et-item .sev-3 { background: #fbbf24; }
+.events-ticker .et-item .sev-4 { background: #fb923c; }
+.events-ticker .et-item .sev-5 { background: #ef3b3b; box-shadow: 0 0 8px #ef3b3b; }
+.events-ticker .et-item .type {
+  font-weight: 600;
+  color: var(--text-hi);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 9px;
+}
+.events-ticker .et-item .ago {
+  color: var(--text-lo);
+  font-size: 9px;
+}
+@keyframes etSlide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* Removed: old override block conflicted with the master layout at line ~788.
+   The master layout now accounts for: mmbar(0-36) → toggles(36-66) → narrative(66-98)
+   → ticker(98-134) → modes(140+) → panels(200+). */
+
+/* ============================================================
+   PULSE MODE — apocalypse radar
+   ============================================================ */
+.pulse-panel {
+  position: fixed;
+  left: 16px;
+  top: 112px;
+  z-index: 85;
+  width: 300px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  backdrop-filter: var(--blur);
+  padding: 16px;
+  box-shadow: var(--shadow-md);
+  display: none;
+}
+.pulse-panel.show { display: block; }
+.pulse-panel h3 {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--text-hi); margin-bottom: 4px;
+}
+.pulse-panel .pp-sub {
+  font-size: 10px; color: var(--text-lo); margin-bottom: 12px; line-height: 1.5;
+}
+.pulse-panel .pp-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.pulse-panel .pp-row .flag { width: 16px; text-align: center; font-size: 14px; }
+.pulse-panel .pp-row .name { flex: 1; color: var(--text-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pulse-panel .pp-row .score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+/* ============================================================
+   PLANET RAIL — left-edge vertical solar system selector
+   ============================================================ */
+.planet-rail {
+  position: fixed;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 8px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-md);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.planet-rail::-webkit-scrollbar { display: none; }
+.planet-rail-item {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  transition: all 200ms ease;
+  width: 58px;
+}
+.planet-rail-item:hover { background: rgba(255,255,255,0.05); }
+.planet-rail-item.active {
+  background: rgba(76,194,255,0.14);
+  border-color: rgba(76,194,255,0.35);
+}
+.planet-rail-item .planet-dot {
+  display: block;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(0,0,0,0.6), 0 0 4px rgba(255,255,255,0.15) inset;
+}
+.planet-rail-item .planet-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-lo);
+  opacity: 0.85;
+}
+.planet-rail-item.active .planet-label { color: var(--text-hi); opacity: 1; }
+
+/* Body card (opens when on non-Earth) */
+.body-card {
+  position: fixed;
+  top: 90px;
+  right: 16px;
+  z-index: 86;
+  width: 260px;
+  padding: 16px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  backdrop-filter: var(--blur);
+  box-shadow: var(--shadow-md);
+  display: none;
+}
+.body-card .bc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.body-card .bc-dot { width: 14px; height: 14px; border-radius: 50%; }
+.body-card .bc-name { font-size: 16px; font-weight: 700; color: var(--text-hi); }
+.body-card .bc-desc { font-size: 11px; color: var(--text-md); line-height: 1.5; margin-bottom: 12px; }
+.body-card .bc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.body-card .bc-stat { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 10px; }
+.body-card .bc-stat .label { font-size: 9px; text-transform: uppercase; color: var(--text-lo); letter-spacing: 0.1em; }
+.body-card .bc-stat .val { font-size: 13px; font-weight: 600; color: var(--text-hi); font-variant-numeric: tabular-nums; }
+.body-card .bc-back {
+  width: 100%;
+  padding: 8px;
+  background: rgba(76,194,255,0.12);
+  border: 1px solid rgba(76,194,255,0.3);
+  border-radius: var(--r-sm);
+  color: var(--text-hi);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Fade overlay for body transitions */
+.planet-fade {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 600ms ease;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+</style>
+</head>
+<body>
+
+<div id="boot">
+  <div class="boot-inner">
+    <div class="boot-title">WorldTwin</div>
+    <div class="boot-sub" id="bootSub">State of the World</div>
+    <div class="boot-spinner"></div>
+    <div id="bootProgressText" style="font-size:10px;color:var(--text-lo);margin-top:10px;letter-spacing:0.1em;text-transform:uppercase">Loading layers…</div>
+    <div id="bootProgressBar" style="width:200px;height:3px;background:var(--surface-2);border-radius:2px;margin:8px auto 0;overflow:hidden">
+      <div id="bootProgressFill" style="height:100%;width:0%;background:var(--accent);transition:width 180ms ease"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Mapmode Bar (EU4-style top strip) -->
+<div class="mmbar" id="mmbar">
+  <span class="mmbar-label">MAPMODE</span>
+  <!-- Buttons populated by mapmode-bar.js -->
+</div>
+
+<!-- Layer toggle bar — all layers as selectable icons -->
+<div id="layerToggles">
+  <!-- Populated by layer-toggles.js -->
+</div>
+
+<!-- Narrative strip (Gemini analyst) -->
+<div class="narrative-strip" id="narrativeStrip">
+  <div class="ns-label">🧭 ANALYST</div>
+  <div class="ns-text" id="narrativeText">Loading…</div>
+</div>
+<div class="narrative-expanded" id="narrativeExpanded">
+  <span class="ne-close" id="neClose">×</span>
+  <div id="neBody">Loading…</div>
+</div>
+
+<!-- Events ticker (top of screen) -->
+<div class="events-ticker" id="eventsTicker">
+  <div class="et-label">
+    <span class="et-dot"></span>LIVE
+  </div>
+  <div class="et-scroll">
+    <div class="et-inner" id="etInner">Loading events…</div>
+  </div>
+</div>
+
+<!-- Pulse mode panel -->
+<div class="pulse-panel" id="pulsePanel">
+  <h3>Pulse · Apocalypse Radar</h3>
+  <div class="pp-sub">Per-country composite score across water stress, food security, conflict, fires, and grid carbon. Red = worrying.</div>
+  <div id="pulseList">Loading…</div>
+</div>
+
+<div id="globe"></div>
+
+<!-- Mode bar -->
+<div class="modes" id="modes">
+  <button class="mode active" data-mode="world"><span class="ico" data-lucide="globe-2"></span><span class="ttl">World</span></button>
+  <button class="mode" data-mode="weather"><span class="ico" data-lucide="cloud"></span><span class="ttl">Weather</span></button>
+  <button class="mode" data-mode="nature"><span class="ico" data-lucide="flame"></span><span class="ttl">Nature</span></button>
+  <button class="mode" data-mode="war"><span class="ico" data-lucide="swords"></span><span class="ttl">War</span></button>
+  <button class="mode" data-mode="economy"><span class="ico" data-lucide="trending-up"></span><span class="ttl">Economy</span></button>
+  <button class="mode" data-mode="energy"><span class="ico" data-lucide="zap"></span><span class="ttl">Energy</span></button>
+  <button class="mode" data-mode="resources"><span class="ico" data-lucide="gem"></span><span class="ttl">Resources</span></button>
+  <button class="mode" data-mode="health"><span class="ico" data-lucide="activity"></span><span class="ttl">Health</span></button>
+  <button class="mode" data-mode="gaming"><span class="ico" data-lucide="gamepad-2"></span><span class="ttl">Gaming</span></button>
+  <button class="mode" data-mode="sports"><span class="ico" data-lucide="trophy"></span><span class="ttl">Sports</span></button>
+  <button class="mode" data-mode="social"><span class="ico" data-lucide="message-square"></span><span class="ttl">Social</span></button>
+  <button class="mode" data-mode="space"><span class="ico" data-lucide="satellite"></span><span class="ttl">Space</span></button>
+  <button class="mode" data-mode="pulse"><span class="ico" data-lucide="atom"></span><span class="ttl">Pulse</span></button>
+</div>
+
+<!-- KPI row -->
+<div class="kpi-row" id="kpiRow"></div>
+
+<!-- Ticker strip (Economy / Resources) -->
+<div class="ticker-strip" id="tickerStrip"><div class="ticker-inner" id="tickerInner"></div></div>
+
+<!-- Commodity filter panel (Resources) -->
+<div class="commodity-panel" id="commodityPanel">
+  <h3>Filter by Resource</h3>
+  <input class="cp-search" id="cpSearch" placeholder="Search commodities…">
+  <button class="cp-all active" id="cpAll">All Commodities</button>
+  <div id="cpCats"></div>
+</div>
+
+<!-- Legend strip (always on when data layer active) -->
+<div class="legend-strip" id="legendStrip" style="display:none">
+  <div class="lg-dot" id="lgDot"></div>
+  <div class="lg-label" id="lgLabel">—</div>
+  <div class="lg-ramp" id="lgRamp"></div>
+  <div class="lg-min" id="lgMin">0</div>
+  <div class="lg-max" id="lgMax">100</div>
+  <div class="lg-freshness" id="lgFreshness">—</div>
+</div>
+
+<!-- Legend card (dismissable explainer) -->
+<div class="legend-card" id="legendCard">
+  <h3>
+    <span id="lcTitle">Mode Info</span>
+    <span class="close" id="lcClose">×</span>
+  </h3>
+  <div id="lcBody"></div>
+</div>
+
+<!-- Country card (on country click) -->
+<div class="country-card" id="countryCard">
+  <button class="cc-close" id="ccClose">×</button>
+  <div class="cc-flag" id="ccFlag"></div>
+  <div class="cc-name" id="ccName">—</div>
+  <div class="cc-subtitle" id="ccSub">—</div>
+  <div id="ccBody"></div>
+</div>
+
+<!-- Layer Browser (right side, press L) -->
+<div class="layer-browser" id="layerBrowser"></div>
+
+<!-- Planet rail (left edge) -->
+<div class="planet-rail" id="planetRail"></div>
+
+<!-- Body card (when not on Earth) -->
+<div class="body-card" id="bodyCard"></div>
+
+<!-- Fade overlay for planet transitions -->
+<div class="planet-fade" id="planetFade"></div>
+
+<button class="help-btn" id="helpBtn" title="Help (? key)">?</button>
+<div class="loading" id="loading"><div class="dot"></div><span id="loadingText">LOADING</span></div>
+
+<!-- Diagnostics panel (toggle with 'd' key) -->
+<div id="diagnostics" style="display:none;position:fixed;bottom:70px;left:16px;z-index:200;background:var(--glass);border:1px solid var(--border);border-radius:var(--r-md);backdrop-filter:var(--blur);padding:14px;font-size:10px;color:var(--text-md);font-family:'JetBrains Mono',ui-monospace,monospace;max-width:320px;max-height:60vh;overflow-y:auto;box-shadow:var(--shadow-md)">
+  <div style="color:var(--text-hi);font-weight:700;text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;display:flex;justify-content:space-between">
+    <span>Diagnostics</span>
+    <span id="diagClose" style="cursor:pointer;opacity:.5">×</span>
+  </div>
+  <div id="diagBody">—</div>
+</div>
+
+<!-- App scripts -->
+<script src="js/icons.js"></script>
+<script src="js/design.js"></script>
+<script src="js/pickcard.js"></script>
+<script src="js/cesium-setup.js"></script>
+<script src="js/wind-canvas.js"></script>
+<script src="js/preloader.js"></script>
+<script src="js/planets.js"></script>
+<script src="js/layers.js"></script>
+<script src="js/layers2.js"></script>
+<script src="js/mapmode.js"></script>
+<script src="js/mapmodes-data.js"></script>
+<script src="js/mapmode-bar.js"></script>
+<script src="js/event-glyphs.js"></script>
+<script src="js/war-hotspots.js"></script>
+<script src="js/energy-viz.js"></script>
+<script src="js/intel-card.js"></script>
+<script src="js/mapmode-card.js"></script>
+<script src="js/layer-browser.js"></script>
+<script src="js/layer-toggles.js"></script>
+<script src="js/modes.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
