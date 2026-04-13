@@ -220,7 +220,14 @@
       await wait(500);
     }
 
-    // Phase 2: Earth uses buildEarthViewer() (single source of truth for the
+    // Close all popups and clear mapmode state before switching bodies
+    if (window.dismissAllPopups) window.dismissAllPopups();
+    if (window.Mapmode && window.Mapmode.clearPolygons) window.Mapmode.clearPolygons();
+    window.MAPMODE_COLORS = {};
+    window.MAPMODE_HIGHLIGHT = {};
+    window.MAPMODE_WAR_HOTSPOTS = {};
+
+    // Earth uses buildEarthViewer() (single source of truth for the
     // full cinematic stack). Other bodies use the generic ellipsoid rebuild.
     if (bodyId === 'earth') {
       if (typeof window.buildEarthViewer === 'function') {

@@ -17,14 +17,14 @@
     },
     weather: {
       label: 'Weather · Atmosphere',
-      layers: ['temperature_field', 'pressure_field', 'humidity_field', 'noaa_sst', 'rainviewer', 'nhc_cyclones', 'air_quality', 'fires'],
+      layers: ['temperature_field', 'noaa_sst', 'nhc_cyclones', 'fires'],
       legend: {
-        title: 'Temp · Pressure · SST · Radar',
+        title: 'Surface Temperature · SST',
         ramp: 'heat',
         min: '-30 °C',
         max: '+45 °C',
       },
-      describe: 'Surface temp grid, pressure field, sea surface temp, precipitation radar, wind particles, cloud composite, cyclones, AQ, fires.',
+      describe: 'Surface temp, ocean SST, cyclones, fires, wind particles, cloud composite. Toggle pressure/humidity/AQ/radar via the layer bar above.',
       cloudComposite: true,
       windParticles: true,
     },
@@ -170,10 +170,19 @@
     // Clear all previous layers (safer than figuring out diff)
     Object.keys(window.LAYERS).forEach(lid => window.LAYERS[lid].clear());
 
+    // Reset mapmode polygon colors to transparent (don't remove polygons,
+    // just make them invisible so they don't bleed into non-mapmode views)
+    window.MAPMODE_COLORS = {};
+    window.MAPMODE_HIGHLIGHT = {};
+    window.MAPMODE_WAR_HOTSPOTS = {};
+
+    // Close any open popups/cards from previous interaction
+    if (window.dismissAllPopups) window.dismissAllPopups();
+
     // Kill ancillary overlays
-    document.getElementById('commodityPanel').classList.remove('show');
-    document.getElementById('tickerStrip').classList.remove('show');
-    document.getElementById('pulsePanel').classList.remove('show');
+    try { document.getElementById('commodityPanel').classList.remove('show'); } catch (_) {}
+    try { document.getElementById('tickerStrip').classList.remove('show'); } catch (_) {}
+    try { document.getElementById('pulsePanel').classList.remove('show'); } catch (_) {}
     if (window.removeCloudComposite) window.removeCloudComposite();
     if (window.WindCanvas) window.WindCanvas.stop();
 
