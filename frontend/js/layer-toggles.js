@@ -21,7 +21,7 @@
     iss: '🛸', satellites: '📡', spacetrack_gp: '🛰️', swpc_aurora: '🌌',
     nasa_donki: '☀️', nasa_neows: '☄️',
     // War
-    ucdp_ged: '⚔️', conflict_events: '💥', wikidata_battles: '🗡️',
+    ucdp_ged: '⚔️', ucdp: '🎓', conflict_events: '💥', wikidata_battles: '🗡️',
     conflicts: '📰', crises: '🆘', reliefweb: '🏥',
     // Economy
     trade_annual: '📦', portwatch_chokepoints: '⚓', portwatch_ports: '🏗️',
@@ -47,7 +47,7 @@
     air_quality: 'AQI', wind_sample: 'Wind', openaq_stations: 'OpenAQ',
     flights: 'Planes', ships: 'Vessels', iss: 'ISS', satellites: 'Sats',
     spacetrack_gp: 'SATCAT', swpc_aurora: 'Aurora', nasa_donki: 'DONKI', nasa_neows: 'Asteroids',
-    ucdp_ged: 'UCDP', conflict_events: 'Conflicts', wikidata_battles: 'Battles',
+    ucdp_ged: 'UCDP (hist)', ucdp: 'UCDP (2024)', conflict_events: 'Conflicts', wikidata_battles: 'Battles',
     conflicts: 'War News', crises: 'Crises', reliefweb: 'ReliefWeb',
     trade_annual: 'Trade', portwatch_chokepoints: 'Chokepoints', portwatch_ports: 'Ports',
     climatetrace_assets: 'Emissions', wri_power_plants: 'Plants', eia_930_grid: 'US Grid', entsoe_grid: 'EU Grid', energy_viz: 'Energy Mix',
@@ -70,7 +70,7 @@
     air_quality: 'health', wind_sample: 'weather', openaq_stations: 'health',
     flights: 'transit', ships: 'transit', iss: 'space', satellites: 'space',
     spacetrack_gp: 'space', swpc_aurora: 'space', nasa_donki: 'space', nasa_neows: 'space',
-    ucdp_ged: 'war', conflict_events: 'war', wikidata_battles: 'war',
+    ucdp_ged: 'war', ucdp: 'war', conflict_events: 'war', wikidata_battles: 'war',
     conflicts: 'war', crises: 'war', reliefweb: 'war',
     trade_annual: 'economy', portwatch_chokepoints: 'economy', portwatch_ports: 'economy',
     climatetrace_assets: 'resources', wri_power_plants: 'resources', eia_930_grid: 'resources', entsoe_grid: 'resources', energy_viz: 'resources',

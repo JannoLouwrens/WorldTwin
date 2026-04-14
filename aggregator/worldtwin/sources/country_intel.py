@@ -96,10 +96,31 @@ async def fetch(client):
     entsoe = _load("entsoe_grid") or {}
     entsoe_c = entsoe.get("countries", {})
     entsoe_flows = entsoe.get("flows", [])
-    ucdp = _load("ucdp_ged") or {}
-    ucdp_events = ucdp.get("events", ucdp.get("items", []))
-    if isinstance(ucdp_events, list) is False:
-        ucdp_events = []
+    # Merge BOTH UCDP sources: flat file (historical) + API (2024+ candidate)
+    ucdp_ged = _load("ucdp_ged") or {}
+    ucdp_ged_events = ucdp_ged.get("events", ucdp_ged.get("items", []))
+    if not isinstance(ucdp_ged_events, list):
+        ucdp_ged_events = []
+    ucdp_api = _load("ucdp") or {}
+    ucdp_api_events = ucdp_api.get("events", [])
+    if not isinstance(ucdp_api_events, list):
+        ucdp_api_events = []
+    # API events use props dict; normalize to flat for counting
+    ucdp_events = []
+    for ev in ucdp_ged_events:
+        if isinstance(ev, dict):
+            ucdp_events.append(ev)
+    for ev in ucdp_api_events:
+        if isinstance(ev, dict):
+            props = ev.get("props", {})
+            ucdp_events.append({
+                "country": props.get("country", ev.get("country", "")),
+                "country_id": props.get("country_id", ""),
+                "best": int(props.get("total_deaths", ev.get("value", 0)) or 0),
+                "side_a": props.get("side_a", ""),
+                "side_b": props.get("side_b", ""),
+                "date_start": props.get("date_start", ""),
+            })
     idmc = _load("idmc_displacement") or {}
     idmc_c = idmc.get("countries", {})
     gdacs = _load("gdacs_events") or {}

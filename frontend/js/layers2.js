@@ -1185,6 +1185,58 @@
   }
 
   // ============================================================
+  // UCDP API — 5000 academic conflict events (2024+, Gold-tier)
+  // Data shape: {events: [{lat,lon,value,label,popup,props:{side_a,side_b,country,...}}]}
+  // ============================================================
+  async function renderUcdpApi() {
+    clearLayer('ucdp');
+    const d = await getCache('ucdp');
+    if (!d) return;
+    const events = d.events || d.items || (Array.isArray(d) ? d : []);
+    if (!Array.isArray(events)) return;
+    const glyph = makeGlyph(P.swords, '#ef4444', 22);
+    events.slice(0, 3000).forEach(ev => {
+      const lat = parseFloat(ev.lat);
+      const lon = parseFloat(ev.lon);
+      if (!lat || !lon || (lat === 0 && lon === 0)) return;
+      const props = ev.props || {};
+      const deaths = parseInt(props.total_deaths || ev.value || 0);
+      const sizeScale = Math.max(0.4, Math.min(1.2, deaths / 50));
+      addEntity('ucdp', {
+        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        billboard: { image: glyph, scale: sizeScale, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+        name: ev.label || (props.side_a + ' vs ' + props.side_b) || 'UCDP event',
+        properties: pc({
+          title: props.conflict_name || ev.label || 'UCDP Conflict Event',
+          source_name: 'UCDP (Uppsala University)',
+          source_url: 'https://ucdp.uu.se/',
+          fetched_at: fmtISO(d.fetched || d.source),
+          event_date: fmtISO(props.date_start),
+          location: (props.country || '') + (props.adm_1 ? ', ' + props.adm_1 : ''),
+          values: [
+            { label: 'Conflict', value: props.conflict_name || '—' },
+            { label: 'Dyad', value: props.dyad_name || '—' },
+            { label: 'Side A', value: props.side_a || '—' },
+            { label: 'Side B', value: props.side_b || '—' },
+            { label: 'Fatalities', value: String(deaths) },
+            { label: 'Deaths (A)', value: props.deaths_a || '0' },
+            { label: 'Deaths (B)', value: props.deaths_b || '0' },
+            { label: 'Civilians', value: props.deaths_civ || '0' },
+            { label: 'Date', value: props.date_start || '—' },
+            { label: 'Country', value: props.country || '—' },
+            { label: 'Source', value: (props.source_article || '').slice(0, 80) || '—' },
+          ],
+          category_color: '#ef4444',
+        }),
+        description: '<b>' + (props.dyad_name || ev.label || '') + '</b><br>' +
+          (props.country || '') + ' · ' + (props.date_start || '') + '<br>' +
+          'Fatalities: <b>' + deaths + '</b> (A:' + (props.deaths_a||0) + ' B:' + (props.deaths_b||0) + ' Civ:' + (props.deaths_civ||0) + ')<br>' +
+          '<small>Source: UCDP GED API (CC BY 4.0) · Uppsala University</small>',
+      });
+    });
+  }
+
+  // ============================================================
   // Register every renderer into window.LAYERS
   // ============================================================
   function registerAll() {
@@ -1211,6 +1263,7 @@
     window.LAYERS.noaa_sst           = { render: renderSST,             clear: () => clearLayer('noaa_sst') };
     window.LAYERS.humidity_field     = { render: renderHumidity,         clear: () => clearLayer('humidity_field') };
     window.LAYERS.entsoe_grid       = { render: renderEntsoe,           clear: () => clearLayer('entsoe_grid') };
+    window.LAYERS.ucdp              = { render: renderUcdpApi,          clear: () => clearLayer('ucdp') };
     console.log('[layers2] registered', Object.keys(window.LAYERS).length, 'total renderers');
   }
 

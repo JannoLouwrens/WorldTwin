@@ -41,7 +41,7 @@
     },
     war: {
       label: 'War · Conflict',
-      layers: ['ucdp_ged', 'conflict_events', 'wikidata_battles', 'gdelt_gkg_themes', 'gdacs_events', 'conflicts', 'crises', 'reliefweb'],
+      layers: ['ucdp', 'ucdp_ged', 'conflict_events', 'wikidata_battles', 'gdelt_gkg_themes', 'gdacs_events', 'conflicts', 'crises', 'reliefweb'],
       legend: {
         title: 'Fatality intensity',
         ramp: 'fire',
