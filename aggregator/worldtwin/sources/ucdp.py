@@ -72,7 +72,7 @@ async def _fetch_paginated(client: httpx.AsyncClient, resource: str, version: st
         if params["page"] >= total_pages - 1:
             break
         params["page"] += 1
-        if params["page"] > 20:  # safety
+        if params["page"] > 9:  # safety
             break
     return out
 
@@ -84,15 +84,13 @@ async def fetch(client: httpx.AsyncClient):
     # Try to fetch candidate events (most recent) — we try a few version
     # strings because UCDP increments these. If all fail, return None.
     candidates = [
-        ("gedcandidate", "26.0.2"),
-        ("gedcandidate", "26.0.1"),
-        ("gedcandidate", "25.1"),
         ("gedevents", "25.1"),
+        ("gedevents", "24.1"),
     ]
     events = []
     for resource, version in candidates:
         try:
-            events = await _fetch_paginated(client, resource, version, pagesize=500)
+            events = await _fetch_paginated(client, resource, version, pagesize=500, StartDate="2024-01-01")
             if events:
                 print(f"[ucdp] fetched {len(events)} events from {resource}/{version}")
                 break
