@@ -1,269 +1,237 @@
-# WorldTwin Architecture — current state & cleanup plan
+# WorldTwin — Architecture & Cache Index
 
-**Generated**: 2026-04-11 · **Phase 1 deliverable**
+Single source of truth. Last refreshed 2026-04-25 after the cleanup pass.
 
-## Infrastructure (physical / cloud)
-
-- **Cloud**: Oracle Cloud Infrastructure, ARM free tier
-- **Server**: 129.151.191.74 — Oracle Linux 9.7 aarch64, 4 OCPU, 22 GB RAM
-- **Disk**: 30 GB root + 15 GB `/var/oled` (Docker storage)
-- **User**: `opc`
-- **SSH key**: `C:\Users\DELL\Documents\My Work\GitHub\Solo\ssh-key-2026-02-08.key`
-
-## Two projects on one host (kept separate)
+## Layout
 
 ```
-/home/opc/
-├── openclaw-platform/          ← customer AI-agent platform (10 containers)
-│   ├── docker-compose.yml       (aggregator NOT here anymore, post Phase SEPARATE)
-│   ├── Caddyfile                (shared edge proxy, handles /weather* too)
-│   ├── cache        → SYMLINK → /home/opc/worldtwin/cache
-│   └── weather/                 (frontend static files — STILL LIVES HERE, dirt)
-│       ├── index.html
-│       └── js/*.js
-└── worldtwin/                   ← WorldTwin globe, own compose
-    ├── docker-compose.yml
-    ├── .env                     (21 API keys, chmod 600)
-    ├── aggregator/
-    │   ├── Dockerfile
-    │   └── worldtwin/           (Python package)
-    │       ├── __main__.py      (uvicorn entry)
-    │       ├── server.py        (FastAPI app, 13 routes)
-    │       ├── registry.py      (plugin auto-discovery via pkgutil)
-    │       ├── scheduler.py     (one asyncio task per plugin)
-    │       ├── cache.py         (JSON disk + health mark)
-    │       ├── models.py        (LayerMeta dataclass, Envelope builder)
-    │       └── sources/         (72 plugin files, one LayerMeta each)
-    └── cache/                   (JSON files written by scheduler, mounted into aggregator)
+WorldTwin/
+├── aggregator/                  # FastAPI scheduler + ~83 plugins → JSON caches
+│   └── worldtwin/
+│       ├── scheduler.py
+│       ├── server.py
+│       ├── registry.py
+│       ├── models.py            # LayerMeta + helpers
+│       └── sources/             # one Python file per plugin
+├── frontend/
+│   ├── index.html               # ONE entrypoint, loads ~32 JS modules in order
+│   ├── config.json              # frontend-side metadata mirror
+│   └── js/
+│       ├── time/                # time-foundation modules
+│       └── *.js                 # one module per concern (no mega files)
+└── scripts/                     # validation tooling (visual-diff, screenshots)
 ```
 
-## Docker compose — two stacks, one shared network
+## Aggregator — the data layer
 
-**openclaw-platform/docker-compose.yml** runs:
-- `caddy` (2-alpine) — edge reverse proxy, ports 80/443. Mounts `./Caddyfile`, `./weather`→`/srv/weather`, `./cache`→`/srv/cache` (the cache is a symlink into worldtwin).
-- `admin` (custom Python) — company provisioning dashboard
-- `qdrant`, `mem0-api` — shared memory layer for customer agents
-- 10 × `company-*` containers — isolated OpenClaw instances, one per customer
+### Plugin contract
+Each `sources/*.py`:
+1. `LAYER = LayerMeta(id=..., refresh_s=..., requires_key=..., key_env=...)`
+2. `async def fetch(client) -> dict | tuple[dict, dict]`
+3. `register(LAYER, fetch)` at module level
 
-**worldtwin/docker-compose.yml** runs:
-- `aggregator` (custom Python) — the FastAPI plugin service. Attached to `openclaw-platform_frontend` external network so Caddy can proxy to it.
+The scheduler imports every non-`_` file in `sources/`, runs `fetch()` on schedule, writes return value to `CACHE_DIR/{id}.json`, and serves it at `GET /api/cache/{id}.json`.
 
-**Shared**:
-- `openclaw-platform_frontend` Docker network (defined in openclaw-platform compose, marked external in worldtwin compose)
+**Disable a plugin**: `enabled=False` in `LayerMeta`, or rename file with leading `_`.
 
-**This is correct separation.** ✅ Two independent compose files, two independent `.env` files, two independent image builds. A `docker compose down` in worldtwin does not touch OpenClaw containers.
+### Cache index — what each cache answers
 
-## Caddy routing
+| id | source | shape | feeds frontend |
+|---|---|---|---|
+| `acled` | ACLED (paid) | events | DISABLED |
+| `air_quality` | Open-Meteo | array(42 cities) | layers.js air_quality |
+| `cables` | TeleGeography | geojson(710) | connections.js |
+| `climatetrace_assets` | ClimateTRACE | points(5000) | layers2.js |
+| `cloudflare_radar` | Cloudflare | outages | ai_narrative digest |
+| `commodity_prices` | CoinGecko | items + crypto | ai_narrative |
+| `conflict_events` | GDELT | events(1500) | layers2.js |
+| `conflicts` | GDELT news | articles | layers2.js news |
+| `country_culture` | Wikidata + Pew | countries(127) | mapmode religion/ethnicity, dossier |
+| `country_deep_dive` | composite | countries(227) | mapmode water/food, dossier |
+| `country_intel` | composite | countries | mapmode-card builders (NOT dossier — dossier reads source caches direct) |
+| `country_polygons` | Natural Earth | geojson(242) | mapmode base layer |
+| `country_relations` | curated + GDELT | by_country(147) | mapmode political, dossier, hover allies |
+| `country_resources` | composite | countries(198) | dossier exports/imports + centroid lookup |
+| `crises` | HDX | array | layers2.js |
+| `disasters` | NASA EONET | events(200) | layers2.js |
+| `economy` | CoinGecko | forex + crypto | briefing, ai_narrative |
+| `eia_930_grid` | EIA 930 | by_ba | layers2.js US grid |
+| `eia_international` | EIA | countries(258) | (no renderer — opt) |
+| `eia_petroleum` | EIA | latest + history | ai_narrative |
+| `entsoe_grid` | ENTSO-E | by_country | layers2.js EU grid |
+| `fao_food_prices` | FAO | csv | ai_narrative |
+| `fires` | NASA FIRMS | array(2160) | layers.js |
+| `flights` | adsb.lol | states | layers.js |
+| `fred` | St Louis Fed | series(30+) | briefing KPIs, ai_narrative |
+| `gaming` | Steam + Twitch | top games | layers2.js |
+| `gdacs_events` | GDACS | events(44) | layers.js, ai_narrative |
+| `gdelt_gkg_themes` | GDELT GKG | themes | ai_narrative |
+| `geoboundaries_adm1` | geoBoundaries | shapes | mapmode-card province lookup |
+| `gfw_events` | Global Fishing Watch | events(200) | layers2.js, ai_narrative |
+| `global_events` | composite | events(83) | events-pulse.js, briefing, ai_narrative |
+| `historical_borders` | aourednik | snapshots(53) | historical-borders.js |
+| `historical_disasters` | NOAA + Smithsonian | events | historical-events.js |
+| `humidity_field` | Open-Meteo | grid | layers2.js |
+| `hyde_population` | OWID | countries(238) | mapmode population_history |
+| `idmc_displacement` | IDMC | (verify) | TODO: wire or retire |
+| `imf_data` | IMF | countries(229) | mapmode inflation/debt, dossier, ai_narrative |
+| `iss` | wheretheiss | iss + crew | layers.js |
+| `maddison_history` | OWID | countries(178) | mapmode gdp_pc_history, dossier sparkline |
+| `nasa_donki` | NASA DONKI | events(200) | ai_narrative |
+| `nasa_mars_photos` | NASA | rovers | (no renderer — opt) |
+| `nasa_neows` | NASA | hazardous | layers2.js asteroids |
+| `news` | GDELT | articles | layers2.js |
+| `nhc_cyclones` | NOAA NHC | storms | layers.js, ai_narrative |
+| `noaa_co2` | NOAA GML + EPICA | stations + 800kyr series | layers2.js + scrubber |
+| `noaa_sst` | NOAA OISST | grid | layers2.js |
+| `oecd_cli` | OECD | countries(22) | ai_narrative |
+| `openaq_stations` | OpenAQ v3 | by_country | layers2.js |
+| `owid_energy` | OWID | countries(220) | mapmode renewable, energy-viz |
+| `paleo_temperature` | Marcott + PAGES2k + HadCRUT5 | series | (briefing KPI possible) |
+| `population` | REST Countries | array(245) | basic facts lookup |
+| `portwatch_chokepoints` | IMF PortWatch | chokepoints(21) | layers.js, briefing, ai_narrative |
+| `portwatch_ports` | IMF PortWatch | ports(800) | layers2.js |
+| `pressure_field` | Open-Meteo | grid | layers2.js |
+| `pulse_mode` | composite | countries(227) | mapmode pulse, briefing, ai_narrative |
+| `quakes` | USGS | features(42) | layers.js, ai_narrative |
+| `radio` | Radio Browser | array(500) | layers2.js |
+| `rainviewer` | RainViewer | tiles | layers.js |
+| `relations` | composite | countries(135) | LEGACY (use country_relations) |
+| `reliefweb` | HDX | disasters | layers2.js, ai_narrative |
+| `satellites` | CelesTrak | array(323) | layers.js |
+| `ships` | AISStream | array(500) | layers.js |
+| `spacetrack_gp` | Space-Track | catalog | layers2.js |
+| `sports` | ESPN | matches | layers2.js |
+| `swpc_aurora` | NOAA SWPC | aurora + Kp | layers.js, ai_narrative |
+| `temperature_field` | Open-Meteo | grid | layers2.js |
+| `trade_annual` | UN Comtrade | flows(483) | connections.js trade arcs |
+| `trade_monthly` | UN Comtrade | flows(128) | TODO: monthly mode |
+| `trends` | composite | top | (no renderer — opt) |
+| `ucdp` | UCDP API | events | layers2.js |
+| `ucdp_ged` | UCDP-GED | events(3000) | layers.js, ai_narrative |
+| `usgs_volcano_hans` | USGS HANS | volcanoes | layers2.js |
+| `volcanoes` | Smithsonian GVP | features(1215) | layers2.js |
+| `webcams` | Windy | webcams | layers2.js |
+| `who_don` | WHO DON | outbreaks | layers2.js, ai_narrative |
+| `wikidata_battles` | Wikidata SPARQL | battles | layers2.js, ai_narrative |
+| `wind_sample` | Open-Meteo | grid | wind-canvas.js |
+| `world_bank` | World Bank WDI | countries(265) × indicators | mapmode (most), dossier, briefing |
+| `wri_power_plants` | WRI GPPD | by_country(167) | layers2.js |
+| `youtube` | YouTube | countries(29) | layers2.js |
+| `gemini_narrative` | **AI narrative** | digest + 3 paragraphs | briefing.js |
 
-```caddyfile
-:80 {
-    handle /weather*     { root * /srv/weather; uri strip_prefix /weather; file_server }
-    handle /api/cache/*  { uri strip_prefix /api/cache; root * /srv/cache; file_server }
-    handle /api/*        { reverse_proxy aggregator:8090 }
-    handle /v1/cache/*   { uri strip_prefix /v1/cache; root * /srv/cache/v1; file_server }
-    handle /v1/*         { reverse_proxy aggregator:8090 }
-    # plus ~14 CORS /proxy/* passthroughs (opensky, gdelt, worldbank, ucdp, blitzortung, ...)
-}
+**Hard rule for cache reads:** World Bank indicator IDs contain dots (`NY.GDP.MKTP.CD`). Never `path.split('.')`. Always `cache.countries[iso3][indicatorId]`.
+
+## Frontend — the visualization layer
+
+### Module load order (index.html)
+
+Time foundation MUST come before Cesium-aware modules:
+
+```
+js/time/clock.js          # signed-int year ↔ JulianDate
+js/time/cache.js          # century-bucketed LRU
+js/time/series.js         # HistoricalSeries interpolator
+js/time/scrubber.js       # bottom timeline widget
+js/time/auto-history.js   # auto-load historical layers when scrubbing
+js/icons.js
+js/design.js              # CSS vars + design tokens
+js/pickcard.js            # universal click-card
+js/cesium-setup.js        # buildEarthViewer + atmosphere + era imagery
+js/wind-canvas.js
+js/preloader.js
+js/planets.js             # Earth/Mars/etc switcher
+js/layers.js              # core renderers (~30)
+js/layers2.js             # phase-3 orphan plugin renderers (~20)
+js/historical-borders.js  # 53-snapshot polity overlay
+js/historical-events.js   # 2150 BC+ disasters
+js/connections.js         # trade arcs + cables + ally radial lines
+js/dossier.js             # multi-source country deep-dive
+js/events-pulse.js        # global_events globe markers
+js/briefing.js            # bottom-left World Briefing panel
+js/hover-tooltip.js       # value-on-hover tooltip
+js/onboarding.js          # first-visit overlay
+js/mapmode.js             # EU4-style choropleth engine
+js/mapmodes-data.js       # 19 mapmode definitions
+js/mapmode-bar.js
+js/event-glyphs.js
+js/war-hotspots.js
+js/energy-viz.js
+js/mapmode-card.js        # per-mapmode deep-dive (uses country_intel)
+js/layer-browser.js       # right-side unified browser
+js/layer-toggles.js
+js/modes.js               # bottom mode preset bar
+js/ui.js                  # legend strip, KPI row, ticker
+js/app.js                 # boot, click/hover handlers
 ```
 
-Frontend fetches fall into three buckets:
-1. **`/api/cache/<id>.json`** → direct static serve from `/srv/cache` (millisecond latency)
-2. **`/api/<endpoint>`** → dynamic proxy to aggregator (for /api/health, etc.)
-3. **`/proxy/<vendor>/<path>`** → CORS-friendly passthrough to external APIs (used for live sub-minute data like OpenSky when direct CORS fails)
+### Globals — the inter-module contract
 
-## Backend plugin pattern
-
-```python
-# sources/<id>.py
-from ..models import LayerMeta
-from ..registry import register
-
-LAYER = LayerMeta(
-    id="my_layer",
-    name="Human Name",
-    category="nature",            # see CATALOG.md for category list
-    kind="raw",                   # raw / points / polygons / countries / ...
-    source="Upstream name",
-    source_url="https://...",
-    license="CC BY 4.0",
-    refresh_s=3600,               # how often to re-fetch
-    initial_delay_s=30,           # boot offset
-    description="...",
-    requires_key=False,
-    key_env=None,
-    enabled=True,
-)
-
-async def fetch(client: httpx.AsyncClient):
-    r = await client.get("https://upstream")
-    return {"source": "...", "count": N, "items": [...]}
-
-register(LAYER, fetch)
-```
-
-**Auto-discovery**: `registry.autodiscover()` uses `pkgutil.iter_modules` to import every `sources/*.py` at startup. Plugin self-registers at import time. Zero boilerplate beyond the three pieces above.
-
-**Scheduler**: `scheduler.start_all()` kicks off one asyncio task per plugin. Each task is a loop `sleep(initial_delay_s); while True: fetch; sleep(refresh_s - elapsed)`. All share one `httpx.AsyncClient`.
-
-**Cache**: `cache.write_envelope` writes normalized v1 envelope to `/cache/v1/<id>.json`. `cache.write_legacy` writes the raw legacy shape to `/cache/<id>.json`. `cache.mark_ok` / `mark_error` update `/cache/_health.json`.
-
-## Frontend static files
-
-```
-weather/
-├── index.html         (1265 lines, includes all CSS inline in a <style> block)
-└── js/                (17 files, all loaded as <script src>)
-    ├── icons.js       — inline SVG icons
-    ├── design.js      — color ramps, point radius math
-    ├── cesium-setup.js — FIRST creates the viewer (Earth, static config)
-    ├── wind-canvas.js — earth.nullschool-style wind particle animation
-    ├── preloader.js   — parallel fetch of 25 cache files with progress bar
-    ├── planets.js     — 10-body registry, destroy+rebuild viewer for switches
-    ├── layers.js      — 19 renderers (quakes/fires/cables/...) — 767 lines of per-layer code
-    ├── mapmode.js     — EU4-style choropleth engine (polygons + ColorMaterialProperty)
-    ├── mapmodes-data.js — 15 mapmode definitions (each with colorFn + legend)
-    ├── mapmode-bar.js — top strip UI for mapmode buttons
-    ├── event-glyphs.js — SVG→canvas billboard factory + 7 glyph renderers
-    ├── war-hotspots.js — UCDP+GDACS-derived pulsing red country borders
-    ├── layer-browser.js — right-side slide-in layer toggle panel
-    ├── modes.js       — 11 mode definitions + activateMode loop
-    ├── ui.js          — narrative strip + pulse panel + country card + diagnostics
-    └── app.js         — click/hover handlers + boot wiring
-```
-
-No build step. No modules. Everything uses `window.*` globals. Cesium is loaded from CDN.
-
-## Architecture verdict — current
-
-| Aspect | State | Notes |
+| Global | Owner | Purpose |
 |---|---|---|
-| Compose-level isolation | ✅ Clean | WorldTwin ≠ OpenClaw |
-| Backend plugin pattern | ✅ Clean | LayerMeta + fetch + register, auto-discovered |
-| Cache layer | ✅ Clean | JSON on disk, served static through Caddy |
-| Secrets management | ✅ Clean | Single .env, chmod 600, never in git |
-| Shared network | ✅ Clean | One named external network |
-| **Frontend lives in wrong repo** | ❌ Dirt | `openclaw-platform/weather/` should be `worldtwin/frontend/` |
-| **No API contract** | ❌ Missing | Plugins invent their own JSON shapes |
-| **Layers.js is 767 lines of copy-paste** | ⚠ Smell | Per-layer `addEntity` calls, no abstraction |
-| **Two parallel worlds** (modes vs mapmodes) | ⚠ Smell | Different cache access, different click handlers |
-| **No envelope schema enforcement** | ❌ Missing | Frontend hardcodes shape assumptions |
-| **No chrome grid** | ❌ Dirt | 20 fixed-position panels, z-indices 70→1000 |
-| **Dead code on disk** | ⚠ Smell | `modes.js.bak.j_fix`, `world_bank.py.bak`, `*.disabled` |
-| **First-boot Earth race** | ❌ Bug | cesium-setup.js vs planets.js both want to init Earth |
-| **Backend/frontend schema drift** | ❌ Dirt | Plugins rename ids over time, frontend lags |
+| `window.viewer` | cesium-setup.js | Cesium.Viewer instance |
+| `window.Clock` | time/clock.js | year sub/set, JulianDate helpers, ISO 8601 BC support |
+| `window.Scrubber` | time/scrubber.js | mount, registerLayer, setVisible |
+| `window.TimeCache` | time/cache.js | bucketForYear, get, getRange, preload |
+| `window.HistoricalSeries` | time/series.js | constructor for interpolated series |
+| `window.LAYERS` | layers.js / layers2.js | { id: { render, clear } } |
+| `window._cacheStore` | preloader.js | Map of cacheId → JSON |
+| `window.fetchCache(id)` | preloader.js | async loader |
+| `window.Mapmode` | mapmode.js | register, activate, hoverCountry, list, current, repaint |
+| `window.MAPMODE_COLORS` | mapmode.js | { iso3: hex } — read every frame |
+| `window.MAPMODE_HIGHLIGHT` | mapmode.js | { iso3: hex } — hover overlay |
+| `window.Connections` | connections.js | renderTradeFlows, renderCables, renderHoverLines |
+| `window.showDossier(iso3, opts?)` | dossier.js | open multi-source country panel |
+| `window.showMapmodeCard(iso3)` | mapmode-card.js | per-mapmode card |
+| `window.showOnboarding()` | onboarding.js | reopen welcome overlay |
+| `window.Briefing` | briefing.js | build, show, hide |
+| `window.EventsPulse` | events-pulse.js | render, clear |
+| `window.activateMode(modeId)` | modes.js | switch preset bundle |
+| `window.Planets` | planets.js | switchToBody, currentBody |
+| `window.swapBaseForYear(year)` | cesium-setup.js | era-aware base imagery swap |
+| `window.autoLoadHistoricalLayers(year)` | time/auto-history.js | toggle borders/disasters by year |
 
-## Target architecture — after Phases 2-10
+## LLM — single point of AI
 
-### 1. Move frontend into WorldTwin repo
+There is **ONE** AI call in the system: `aggregator/worldtwin/sources/ai_narrative.py`.
+
+- Builds a 22-section digest from caches (chokepoints, macros, conflict, hazards, disease, space weather, internet, dark vessels, battles, commodities, food, oil, crises, IMF inflation/debt, OECD CLI, double-trouble countries, ...)
+- Calls **Gemini 2.5 Pro** (free tier on `GEMINI_API_KEY`)
+- Falls back to Gemini 2.5 Flash if Pro fails
+- Falls back to Claude Sonnet 4.6 (via OpenRouter, only if `OPENROUTER_API_KEY` is set)
+- Cache id `gemini_narrative` (legacy id, kept for frontend compat)
+- Frontend reads via `briefing.js`, displays alongside ground-truth strip pulled directly from caches
+
+**To swap the model**: change the model string in the `_call_*` functions. Output schema unchanged.
+
+**To add data to the LLM**: add a new section in `_build_digest()`, pre-compute deltas/extremes, append to the prompt's `AVAILABLE DIGEST SECTIONS` list, and the citation rule will pick it up automatically.
+
+## Deploy workflow
+
+Server: Oracle Cloud `129.151.191.74`. SSH key: `Solo/ssh-key-2026-02-08.key`.
 
 ```
-/home/opc/worldtwin/
-├── docker-compose.yml        (now includes a caddy-worldtwin service? OR keep shared edge)
-├── .env
-├── config.json              ← SINGLE SOURCE OF TRUTH
-├── aggregator/               (unchanged)
-└── frontend/                 ← NEW home for static files
-    ├── index.html
-    └── js/...
+# Frontend JS file
+scp -i $KEY local.js opc@129.151.191.74:/home/opc/worldtwin/weather/js/local.js
+
+# Aggregator plugin
+scp -i $KEY plugin.py opc@129.151.191.74:/home/opc/worldtwin/aggregator/worldtwin/sources/plugin.py
+ssh -i $KEY opc@129.151.191.74 "cd /home/opc/worldtwin && sudo docker compose restart aggregator"
 ```
 
-Caddy's `/weather*` handle mounts `/home/opc/worldtwin/frontend` → `/srv/worldtwin-frontend`.
+**Frontend has NO build step.** Edit JS, scp, hard-reload. Done.
 
-The `openclaw-platform/weather` directory is deleted. Symlink `openclaw-platform/cache` removed.
+## What's NOT in the project (intentional)
 
-### 2. Single boot path for Earth
+- No bundler, no transpiler, no React/Vue/Svelte
+- No backend database — every cache is a JSON file on disk
+- No user accounts — single-tenant globe
+- No authentication
+- No git history of historical analytics
 
-- Delete the hand-rolled viewer setup in `cesium-setup.js`.
-- `planets.js` owns the viewer. `switchToBody('earth')` is called on boot AND on planet round-trip.
-- `activateMode('world')` is called from `planets.js` onReady, never from preloader directly.
+## Open issues
 
-### 3. Unified LayerSpec contract
-
-```js
-// config.json is fetched once at boot
-window.CONFIG = await (await fetch('/weather/config.json')).json();
-
-// layers.js becomes a dispatch table
-const RENDERERS = {
-  points: renderPoints,
-  glyphs: renderGlyphs,
-  polylines: renderPolylines,
-  polygons: renderPolygons,
-  arcs: renderArcs,
-  grid: renderField,
-  tiles: renderTileLayer,
-  news_ticker: renderTickerPanel,
-  country_card_data: attachCountryCard,
-  tle_propagator: propagateTLEs,
-  wind_canvas: runWindCanvas,
-  aurora_ring: drawAuroraRing,
-  meteor_ring: drawMeteorRing,
-  mapmode_source: registerAsMapmode,
-};
-
-function renderLayer(layerId) {
-  const spec = window.CONFIG.layers.find(l => l.id === layerId);
-  if (!spec) return;
-  const data = cache.get(layerId);
-  const fn = RENDERERS[spec.renderer];
-  fn(data, viewer, spec);
-}
-```
-
-Five or six generic helpers replace 767 lines of layers.js.
-
-### 4. One click handler
-
-```js
-// app.js
-viewer.screenSpaceEventHandler.setInputAction((click) => {
-  const picked = viewer.scene.pick(click.position);
-  if (picked?.id?.properties?.getValue) {
-    const props = picked.id.properties.getValue(viewer.clock.currentTime);
-    showPickCard(props);              // universal card
-    return;
-  }
-  // Else: country hit test
-  const iso3 = findCountryAt(click.position);
-  if (iso3) showCountryCard(iso3);    // mapmode mode: show value card
-}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-```
-
-### 5. Chrome grid (see GUI_LAYOUT.md)
-
-Five divs: `#chromeTop`, `#chromeLeft`, `#chromeRight`, `#chromeBottom`, `#overlays`. All panels become children.
-
-### 6. Schema enforcement
-
-`registry.py` validates at register time that the plugin's declared `envelope` matches what `fetch()` returns on first successful run. Mismatch → error logged, plugin disabled.
-
----
-
-## Post-cleanup verdict
-
-| Aspect | State |
-|---|---|
-| Compose-level isolation | ✅ |
-| Plugin pattern | ✅ |
-| Cache layer | ✅ |
-| Secrets | ✅ |
-| Shared network | ✅ |
-| Frontend location | ✅ (moved to worldtwin/frontend) |
-| API contract | ✅ (config.json) |
-| Frontend layer abstraction | ✅ (6 helpers) |
-| Boot path | ✅ (single path) |
-| Click handler | ✅ (single handler) |
-| Chrome grid | ✅ (5 regions) |
-| Schema enforcement | ✅ (register-time validation) |
-| Dead code | ✅ (deleted in Phase 2) |
-
----
-
-## Dev loop going forward
-
-1. **Edit locally** under `C:\Users\DELL\Documents\My Work\GitHub\Solo\new_plugins\_worldtwin_snapshot\` (mirror of server state).
-2. **Diff + sync** via rsync (`ssh ... "rsync ..."`). Never `sed`/heredoc on the server directly.
-3. **Restart aggregator** via `docker compose restart aggregator` in worldtwin dir.
-4. **Verify** via `/api/health` and Puppeteer smoke test from inside alpine-chrome container, URL `http://caddy/weather/`.
-5. **Pull screenshots** to `/tmp/shots/` → local for review.
-6. **Do not patch production files with inline bash** unless it's a one-character fix AND you've tested the grep-match locally first.
+- `idmc_displacement` writes a cache but no frontend reads it. Wire or retire.
+- `trade_monthly` has 128 monthly flows; `connections.js` only renders annual. Add toggle.
+- `dartmouth_floods` upstream is dead (404). Disable + remove from registry.
+- `acled` disabled (paid). Leave file for future re-enable.

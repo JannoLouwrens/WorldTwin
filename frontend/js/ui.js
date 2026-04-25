@@ -7,17 +7,45 @@
     if (!legend) { strip.style.display = 'none'; return; }
     strip.style.display = 'flex';
     document.getElementById('lgLabel').textContent = legend.title;
-    document.getElementById('lgMin').textContent = legend.min || '—';
-    document.getElementById('lgMax').textContent = legend.max || '—';
-    // Update ramp
-    const ramp = DS.ramps[legend.ramp] || DS.ramps.heat;
-    document.getElementById('lgRamp').style.background = 'linear-gradient(90deg, ' + ramp.join(', ') + ')';
+
+    const rampEl = document.getElementById('lgRamp');
+    const minEl = document.getElementById('lgMin');
+    const maxEl = document.getElementById('lgMax');
+
+    if (legend.categorical && Array.isArray(legend.swatches)) {
+      // Categorical: render colored dots + labels, hide min/max
+      minEl.textContent = '';
+      maxEl.textContent = '';
+      rampEl.style.background = 'transparent';
+      rampEl.style.width = 'auto';
+      rampEl.style.display = 'flex';
+      rampEl.style.flexWrap = 'wrap';
+      rampEl.style.gap = '8px';
+      rampEl.innerHTML = legend.swatches.map(s =>
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--text-md);white-space:nowrap">' +
+          '<span style="width:10px;height:10px;border-radius:50%;background:' + s.color + ';box-shadow:0 0 4px ' + s.color + '80;flex-shrink:0"></span>' +
+          '<span>' + s.label + '</span>' +
+        '</span>'
+      ).join('');
+    } else {
+      // Continuous: gradient bar + min/max labels
+      minEl.textContent = legend.min || '—';
+      maxEl.textContent = legend.max || '—';
+      rampEl.innerHTML = '';
+      rampEl.style.display = 'block';
+      rampEl.style.width = '200px';
+      rampEl.style.height = '8px';
+      rampEl.style.borderRadius = '4px';
+      const ramp = DS.ramps[legend.ramp] || DS.ramps.bad;
+      rampEl.style.background = 'linear-gradient(90deg, ' + ramp.join(', ') + ')';
+    }
+
     // Mode dot
     const mode = window.currentModeId ? window.currentModeId() : 'world';
     const hue = DS.modeHue[mode] || DS.modeHue.world;
     document.getElementById('lgDot').style.color = hue;
     document.getElementById('lgDot').style.background = hue;
-    // Freshness — pick a sensible layer fetched_at to show
+    // Freshness
     updateFreshness();
   }
   async function updateFreshness() {
@@ -120,245 +148,10 @@
   function hideLegendCard() { document.getElementById('legendCard').classList.remove('show'); }
   document.getElementById('lcClose').addEventListener('click', hideLegendCard);
 
-  // ============= COUNTRY CARD =============
-  let _countryResourcesData = null;
-  let _deepDiveData = null;
-  async function loadCountryResources() {
-    if (_countryResourcesData) return _countryResourcesData;
-    const r = await fetch('/api/cache/country_resources.json');
-    if (!r.ok) return null;
-    _countryResourcesData = await r.json();
-    return _countryResourcesData;
-  }
-  async function loadDeepDive() {
-    if (_deepDiveData) return _deepDiveData;
-    try {
-      const r = await fetch('/api/cache/country_deep_dive.json');
-      if (!r.ok) return null;
-      _deepDiveData = await r.json();
-      return _deepDiveData;
-    } catch (_) { return null; }
-  }
+  // NOTE: Old country card (showCountryCard / hideCountryCard) was removed
+  // 2026-04-25 — superseded by dossier.js which composes 8 caches into one panel.
 
-  function showCountryCard(iso3) {
-    loadCountryResources().then(data => {
-      if (!data || !data.countries || !data.countries[iso3]) {
-        document.getElementById('ccName').textContent = iso3 || '—';
-        document.getElementById('ccSub').textContent = 'No fact sheet available';
-        document.getElementById('ccBody').innerHTML = '';
-        document.getElementById('countryCard').classList.add('show');
-        return;
-      }
-      const c = data.countries[iso3];
-      document.getElementById('ccFlag').textContent = flagEmoji(iso3);
-      document.getElementById('ccName').textContent = c.name;
-      document.getElementById('ccSub').textContent = `ISO ${c.iso3} · M49 ${c.m49} · Year ${c.year}`;
-
-      // KPIs: trade balance, exports, imports
-      const balance = c.trade_balance_usd;
-      const balColor = balance >= 0 ? '#34d399' : '#ef4444';
-      let body = `
-        <div class="cc-section">
-          <div class="cc-section-title">Trade Balance ${c.year}</div>
-          <div class="cc-kpis">
-            <div class="cc-kpi"><div class="label">Exports</div><div class="value">$${DS.fmt(c.total_exports_usd)}</div></div>
-            <div class="cc-kpi"><div class="label">Imports</div><div class="value">$${DS.fmt(c.total_imports_usd)}</div></div>
-          </div>
-          <div class="cc-kpi" style="grid-column:1/-1"><div class="label">Net Balance</div><div class="value" style="color:${balColor}">${balance >= 0 ? '+' : ''}$${DS.fmt(balance)}</div></div>
-        </div>
-      `;
-
-      // Top exports
-      const topExp = (c.top_exports || []).slice(0, 10);
-      const maxExp = topExp[0]?.value_usd || 1;
-      body += `
-        <div class="cc-section">
-          <div class="cc-section-title">Top Exports</div>
-          <div class="cc-list">
-            ${topExp.map(e => {
-              const pct = e.value_usd / maxExp;
-              const hue = DS.categoryHue[e.parent] || '#999';
-              return `
-                <div class="row">
-                  <div class="swatch" style="background:${hue}"></div>
-                  <div class="name">${e.category}</div>
-                  <div class="val">$${DS.fmt(e.value_usd)}</div>
-                </div>
-                <div class="cc-bar"><div class="fill" style="width:${pct*100}%;background:${hue}"></div></div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      `;
-
-      // Top imports
-      const topImp = (c.top_imports || []).slice(0, 10);
-      const maxImp = topImp[0]?.value_usd || 1;
-      body += `
-        <div class="cc-section">
-          <div class="cc-section-title">Top Imports</div>
-          <div class="cc-list">
-            ${topImp.map(e => {
-              const pct = e.value_usd / maxImp;
-              const hue = DS.categoryHue[e.parent] || '#999';
-              return `
-                <div class="row">
-                  <div class="swatch" style="background:${hue}"></div>
-                  <div class="name">${e.category}</div>
-                  <div class="val">$${DS.fmt(e.value_usd)}</div>
-                </div>
-                <div class="cc-bar"><div class="fill" style="width:${pct*100}%;background:${hue}"></div></div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      `;
-
-      // Power mix
-      if (c.power) {
-        body += `
-          <div class="cc-section">
-            <div class="cc-section-title">Power Generation · ${c.power.total_mw.toFixed(0)} MW · ${c.power.plant_count} plants</div>
-            <div class="cc-list fuel-list">
-              ${c.power.mix.map(m => `
-                <div class="row">
-                  <div class="swatch" style="background:${DS.fuelHue[m.fuel.toLowerCase()] || '#6b7790'}"></div>
-                  <div class="name">${m.fuel}</div>
-                  <div class="val">${m.pct.toFixed(1)}%</div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        `;
-      }
-
-      // Deep dive — Electricity / Water / Food / Oil (async, loads after base render)
-      body += `<div id="deepDivePlaceholder"></div>`;
-      body += `<div class="cc-section"><div style="font-size:9px;opacity:0.4;">Sources: UN Comtrade, WRI Global Power Plant DB, OWID Energy, FEWS NET, WRI Aqueduct, ClimateTRACE</div></div>`;
-
-      document.getElementById('ccBody').innerHTML = body;
-      document.getElementById('countryCard').classList.add('show');
-
-      // Load deep-dive asynchronously and append
-      loadDeepDive().then(dd => {
-        if (!dd) return;
-        const dc = dd.countries && dd.countries[iso3];
-        if (!dc) return;
-        const ph = document.getElementById('deepDivePlaceholder');
-        if (!ph) return;
-        ph.innerHTML = renderDeepDive(dc);
-      });
-    });
-  }
-
-  function renderDeepDive(dd) {
-    const e = dd.electricity || {};
-    const w = dd.water || {};
-    const f = dd.food || {};
-    const o = dd.oil || {};
-    const em = dd.emissions || {};
-    let html = '';
-
-    // Electricity
-    if (e.generation_twh || e.fossil_share !== null) {
-      const fossil = e.fossil_share != null ? e.fossil_share.toFixed(0) : '—';
-      const renew = e.renewables_share != null ? e.renewables_share.toFixed(0) : '—';
-      const nuclear = e.nuclear_share != null ? e.nuclear_share.toFixed(0) : '—';
-      const carbon = e.carbon_intensity_gco2_kwh != null ? e.carbon_intensity_gco2_kwh.toFixed(0) : '—';
-      html += `
-        <div class="cc-section">
-          <div class="cc-section-title">⚡ Electricity (${e.year || '—'})</div>
-          <div class="cc-kpis">
-            <div class="cc-kpi"><div class="label">Generation</div><div class="value">${e.generation_twh != null ? DS.fmt(e.generation_twh, 1) + ' TWh' : '—'}</div></div>
-            <div class="cc-kpi"><div class="label">Carbon</div><div class="value">${carbon} g/kWh</div></div>
-          </div>
-          <div class="cc-list">
-            <div class="row"><div class="swatch" style="background:#3b3b3b"></div><div class="name">Fossil</div><div class="val">${fossil}%</div></div>
-            <div class="row"><div class="swatch" style="background:#22c55e"></div><div class="name">Renewables</div><div class="val">${renew}%</div></div>
-            <div class="row"><div class="swatch" style="background:#5eead4"></div><div class="name">Nuclear</div><div class="val">${nuclear}%</div></div>
-          </div>
-          ${e.total_plants ? `<div style="font-size:10px;color:var(--text-lo);margin-top:6px">${e.total_plants} plants · ${DS.fmt(e.total_capacity_mw || 0)} MW installed</div>` : ''}
-        </div>
-      `;
-    }
-
-    // Water
-    if (w.baseline_water_stress != null) {
-      const s = w.baseline_water_stress;
-      let hex = '#22c55e';
-      if (s >= 4.5) hex = '#ef3b3b';
-      else if (s >= 3.5) hex = '#fb923c';
-      else if (s >= 2.5) hex = '#fbbf24';
-      const pct = (s / 5) * 100;
-      html += `
-        <div class="cc-section">
-          <div class="cc-section-title">💧 Water Stress</div>
-          <div style="font-size:20px;font-weight:700;color:${hex}">${w.stress_description || '—'}</div>
-          <div style="font-size:10px;color:var(--text-lo);margin-top:4px">Aqueduct baseline score: ${s.toFixed(1)} / 5</div>
-          <div class="cc-bar" style="margin-top:6px"><div class="fill" style="width:${pct}%;background:${hex}"></div></div>
-        </div>
-      `;
-    }
-
-    // Food
-    if (f.ipc_phase != null) {
-      const p = f.ipc_phase;
-      const phaseNames = { 1: 'None/Minimal', 2: 'Stressed', 3: 'Crisis', 4: 'Emergency', 5: 'Famine' };
-      let hex = '#22c55e';
-      if (p >= 4) hex = '#ef3b3b';
-      else if (p >= 3) hex = '#fb923c';
-      else if (p >= 2) hex = '#fbbf24';
-      html += `
-        <div class="cc-section">
-          <div class="cc-section-title">🌾 Food Security</div>
-          <div style="font-size:20px;font-weight:700;color:${hex}">Phase ${p} · ${phaseNames[p] || f.ipc_description || ''}</div>
-          ${f.ipc_period ? `<div style="font-size:10px;color:var(--text-lo);margin-top:4px">${f.ipc_scenario || ''} ${f.ipc_period}</div>` : ''}
-          <div style="font-size:10px;color:var(--text-lo);margin-top:6px">Source: FEWS NET · IPC classification</div>
-        </div>
-      `;
-    }
-
-    // Oil / primary energy
-    if (o.primary_energy_twh || o.greenhouse_gas_emissions_mt) {
-      html += `
-        <div class="cc-section">
-          <div class="cc-section-title">🛢 Energy & Emissions</div>
-          <div class="cc-kpis">
-            <div class="cc-kpi"><div class="label">Primary Energy</div><div class="value">${o.primary_energy_twh != null ? DS.fmt(o.primary_energy_twh, 0) + ' TWh' : '—'}</div></div>
-            <div class="cc-kpi"><div class="label">GHG Emissions</div><div class="value">${o.greenhouse_gas_emissions_mt != null ? DS.fmt(o.greenhouse_gas_emissions_mt, 0) + ' Mt' : '—'}</div></div>
-          </div>
-        </div>
-      `;
-    }
-
-    // ClimateTRACE sector breakdown
-    if (em.total_tco2e && em.by_sector) {
-      const sectors = Object.entries(em.by_sector).sort((a, b) => b[1] - a[1]).slice(0, 5);
-      const max = em.total_tco2e;
-      html += `
-        <div class="cc-section">
-          <div class="cc-section-title">🏭 ClimateTRACE emissions</div>
-          <div class="cc-list">
-            ${sectors.map(([s, v]) => {
-              const pct = (v / max) * 100;
-              return `
-                <div class="row">
-                  <div class="swatch" style="background:#fb923c"></div>
-                  <div class="name">${s.replace(/-/g, ' ')}</div>
-                  <div class="val">${DS.fmt(v, 1)} tCO2e</div>
-                </div>
-                <div class="cc-bar"><div class="fill" style="width:${pct}%;background:#fb923c"></div></div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      `;
-    }
-
-    return html;
-  }
-  function hideCountryCard() { document.getElementById('countryCard').classList.remove('show'); }
-  document.getElementById('ccClose').addEventListener('click', hideCountryCard);
+  // ============= COUNTRY CARD (REMOVED) =============
 
   // ============= COMMODITY FILTER =============
   let _commoditiesData = null;
@@ -446,8 +239,6 @@
   window.setLegendStrip = setLegendStrip;
   window.updateKpiRow = updateKpiRow;
   window.showLoading = showLoading;
-  window.showCountryCard = showCountryCard;
-  window.hideCountryCard = hideCountryCard;
   window.showCommodityFilter = showCommodityFilter;
   window.hideCommodityFilter = hideCommodityFilter;
   window.showTicker = showTicker;

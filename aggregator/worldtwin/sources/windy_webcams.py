@@ -6,7 +6,8 @@ import httpx
 from ..models import LayerMeta, point
 from ..registry import register
 
-WINDY_KEY = os.environ.get("WINDY_KEY", "REDACTED_WINDY_KEY")
+# NEVER commit the key inline. Set WINDY_KEY in .env.
+WINDY_KEY = os.environ.get("WINDY_KEY", "")
 
 LAYER = LayerMeta(
     id="webcams",

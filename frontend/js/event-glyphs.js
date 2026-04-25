@@ -265,6 +265,4 @@
     window.LAYERS.dartmouth_floods = { render: renderDartmouthFloods, clear: () => clearLayer('dartmouth_floods') };
     window.LAYERS.spacetrack_gp = { render: renderSpaceTrackGp, clear: () => clearLayer('spacetrack_gp') };
   }
-  // Expose for late-registration
-  window.EventGlyphs = { renderDonki, renderNeoWs, renderGfwEvents, renderOpenAqStations, renderVolcanoHans, renderDartmouthFloods, renderSpaceTrackGp };
 })();

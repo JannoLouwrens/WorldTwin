@@ -65,5 +65,4 @@
   // Initial + every 5 min
   setTimeout(refresh, 6000);
   setInterval(refresh, 300000);
-  window.refreshWarHotspots = refresh;
 })();

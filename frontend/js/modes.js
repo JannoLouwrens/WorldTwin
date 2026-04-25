@@ -17,7 +17,7 @@
     },
     weather: {
       label: 'Weather · Atmosphere',
-      layers: ['temperature_field', 'noaa_sst', 'nhc_cyclones', 'fires'],
+      layers: ['temperature_field', 'noaa_sst', 'nhc_cyclones', 'fires', 'noaa_co2'],
       legend: {
         title: 'Surface Temperature · SST',
         ramp: 'heat',
@@ -30,7 +30,7 @@
     },
     nature: {
       label: 'Nature · Earth Events',
-      layers: ['quakes', 'fires', 'gdacs_events', 'nhc_cyclones', 'volcanoes', 'usgs_volcano_hans', 'disasters', 'dartmouth_floods'],
+      layers: ['quakes', 'fires', 'gdacs_events', 'nhc_cyclones', 'volcanoes', 'usgs_volcano_hans', 'disasters', 'dartmouth_floods', 'noaa_co2'],
       legend: {
         title: 'Hazard severity',
         ramp: 'fire',
@@ -159,6 +159,25 @@
   let _activationToken = 0;
 
   async function activateMode(modeId) {
+    // Click same mode again → clear everything (no mode active)
+    if (modeId === currentMode) {
+      currentMode = '';
+      Object.keys(window.LAYERS).forEach(lid => window.LAYERS[lid].clear());
+      window.MAPMODE_COLORS = {};
+      window.MAPMODE_HIGHLIGHT = {};
+      window.MAPMODE_WAR_HOTSPOTS = {};
+      if (window.dismissAllPopups) window.dismissAllPopups();
+      try { document.getElementById('commodityPanel').classList.remove('show'); } catch (_) {}
+      try { document.getElementById('tickerStrip').classList.remove('show'); } catch (_) {}
+      try { document.getElementById('pulsePanel').classList.remove('show'); } catch (_) {}
+      if (window.removeCloudComposite) window.removeCloudComposite();
+      if (window.WindCanvas) window.WindCanvas.stop();
+      window.showLoading(false);
+      document.querySelectorAll('.mode').forEach(b => b.classList.remove('active'));
+      if (window.setLegendStrip) window.setLegendStrip(null);
+      if (window.LayerToggles) window.LayerToggles.syncToggles([]);
+      return;
+    }
     const mode = MODES[modeId];
     if (!mode) return;
     // Every call bumps the token. If a new call comes in while we are still

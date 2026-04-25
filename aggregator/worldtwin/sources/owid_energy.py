@@ -78,7 +78,7 @@ async def fetch(client: httpx.AsyncClient):
                 year = int(row.get("year") or 0)
             except ValueError:
                 continue
-            if year < 2015:
+            if year < 1985:           # 40 years of history for time-aware mapmodes
                 continue
             # Keep only key columns, coerce to float where possible
             out = {}
@@ -99,8 +99,7 @@ async def fetch(client: httpx.AsyncClient):
         # Sort history per country by year
         for iso3 in history_by_country:
             history_by_country[iso3].sort(key=lambda r: r.get("year") or 0)
-            # Keep last 10 years
-            history_by_country[iso3] = history_by_country[iso3][-10:]
+            # Keep all years 1985+ (~40 entries per country) — needed for time-aware mapmodes
 
         return {
             "source": "Our World in Data Energy",

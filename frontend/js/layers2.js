@@ -1239,6 +1239,120 @@
   // ============================================================
   // Register every renderer into window.LAYERS
   // ============================================================
+  // ============================================================
+  // CO2 — Atmospheric CO₂ (Mauna Loa Keeling Curve + EPICA 800kyr composite)
+  // Time-aware: scrub from 800,000 BC (~180 ppm during glacials) → 2026 (~430 ppm).
+  // ============================================================
+  let _co2Series = null;          // HistoricalSeries
+  let _co2DataCache = null;       // cached raw aggregator response
+  let _co2Unsub = null;           // Clock subscription
+  async function renderCO2() {
+    clearLayer('noaa_co2');
+    if (_co2Unsub) { _co2Unsub(); _co2Unsub = null; }
+    const d = await getCache('noaa_co2');
+    if (!d) return;
+    _co2DataCache = d;
+
+    // Build the 800kyr→present series for time-aware lookup
+    if (window.HistoricalSeries && Array.isArray(d.historical_series)) {
+      _co2Series = new window.HistoricalSeries(d.historical_series, { interp: 'linear' });
+      if (window.Scrubber && d.historical_range) {
+        window.Scrubber.registerLayer('noaa_co2', d.historical_range, '#ff5050');
+      }
+    } else {
+      _co2Series = null;
+    }
+
+    function ppmAt(year) {
+      if (_co2Series) {
+        const v = _co2Series.at(year);
+        if (v != null) return v;
+      }
+      return (d.headline && d.headline.current_co2_ppm) || 0;
+    }
+    function originAt(year) {
+      // Provenance label so the user knows whether they're looking at ice-core
+      // proxy data or instrumental measurements.
+      if (year < 1958) return 'EPICA / Antarctic ice-core composite (Bereiter 2015)';
+      return 'Mauna Loa Observatory · NOAA GML';
+    }
+
+    const stations = d.stations || [];
+    const primaryEntities = [];   // entities whose label updates on time-scrub
+
+    stations.forEach(s => {
+      const isPrimary = s.props && s.props.is_primary;
+      const code = (s.props && s.props.station_code) || s.id || '';
+      const sName = (s.props && s.props.station_name) || code;
+      const elev = (s.props && s.props.elevation_m) || 0;
+      const sz = isPrimary ? 20 : 10;
+      const color = isPrimary ? '#ff5050' : '#7dd3fc';
+
+      // Reactive label text — re-evaluated every frame from window.__CURRENT_YEAR__
+      const labelText = isPrimary
+        ? new Cesium.CallbackProperty(() => {
+            const y = window.__CURRENT_YEAR__ || (new Date().getUTCFullYear());
+            return ppmAt(y).toFixed(1) + ' ppm';
+          }, false)
+        : undefined;
+
+      const ent = addEntity('noaa_co2', {
+        position: Cesium.Cartesian3.fromDegrees(s.lon, s.lat),
+        point: {
+          pixelSize: sz,
+          color: Cesium.Color.fromCssColorString(color).withAlpha(isPrimary ? 0.95 : 0.7),
+          outlineColor: Cesium.Color.WHITE.withAlpha(isPrimary ? 0.8 : 0.4),
+          outlineWidth: isPrimary ? 3 : 1.5,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: isPrimary ? {
+          text: labelText,
+          font: 'bold 13px Inter,sans-serif',
+          fillColor: Cesium.Color.fromCssColorString('#ff5050'),
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.7),
+          outlineWidth: 2,
+          pixelOffset: new Cesium.Cartesian2(0, -sz - 6),
+          showBackground: true,
+          backgroundColor: Cesium.Color.BLACK.withAlpha(0.5),
+          backgroundPadding: new Cesium.Cartesian2(4, 2),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        } : undefined,
+        name: isPrimary ? 'CO₂' : sName + ' (' + code + ')',
+        properties: pc({
+          title: isPrimary ? 'Atmospheric CO₂ — Keeling Curve + ice core' : sName + ' (' + code + ')',
+          source_name: 'NOAA Global Monitoring Laboratory',
+          source_url: 'https://gml.noaa.gov/ccgg/trends/',
+          values: isPrimary ? [
+            { label: 'Live data', value: 'scrub timeline at bottom' },
+            { label: 'Range', value: '800,000 BC → today' },
+            { label: 'Pre-industrial', value: '~280 ppm' },
+          ] : [
+            { label: 'Station', value: sName },
+            { label: 'Code', value: code },
+            { label: 'Elevation', value: elev + ' m' },
+          ],
+          category_color: color,
+        }),
+        description: isPrimary
+          ? `<b>Mauna Loa Observatory</b><br>Scrub the timeline at the bottom to see CO₂ from 800,000 BC to present.<br>Pre-industrial: 280 ppm. Today: ${(d.headline?.current_co2_ppm || 0).toFixed(2)} ppm.`
+          : `<b>${sName}</b> (${code})<br>Elevation: ${elev}m`,
+      });
+      if (isPrimary) primaryEntities.push(ent);
+    });
+
+    // Subscribe to time changes — update description text on the primary station
+    // and refresh any open mapmode card / pickcard that references CO2.
+    _co2Unsub = window.Clock && window.Clock.subscribe(year => {
+      const v = ppmAt(year);
+      const above = v - 280;
+      for (const ent of primaryEntities) {
+        ent.description = `<b>Atmospheric CO₂: ${v.toFixed(2)} ppm</b> in ${window.Clock.label(year)}<br>${above >= 0 ? '+' : ''}${above.toFixed(1)} ppm vs pre-industrial<br>Source: ${originAt(year)}`;
+      }
+    });
+  }
+
   function registerAll() {
     if (!window.LAYERS) { setTimeout(registerAll, 100); return; }
     window.LAYERS.volcanoes          = { render: renderVolcanoes,        clear: () => clearLayer('volcanoes') };
@@ -1264,6 +1378,7 @@
     window.LAYERS.humidity_field     = { render: renderHumidity,         clear: () => clearLayer('humidity_field') };
     window.LAYERS.entsoe_grid       = { render: renderEntsoe,           clear: () => clearLayer('entsoe_grid') };
     window.LAYERS.ucdp              = { render: renderUcdpApi,          clear: () => clearLayer('ucdp') };
+    window.LAYERS.noaa_co2           = { render: renderCO2,              clear: () => clearLayer('noaa_co2') };
     console.log('[layers2] registered', Object.keys(window.LAYERS).length, 'total renderers');
   }
 

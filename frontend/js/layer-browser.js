@@ -79,7 +79,6 @@
     { id: 'wikidata_battles',   name: 'Wikidata battles',          category: 'war', source: 'Wikidata', default: false },
     { id: 'gdelt_gkg_themes',   name: 'GDELT themes',              category: 'war', source: 'GDELT GKG', default: false },
     { id: 'conflict_events',    name: 'GDELT conflict events',     category: 'war', source: 'GDELT Events 2.0', default: false },
-    { id: 'relations',          name: 'Diplomatic relations',      category: 'war', source: 'GDELT QuadClass', default: false },
     { id: 'reliefweb',          name: 'Active humanitarian crises',category: 'war', source: 'ReliefWeb', default: false },
     { id: 'crises',             name: 'HDX crises',                category: 'war', source: 'HDX', default: false },
 
@@ -101,6 +100,13 @@
     // ===== META =====
     { id: 'global_events',      name: 'Events ticker feed',        category: 'meta', source: 'Aggregated', default: true },
     { id: 'pulse_mode',         name: 'Pulse apocalypse radar',    category: 'meta', source: 'Aggregated', default: false },
+
+    // ===== HISTORICAL (auto-loaded by scrubber, but exposable) =====
+    { id: 'noaa_co2',           name: 'CO₂ stations + 800kyr series',  category: 'historical', source: 'NOAA GML + EPICA', default: false, timeAware: true },
+    { id: 'historical_borders', name: 'Historical borders 123kBC→2010', category: 'historical', source: 'aourednik basemaps', default: false, timeAware: true },
+    { id: 'historical_disasters', name: 'Historical disasters 2150BC→',  category: 'historical', source: 'NOAA NCEI + GVP', default: false, timeAware: true },
+    { id: 'paleo_temperature',  name: 'Temp anomaly 11,300 BP→',        category: 'historical', source: 'Marcott + PAGES2k + HadCRUT5', default: false, timeAware: true },
+    { id: 'historical_wars',    name: 'Major wars 1400→present',        category: 'historical', source: 'Brecke + COW + UCDP', default: false, timeAware: true },
   ];
 
   const CATEGORY_META = {
@@ -115,6 +121,7 @@
     infra:      { label: 'Infrastructure',color: '#5eead4' },
     environment:{ label: 'Environment',   color: '#009E73' },
     meta:       { label: 'Meta',          color: '#CC79A7' },
+    historical: { label: 'Historical',    color: '#a855f7' },
   };
 
   // Runtime state: {id: {on: bool, opacity: 0..1}}
@@ -136,20 +143,82 @@
       (groups[l.category] = groups[l.category] || []).push(l);
     });
 
+    const totalCount = window.LAYER_REGISTRY.length + (window.Mapmode?.list?.()?.length || 0);
     const head = `
       <div class="lb-head">
-        <span>LAYERS <span style="color:var(--text-lo);font-weight:400">${window.LAYER_REGISTRY.length}</span></span>
+        <span>BROWSE <span style="color:var(--text-lo);font-weight:400">${totalCount}</span></span>
         <span class="lb-close" id="lbClose">×</span>
       </div>
-      <input class="lb-search" id="lbSearch" placeholder="Search layers…">
+      <input class="lb-search" id="lbSearch" placeholder="Search any layer or mapmode…">
       <div class="lb-quick">
-        <button class="lb-btn" id="lbShowAll">Show all</button>
+        <button class="lb-btn" id="lbShowAll">Show all layers</button>
         <button class="lb-btn" id="lbHideAll">Hide all</button>
         <button class="lb-btn" id="lbReset">Reset</button>
       </div>
+      <div class="lb-mapmodes" id="lbMapmodes"></div>
       <div class="lb-groups" id="lbGroups"></div>
     `;
     host.innerHTML = head;
+
+    // ============================================================
+    // Mapmodes section — "Color the world by…"
+    // ============================================================
+    const mmEl = host.querySelector('#lbMapmodes');
+    if (mmEl && window.Mapmode) {
+      const mapmodes = window.Mapmode.list();
+      // Categorize mapmodes by semantic
+      const mmCats = {
+        political: { label: 'Political / cultural',  ids: ['political', 'religion', 'ethnicity'] },
+        economic:  { label: 'Economic',               ids: ['gdp', 'gdp_pc', 'inflation', 'debt', 'population', 'urban'] },
+        societal:  { label: 'Society & development',  ids: ['life', 'internet', 'food', 'water_stress'] },
+        threats:   { label: 'Threats',                ids: ['military', 'pulse'] },
+        environment:{ label: 'Environment',           ids: ['co2', 'renewable'] },
+        // (No "through history" sub-category — gdp_pc and population are now
+        // time-aware on their own, listed under the standard economic group.)
+      };
+      const current = window.Mapmode.current();
+      const renderRow = (mm) => {
+        const isOn = mm.id === current;
+        const swatch = mm.legend?.ramp === 'good' ? '#34d399'
+                     : mm.legend?.ramp === 'bad' ? '#ef3b3b'
+                     : mm.legend?.ramp === 'neutral' ? '#7ad7ff'
+                     : '#a855f7';
+        return `
+          <div class="lb-mm-row ${isOn ? 'on' : ''}" data-mm="${mm.id}">
+            <span class="lb-mm-swatch" style="background:${swatch}"></span>
+            <span class="lb-mm-name">${mm.name}</span>
+            <span class="lb-mm-mark">${isOn ? '●' : ''}</span>
+          </div>`;
+      };
+      let mmHtml = `<div class="lb-section-label">COLOR THE WORLD BY</div>`;
+      Object.entries(mmCats).forEach(([cat, info]) => {
+        const items = info.ids.map(id => mapmodes.find(m => m.id === id)).filter(Boolean);
+        if (!items.length) return;
+        mmHtml += `<div class="lb-mm-cat-label">${info.label}</div>`;
+        mmHtml += items.map(renderRow).join('');
+      });
+      // Catch any uncategorized
+      const knownIds = new Set(Object.values(mmCats).flatMap(c => c.ids));
+      const orphans = mapmodes.filter(m => !knownIds.has(m.id));
+      if (orphans.length) {
+        mmHtml += `<div class="lb-mm-cat-label">Other</div>`;
+        mmHtml += orphans.map(renderRow).join('');
+      }
+      mmEl.innerHTML = mmHtml;
+      mmEl.querySelectorAll('.lb-mm-row').forEach(row => {
+        row.onclick = () => {
+          const id = row.dataset.mm;
+          if (window.Mapmode.current() === id) {
+            // Click again to deselect — just re-activate political (default)
+            if (id !== 'political') window.Mapmode.activate('political');
+          } else {
+            window.Mapmode.activate(id);
+          }
+          // Re-render to update active marker
+          buildPanel();
+        };
+      });
+    }
 
     const groupsEl = host.querySelector('#lbGroups');
     Object.entries(groups).forEach(([cat, layers]) => {
@@ -165,14 +234,15 @@
         <div class="lb-cat-body">
           ${layers.map(l => {
             const on = state[l.id].on;
+            const ta = !!l.timeAware;
             return `
-              <div class="lb-row" data-id="${l.id}">
+              <div class="lb-row${ta ? ' lb-time-aware' : ''}" data-id="${l.id}" data-time-aware="${ta}">
                 <label class="lb-toggle">
                   <input type="checkbox" ${on ? 'checked' : ''} data-action="toggle" data-id="${l.id}">
                   <span class="lb-swatch" style="background:${on ? meta.color : 'transparent'};border-color:${meta.color}"></span>
                 </label>
                 <div class="lb-row-main">
-                  <div class="lb-row-name">${l.name}</div>
+                  <div class="lb-row-name">${l.name}${ta ? ' <span class="lb-clock-badge" title="Time-aware: this layer responds to the timeline scrubber">⏱</span>' : ''}</div>
                   <div class="lb-row-sub">${l.source}</div>
                 </div>
                 <input type="range" class="lb-opacity" min="0" max="100" value="${(state[l.id].opacity * 100) | 0}" data-action="opacity" data-id="${l.id}">

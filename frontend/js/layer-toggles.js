@@ -14,7 +14,8 @@
     nhc_cyclones: '🌀', disasters: '☣️', gdacs_events: '⚠️', dartmouth_floods: '💧',
     // Weather
     temperature_field: '🌡️', pressure_field: '📊', humidity_field: '💧', noaa_sst: '🌊', rainviewer: '🌧️',
-    air_quality: '💨', wind_sample: '🌬️',
+    air_quality: '💨', wind_sample: '🌬️', noaa_co2: '🌫️',
+    historical_borders: '🏛️', historical_disasters: '🌍', paleo_temperature: '🌡️',
     // Transit
     flights: '✈️', ships: '🚢',
     // Space
@@ -44,7 +45,8 @@
     quakes: 'Quakes', fires: 'Fires', volcanoes: 'Volcanoes', usgs_volcano_hans: 'HANS',
     nhc_cyclones: 'Cyclones', disasters: 'EONET', gdacs_events: 'GDACS', dartmouth_floods: 'Floods',
     temperature_field: 'Temp', pressure_field: 'Pressure', humidity_field: 'Humidity', noaa_sst: 'Ocean SST', rainviewer: 'Radar',
-    air_quality: 'AQI', wind_sample: 'Wind', openaq_stations: 'OpenAQ',
+    air_quality: 'AQI', wind_sample: 'Wind', openaq_stations: 'OpenAQ', noaa_co2: 'CO₂',
+    historical_borders: 'History', historical_disasters: 'Hist Disasters', paleo_temperature: 'Paleo °C',
     flights: 'Planes', ships: 'Vessels', iss: 'ISS', satellites: 'Sats',
     spacetrack_gp: 'SATCAT', swpc_aurora: 'Aurora', nasa_donki: 'DONKI', nasa_neows: 'Asteroids',
     ucdp_ged: 'UCDP (hist)', ucdp: 'UCDP (2024)', conflict_events: 'Conflicts', wikidata_battles: 'Battles',
@@ -67,7 +69,8 @@
     quakes: 'nature', fires: 'nature', volcanoes: 'nature', usgs_volcano_hans: 'nature',
     nhc_cyclones: 'nature', disasters: 'nature', gdacs_events: 'nature', dartmouth_floods: 'nature',
     temperature_field: 'weather', pressure_field: 'weather', humidity_field: 'weather', noaa_sst: 'weather', rainviewer: 'weather',
-    air_quality: 'health', wind_sample: 'weather', openaq_stations: 'health',
+    air_quality: 'health', wind_sample: 'weather', openaq_stations: 'health', noaa_co2: 'nature',
+    historical_borders: 'meta', historical_disasters: 'nature', paleo_temperature: 'weather',
     flights: 'transit', ships: 'transit', iss: 'space', satellites: 'space',
     spacetrack_gp: 'space', swpc_aurora: 'space', nasa_donki: 'space', nasa_neows: 'space',
     ucdp_ged: 'war', ucdp: 'war', conflict_events: 'war', wikidata_battles: 'war',

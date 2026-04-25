@@ -87,8 +87,19 @@
 
     let preloadIds = null;
     if (window.CONFIG && window.CONFIG.layers) {
-      // Skip huge or non-renderable layers — they're fetched on demand
-      const SKIP = new Set(['geoboundaries_adm1', 'spacetrack_gp', 'nasa_epic_earth']);
+      // Skip huge or non-renderable layers — they're fetched on demand.
+      // The historical heavies (vdem, brecke, clio, cow, maddison, hyde,
+      // historical_borders, historical_disasters, paleo_temperature) are
+      // lazy-loaded when the scrubber leaves Live (see time-awareness-ui.js).
+      const SKIP = new Set([
+        'geoboundaries_adm1', 'spacetrack_gp', 'nasa_epic_earth',
+        'vdem_democracy', 'brecke_wars', 'clio_life_expectancy',
+        'cow_alliances',
+        'historical_borders', 'historical_disasters',
+        // Note: maddison_history + hyde_population stay in preload because
+        // gdp_pc and population mapmodes (always-shown defaults) read them
+        // even at Live for the unified-mapmode UX. ~1.5MB combined.
+      ]);
       preloadIds = window.CONFIG.layers
         .filter(l => !SKIP.has(l.id) && l.status !== 'disabled')
         .map(l => l.id);
@@ -107,6 +118,13 @@
 
     // Step 4: attach click + hover handlers (viewer now exists)
     attachGlobeHandlers();
+
+    // Step 4b: mount historical timeline scrubber
+    if (window.Scrubber) {
+      window.Scrubber.mount('#timeline');
+      // Default to "Live" — current real-world year — so existing layers behave as before
+      window.Clock.setYear(window.Clock.MAX_YEAR, { force: true });
+    }
 
     // Step 5: hide boot splash
     setTimeout(() => {
@@ -142,13 +160,10 @@
       if (window.viewer && window.viewer.selectedEntity) window.viewer.selectedEntity = undefined;
       // Close our pickCard
       if (window.hidePickCard) window.hidePickCard();
-      // Close intel card
-      if (window.hideIntelCard) window.hideIntelCard();
+      // Close dossier (multi-source country panel)
+      if (window.hideDossier) window.hideDossier();
       // Close mapmode card
       if (window.hideMapmodeCard) window.hideMapmodeCard();
-      // Close country card
-      const cc = document.getElementById('countryCard');
-      if (cc) cc.style.display = 'none';
       // Close legend card
       const lc = document.getElementById('legendCard');
       if (lc) lc.style.display = 'none';
@@ -159,10 +174,16 @@
     const handler = new Cesium.ScreenSpaceEventHandler(canvas);
     handler.setInputAction(function(click){
       const picked = window.viewer.scene.pick(click.position);
+      const isCompare = !!(click && (click.shift || (window.event && window.event.shiftKey)));
 
       // Case 0: clicked a mapmode polygon → show mapmode-specific deep card
+      // Shift-click bypasses the mapmode card and goes straight to dossier compare.
       if (picked && picked.id && picked.id.properties && picked.id.properties.mapmode_entity) {
         const iso3 = picked.id.properties.iso3?.getValue?.() || picked.id.properties.iso3;
+        if (iso3 && isCompare && window.showDossier) {
+          window.showDossier(iso3, { compare: true });
+          return;
+        }
         if (iso3 && window.showMapmodeCard) {
           const handled = window.showMapmodeCard(iso3);
           if (handled) return;
@@ -202,11 +223,9 @@
       const lon = Cesium.Math.toDegrees(carto.longitude);
       findNearestCountry(lat, lon).then(iso3 => {
         if (!iso3) return;
-        // Try intelligence card first (cross-source analysis)
-        if (window.showIntelCard) {
-          window.showIntelCard(iso3);
-        } else if (window.showCountryCard) {
-          window.showCountryCard(iso3);
+        // Single source of truth for country deep-dive: dossier.js composes 8 caches.
+        if (window.showDossier) {
+          window.showDossier(iso3, { compare: isCompare });
         }
       });
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);

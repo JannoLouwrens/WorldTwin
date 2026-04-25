@@ -1,6 +1,13 @@
-"""World Bank API v2 — 30 key indicators per country.
+"""World Bank API v2 — 30 key indicators per country, with TIME SERIES.
 
-Free, no key, 1500+ indicators available. We pull 30 of the most useful.
+Free, no key. Each indicator is fetched as a 64-year time series (1960:2024).
+Cache schema (backwards-compatible — `latest` still has the {year, value}
+shape used by existing dossier/mapmode readers):
+
+  countries[iso3][indicator] = {
+      latest:  {year, value},          # most recent non-null sample
+      history: {year_str: value, ...}  # full series, year_str like "2024"
+  }
 """
 import asyncio
 from datetime import datetime, timezone
@@ -14,7 +21,7 @@ from ..registry import register
 
 LAYER = LayerMeta(
     id="world_bank",
-    name="World Bank Indicators (30 per country)",
+    name="World Bank Indicators (30 per country, 1960-2024 history)",
     category="resources",
     kind="raw",
     source="World Bank API v2",
@@ -22,7 +29,7 @@ LAYER = LayerMeta(
     license="CC BY 4.0",
     refresh_s=86400 * 7,
     initial_delay_s=265,
-    description="30 key World Bank indicators per country: GDP, life expectancy, CO2, debt, military spend, internet users, etc.",
+    description="30 key World Bank indicators per country with 64-year history. Per-indicator series enable timeline scrubbing.",
     requires_key=False,
 )
 
@@ -35,9 +42,10 @@ INDICATORS = [
     ("SP.POP.GROW",            "Population growth %"),
     ("SP.DYN.LE00.IN",         "Life expectancy"),
     ("SP.URB.TOTL.IN.ZS",      "Urban population %"),
-    ("EN.GHG.CO2.PC.CE.AR5",         "CO2 per capita (t)"),
+    ("EN.GHG.CO2.PC.CE.AR5",   "CO2 per capita (t)"),
     ("EG.USE.PCAP.KG.OE",      "Energy per capita"),
     ("EG.ELC.ACCS.ZS",         "Electricity access %"),
+    ("EG.ELC.RNEW.ZS",         "Renewable electricity %"),
     ("IT.NET.USER.ZS",         "Internet users %"),
     ("MS.MIL.XPND.GD.ZS",      "Military spend % GDP"),
     ("FP.CPI.TOTL.ZG",         "Inflation %"),
@@ -61,50 +69,62 @@ INDICATORS = [
 ]
 
 
-async def _fetch_indicator(client: httpx.AsyncClient, code: str, label: str, sem: asyncio.Semaphore):
+async def _fetch_indicator(client: httpx.AsyncClient, code: str, sem: asyncio.Semaphore):
+    """Fetch a single indicator across all countries × 1960..now in one call."""
     async with sem:
         try:
             r = await client.get(
                 f"https://api.worldbank.org/v2/country/all/indicator/{code}",
-                params={"format": "json", "per_page": 25000, "date": "2020:2024"},
-                timeout=45,
+                params={"format": "json", "per_page": 25000, "date": "1960:2024"},
+                timeout=90,
             )
             if r.status_code != 200:
                 return code, []
             body = r.json()
             if not isinstance(body, list) or len(body) < 2:
                 return code, []
-            rows = body[1] or []
-            return code, rows
+            return code, body[1] or []
         except Exception as e:
             print(f"[world_bank] {code} error: {e}")
             return code, []
 
 
 async def fetch(client: httpx.AsyncClient):
-    sem = asyncio.Semaphore(4)
-    results = await asyncio.gather(*[_fetch_indicator(client, c, l, sem) for c, l in INDICATORS])
-    # Pivot to {iso3: {indicator: {year, value}}}
+    sem = asyncio.Semaphore(3)         # WB throttles aggressive parallelism
+    results = await asyncio.gather(*[_fetch_indicator(client, c, sem) for c, _ in INDICATORS])
     by_country: dict[str, dict[str, Any]] = {}
     labels = {c: l for c, l in INDICATORS}
+
     for code, rows in results:
-        # Keep most recent non-null per country
-        latest_per_country: dict[str, dict[str, Any]] = {}
+        # Build per-country full series, then pick latest non-null
+        per_country_history: dict[str, dict[str, float]] = {}
         for row in rows:
             country_obj = row.get("country") or {}
             iso3 = row.get("countryiso3code") or country_obj.get("id", "")
-            if not iso3 or iso3 in ("", "None"):
-                continue
+            if not iso3 or len(iso3) != 3:
+                continue                 # skip aggregates (region codes are 2-3 chars but not country ISO3)
             value = row.get("value")
             year = row.get("date", "")
-            if value is None:
+            if value is None or not year:
                 continue
-            cur = latest_per_country.get(iso3)
-            if not cur or year > cur.get("year", ""):
-                latest_per_country[iso3] = {"year": year, "value": value}
-        for iso3, v in latest_per_country.items():
+            try:
+                year_int = int(year)
+            except ValueError:
+                continue
+            per_country_history.setdefault(iso3, {})[str(year_int)] = value
+
+        for iso3, history in per_country_history.items():
+            latest_year = max(history.keys(), key=lambda y: int(y))
+            latest_value = history[latest_year]
             rec = by_country.setdefault(iso3, {})
-            rec[code] = v
+            # Backwards compat: existing readers use {year, value} directly.
+            # New readers use latest{year,value} or history{year:value}.
+            rec[code] = {
+                "year": latest_year,
+                "value": latest_value,
+                "latest": {"year": latest_year, "value": latest_value},
+                "history": history,
+            }
 
     return {
         "source": "World Bank API v2",
@@ -112,6 +132,7 @@ async def fetch(client: httpx.AsyncClient):
         "indicators": labels,
         "count": len(by_country),
         "countries": by_country,
+        "history_year_range": [1960, 2024],
     }
 
 

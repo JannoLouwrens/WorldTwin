@@ -6,7 +6,8 @@ import httpx
 from ..models import LayerMeta, point
 from ..registry import register
 
-FIRMS_KEY = os.environ.get("FIRMS_KEY", "REDACTED_FIRMS_KEY")
+# NEVER commit the key inline. Set FIRMS_KEY in .env.
+FIRMS_KEY = os.environ.get("FIRMS_KEY", "")
 
 LAYER = LayerMeta(
     id="fires",

@@ -45,7 +45,22 @@
     },
 
     // Continuous ramps — each is [stops]
+    // SEMANTIC RAMPS (use these for metrics where value = good/bad):
+    //   bad  — HIGH = BAD (inflation, debt, CO2, water stress, pulse…)
+    //   good — HIGH = GOOD (life exp, GDP pc, internet %, renewable %…)
+    // NEUTRAL RAMPS (for raw size/intensity, no value judgment):
+    //   neutral — generic low→high (population, GDP total)
+    //   density — viridis-like for density
+    //   altitude, depth, recency — domain-specific
     ramps: {
+      // good → bad: green → yellow → orange → red
+      bad:  ['#15803d','#84cc16','#fde047','#fb923c','#ef4444','#b91c1c'],
+      // bad → good: red → orange → yellow → green (reverse of bad)
+      good: ['#b91c1c','#ef4444','#fb923c','#fde047','#84cc16','#15803d'],
+      // Neutral sequential (teal → deep blue), no good/bad meaning
+      neutral: ['#cffafe','#67e8f9','#06b6d4','#0e7490','#1e3a8a'],
+
+      // Legacy names kept for renderers that already reference them
       heat: ['#1e3a8a','#2563eb','#06b6d4','#84cc16','#fde047','#fb923c','#ef4444'],
       fire: ['#fff7b8','#fde047','#fb923c','#ef4444','#b91c1c','#4a0e0e'],
       coldHot: ['#1e40af','#4cc2ff','#f8fafc','#fb923c','#b91c1c'],

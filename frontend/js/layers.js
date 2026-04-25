@@ -3,7 +3,7 @@
 // Entities owned by a layer are stored in window._layerEntities[id] for cleanup.
 (function(){
   window._layerEntities = {};
-  window._layerData = {};   // keeps last loaded payload per layer
+  // window._cacheStore (managed by preloader.js) is the canonical cache store.
 
   function getEntityGroup(id) {
     if (!window._layerEntities[id]) window._layerEntities[id] = [];
@@ -25,9 +25,7 @@
     try {
       const r = await fetch('/api/cache/' + id + '.json?_=' + Date.now());
       if (!r.ok) return null;
-      const d = await r.json();
-      window._layerData[id] = d;
-      return d;
+      return await r.json();
     } catch (e) { console.warn('fetch', id, 'failed', e); return null; }
   }
 
@@ -418,25 +416,32 @@
   async function renderFlights() {
     clearLayer('flights');
     const d = await fetchCache('flights');
-    if (!d || !Array.isArray(d)) return;
-    // Each flight: {lat, lon, alt_ft, heading, callsign, ...}
-    const top = d.slice(0, 1500);
-    top.forEach(f => {
-      if (!f.lat || !f.lon) return;
-      const alt = f.alt_ft || 0;
-      // Altitude ramp 0 to 40k ft
-      const t = Math.min(1, alt / 40000);
+    // OpenSky API: { time, states: [[icao24, callsign, origin_country, time_pos,
+    //   time_contact, lon, lat, baro_alt_m, on_ground, velocity_m/s, heading,
+    //   vert_rate, sensors, geo_alt_m, squawk, spi, position_source], ...] }
+    const states = d?.states;
+    if (!Array.isArray(states)) return;
+    const top = states.slice(0, 1500);
+    top.forEach(s => {
+      const lon = s[5], lat = s[6];
+      if (typeof lon !== 'number' || typeof lat !== 'number') return;
+      const altM = s[7] || 0;            // baro alt in metres
+      const altFt = altM * 3.28084;
+      const t = Math.min(1, altFt / 40000);
       const hex = DS.sampleRamp('altitude', t);
+      const callsign = (s[1] || '').trim();
+      const country = s[2] || '';
+      const speedKts = s[9] ? Math.round(s[9] * 1.94384) : null;
       addEntity('flights', {
-        position: Cesium.Cartesian3.fromDegrees(f.lon, f.lat, Math.min(15000, alt * 0.3048)),
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, Math.min(15000, altM)),
         point: {
           pixelSize: 3,
           color: DS.c(hex, 0.9),
           outlineColor: DS.c('#ffffff', 0.2),
           outlineWidth: 0.5,
         },
-        name: f.callsign || 'Flight',
-        description: `Callsign: ${f.callsign || '—'}<br>Alt: ${alt.toLocaleString()} ft<br>Speed: ${f.speed_kts || '?'} kts`,
+        name: callsign || 'Flight',
+        description: `Callsign: ${callsign || '—'}<br>Origin: ${country}<br>Alt: ${altFt.toLocaleString(undefined,{maximumFractionDigits:0})} ft<br>Speed: ${speedKts ?? '?'} kts`,
       });
     });
   }
@@ -761,7 +766,6 @@
     satellites: { render: renderSatellites, clear: () => clearLayer('satellites') },
   };
   window.LAYERS = LAYERS;
-  window.clearLayer = clearLayer;
-  window.fetchCache = fetchCache;
-  window.loadPopulation = loadPopulation;
+  window.fetchCache = fetchCache;       // used by mapmode.js, layers2.js, energy-viz.js, etc.
+  // window.buildGreatCircle is exported earlier (line 263)
 })();

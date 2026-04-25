@@ -15,11 +15,9 @@ import httpx  # only used for type; we actually use websockets below
 from ..models import LayerMeta, point
 from ..registry import register
 
-# AISStream public API — free key (register at https://aisstream.io)
-AISSTREAM_KEY = os.environ.get(
-    "AISSTREAM_KEY",
-    "b50ff715b2036aadee84702ca3cbfabb732af223",
-)
+# AISStream public API — free key (register at https://aisstream.io).
+# NEVER commit the key inline. Set AISSTREAM_KEY in .env.
+AISSTREAM_KEY = os.environ.get("AISSTREAM_KEY", "")
 
 LAYER = LayerMeta(
     id="ships",

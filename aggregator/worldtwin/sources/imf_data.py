@@ -61,11 +61,16 @@ async def fetch(client: httpx.AsyncClient):
         for iso3, year_map in country_map.items():
             if not year_map:
                 continue
-            # Take the latest available year
             latest_year = max(year_map.keys())
             latest_value = year_map[latest_year]
             rec = by_country.setdefault(iso3, {})
-            rec[code] = {"year": latest_year, "value": latest_value}
+            # Keep history (for time-aware mapmodes) AND latest (for current readers)
+            rec[code] = {
+                "year": latest_year,
+                "value": latest_value,
+                "latest": {"year": latest_year, "value": latest_value},
+                "history": year_map,    # already {year_str: value}
+            }
 
     return {
         "source": "IMF DataMapper",

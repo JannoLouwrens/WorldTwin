@@ -25,3 +25,10 @@ Thumbs.db
 
 # Docker
 *.tar.gz
+
+# Node — script tooling (Playwright binaries, etc.)
+node_modules/
+package-lock.json
+
+# Generated validation artefacts
+scripts/screenshots/

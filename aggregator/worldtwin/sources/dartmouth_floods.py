@@ -26,6 +26,7 @@ LAYER = LayerMeta(
     initial_delay_s=30,
     description="Global flood events from the last 90 days with location, cause, deaths, and severity.",
     requires_key=False,
+    enabled=False,  # 2026-04-25 disabled: upstream URL returns 404 consistently. Re-enable when Dartmouth restores feed.
 )
 
 

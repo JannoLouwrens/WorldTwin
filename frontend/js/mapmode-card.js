@@ -88,20 +88,32 @@
 
   const BUILDERS = {
     political(iso3) {
-      const intel = getIntel()[iso3];
-      if (!intel) return null;
+      const intel = getIntel()[iso3] || {};
       const s = intel.snapshot || {};
       const deps = intel.dependencies || {};
       const blocs = [];
+      let alliesCount = 0, enemiesCount = 0, blocPrimary = null;
       const rel = window._cacheStore?.get('country_relations');
       if (rel?.by_country?.[iso3]) {
         const rc = rel.by_country[iso3];
         blocs.push(...(rc.blocs || []));
+        alliesCount = (rc.allies || []).length;
+        enemiesCount = (rc.enemies || []).length;
+        blocPrimary = rc.bloc_primary;
       }
+      // Fall back to world_bank if intel snapshot is empty
+      const wb = getWB()[iso3] || {};
+      if (!s.gdp_usd) s.gdp_usd = (wb['NY.GDP.MKTP.CD'] || {}).value;
+      if (!s.population) s.population = (wb['SP.POP.TOTL'] || {}).value;
+      if (!s.military_spend_pct) s.military_spend_pct = (wb['MS.MIL.XPND.GD.ZS'] || {}).value;
+      if (!s.internet_pct) s.internet_pct = (wb['IT.NET.USER.ZS'] || {}).value;
       return {
         title: 'Political Profile',
+        value: blocPrimary || '—',
         rows: [
           ['Blocs', blocs.join(', ') || '—'],
+          ['Allies', String(alliesCount)],
+          ['Enemies', String(enemiesCount)],
           ['GDP', '$' + fmtN(s.gdp_usd)],
           ['Population', fmtN(s.population)],
           ['Military', pct(s.military_spend_pct) + ' of GDP'],
@@ -394,6 +406,47 @@
         source: 'World Bank 🥇 + IMF 🥇',
       };
     },
+
+    religion(iso3) {
+      const cc = window._cacheStore?.get('country_culture');
+      const rec = cc?.countries?.[iso3];
+      if (!rec) return null;
+      const intel = getIntel()[iso3] || {};
+      const wb = getWB()[iso3] || {};
+      const pop = (wb['SP.POP.TOTL'] || {}).value;
+      return {
+        title: 'Religion (' + (rec.religion?.family || '—') + ')',
+        value: rec.religion?.label || '—',
+        rows: [
+          ['Family', rec.religion?.family || '—'],
+          ['Population', pop ? fmtN(pop) : '—'],
+          ['Ethnicity', rec.ethnicity?.label || '—'],
+        ],
+        source: 'Wikidata SPARQL P140 + CIA/Pew fallback',
+      };
+    },
+
+    ethnicity(iso3) {
+      const cc = window._cacheStore?.get('country_culture');
+      const rec = cc?.countries?.[iso3];
+      if (!rec) return null;
+      const wb = getWB()[iso3] || {};
+      const pop = (wb['SP.POP.TOTL'] || {}).value;
+      return {
+        title: 'Ethnicity (' + (rec.ethnicity?.family || '—') + ')',
+        value: rec.ethnicity?.label || '—',
+        rows: [
+          ['Family', rec.ethnicity?.family || '—'],
+          ['Population', pop ? fmtN(pop) : '—'],
+          ['Religion', rec.religion?.label || '—'],
+        ],
+        source: 'Wikidata SPARQL P172 + CIA/Pew fallback',
+      };
+    },
+
+    // gdp_pc_history + population_history removed 2026-04-25 — those mapmode
+    // ids are gone, the regular `gdp_pc` and `population` builders above are
+    // shown instead (they'll be enriched with historical-year context next).
 
     pulse(iso3) {
       const intel = getIntel()[iso3];

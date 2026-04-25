@@ -58,6 +58,18 @@
 
   async function loadPolygons() {
     if (polygonsLoaded) return;
+    // Guard against being called before the Cesium viewer is built. Retry every
+    // 200ms until viewer.entities exists, then proceed. This was the cause of
+    // "Cannot read properties of undefined (reading 'entities')" on cold boot.
+    let waitMs = 0;
+    while (!window.viewer || !window.viewer.entities) {
+      await new Promise(r => setTimeout(r, 200));
+      waitMs += 200;
+      if (waitMs > 15000) {
+        console.warn('[mapmode] viewer never appeared — giving up on polygon load');
+        return;
+      }
+    }
     try {
       const r = await (window.fetchCache ? window.fetchCache('country_polygons') : fetch('/api/cache/country_polygons.json').then(r => r.json()));
       if (!r || !r.features) {
@@ -121,8 +133,37 @@
     }
   }
 
-  function register(id, name, colorFn, legend, icon) {
-    MAPMODES[id] = { id, name, colorFn, legend, icon };
+  function register(id, name, colorFn, legend, icon, opts) {
+    // opts.timeAware = true   → repaint when Clock fires
+    // opts.years = [ya, yb]   → register an availability band on the scrubber
+    MAPMODES[id] = { id, name, colorFn, legend, icon, ...(opts || {}) };
+  }
+
+  // Re-run the active mapmode's colorFn — used both for first-paint and for
+  // time-aware repaint when Clock changes. Cheap because it only touches
+  // window.MAPMODE_COLORS; the polygon material reads it via CallbackProperty.
+  function repaint() {
+    if (!currentId) return;
+    const mode = MAPMODES[currentId];
+    if (!mode) return;
+    const colors = {};
+    for (const iso3 of Object.keys(polygonsByIso3)) {
+      try {
+        const hex = mode.colorFn(iso3, polygonsByIso3[iso3]);
+        if (hex) colors[iso3] = hex;
+      } catch (_) {}
+    }
+    window.MAPMODE_COLORS = colors;
+  }
+
+  // Subscribe once to Clock — repaint any time-aware mapmode automatically.
+  let _clockSub = null;
+  function ensureClockSub() {
+    if (_clockSub || !window.Clock) return;
+    _clockSub = window.Clock.subscribe(() => {
+      const mode = MAPMODES[currentId];
+      if (mode && mode.timeAware) repaint();
+    });
   }
 
   async function activate(id) {
@@ -157,6 +198,15 @@
     if (mode.legend && window.setLegendStrip) {
       window.setLegendStrip(mode.legend, mode.name);
     }
+    // Time-aware mapmodes: subscribe to Clock for live repaint, advertise availability
+    ensureClockSub();
+    if (window.Scrubber) {
+      if (mode.timeAware && mode.years) {
+        window.Scrubber.registerLayer('mapmode:' + id, mode.years, '#a855f7');
+      } else {
+        window.Scrubber.unregisterLayer('mapmode:' + id);
+      }
+    }
     console.log('[mapmode] activated', id, 'coloured', Object.keys(colors).length, 'countries');
   }
 
@@ -183,29 +233,62 @@
   }
 
   // Hover a country — set ally/enemy highlight
+  // Mapmode-aware hover. Political shows blocs/enemies. Religion/ethnicity
+  // show same-category. Everything else just highlights the hovered country
+  // and emits a `mapmode_hover` event for tooltip rendering.
   async function hoverCountry(iso3) {
     if (!iso3) {
       window.MAPMODE_HIGHLIGHT = {};
+      window.dispatchEvent(new CustomEvent('mapmode_hover', { detail: null }));
       return;
     }
-    // Read country_relations cache
-    let rel = dataCaches.country_relations;
-    if (!rel && window.fetchCache) {
-      rel = await window.fetchCache('country_relations');
-      if (rel) dataCaches.country_relations = rel;
+    const mode = MAPMODES[currentId];
+    const props = polygonsByIso3[iso3] || {};
+    const highlight = { [iso3]: '#ffffff' };
+
+    if (currentId === 'political') {
+      // Show allies (bloc) and enemies — but cap to keep visual clarity
+      let rel = dataCaches.country_relations;
+      if (!rel && window.fetchCache) {
+        rel = await window.fetchCache('country_relations');
+        if (rel) dataCaches.country_relations = rel;
+      }
+      const r = rel?.by_country?.[iso3];
+      if (r) {
+        const allyHue = r.bloc_color || '#4cc2ff';
+        // Allies often number 80+ which is visual noise. Cap to top 12 by alphabetic
+        // order (the data isn't ranked) — gives "primary bloc" feel.
+        (r.allies || []).slice(0, 12).forEach(a => { highlight[a] = allyHue; });
+        (r.enemies || []).forEach(e => { highlight[e] = '#ef3b3b' });
+      }
+    } else if (currentId === 'religion' || currentId === 'ethnicity') {
+      // Highlight all countries with the same religion/ethnicity family
+      const cc = dataCaches.country_culture;
+      const target = cc?.countries?.[iso3];
+      const myFamily = currentId === 'religion'
+        ? target?.religion?.family
+        : target?.ethnicity?.family;
+      if (myFamily && cc?.countries) {
+        for (const otherIso of Object.keys(cc.countries)) {
+          if (otherIso === iso3) continue;
+          const other = cc.countries[otherIso];
+          const otherFamily = currentId === 'religion'
+            ? other?.religion?.family
+            : other?.ethnicity?.family;
+          if (otherFamily === myFamily) {
+            highlight[otherIso] = (window.MAPMODE_COLORS || {})[otherIso] || '#ffffff';
+          }
+        }
+      }
     }
-    if (!rel || !rel.by_country) {
-      window.MAPMODE_HIGHLIGHT = { [iso3]: '#ffffff' };
-      return;
-    }
-    const r = rel.by_country[iso3];
-    const highlight = { [iso3]: '#ffffff' };  // hovered = bright white
-    if (r) {
-      const allyHue = r.bloc_color || '#4cc2ff';
-      (r.allies || []).forEach(a => { highlight[a] = allyHue; });
-      (r.enemies || []).forEach(e => { highlight[e] = '#ef3b3b'; });
-    }
+    // For all other mapmodes (gdp, population, military, etc.) — just the one country.
+
     window.MAPMODE_HIGHLIGHT = highlight;
+    // Emit hover event with the country value for tooltip rendering
+    const value = (window.MAPMODE_COLORS || {})[iso3];
+    window.dispatchEvent(new CustomEvent('mapmode_hover', {
+      detail: { iso3, name: props.name || iso3, value, mode: currentId },
+    }));
   }
 
   function clearHover() {
@@ -215,6 +298,7 @@
   window.Mapmode = {
     register,
     activate,
+    repaint,
     list: () => Object.values(MAPMODES),
     current: () => currentId,
     loadPolygons,

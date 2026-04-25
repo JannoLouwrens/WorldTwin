@@ -238,12 +238,13 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
   padding: 9px 16px;
   background: var(--glass);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: 18px;
   backdrop-filter: var(--blur);
   box-shadow: var(--shadow-md);
   font-size: 11px;
   color: var(--text-md);
-  max-width: min(720px, 92vw);
+  max-width: min(1100px, 96vw);
+  flex-wrap: wrap;
 }
 .legend-strip .lg-dot {
   width: 10px; height: 10px; border-radius: 50%;
@@ -261,7 +262,7 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
 }
 .legend-strip .lg-ramp {
   width: 200px; height: 8px; border-radius: 4px;
-  background: linear-gradient(90deg, #1e3a8a, #2563eb, #06b6d4, #84cc16, #fde047, #fb923c, #ef4444);
+  background: linear-gradient(90deg, #15803d, #84cc16, #fde047, #fb923c, #ef4444, #b91c1c);
   flex-shrink: 0;
 }
 .legend-strip .lg-min, .legend-strip .lg-max {
@@ -322,72 +323,7 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
 /* ============================================================
    COUNTRY CARD — opens on country click (right side)
    ============================================================ */
-.country-card {
-  position: fixed;
-  top: 90px;
-  right: 16px;
-  z-index: 85;
-  width: 340px;
-  max-height: 82vh;
-  overflow-y: auto;
-  background: var(--glass);
-  border: 1px solid var(--border-hi);
-  border-radius: var(--r-md);
-  backdrop-filter: var(--blur);
-  padding: 18px;
-  box-shadow: var(--shadow-md);
-  display: none;
-}
-.country-card.show { display: block; animation: slideInRight 240ms ease; }
-.country-card .cc-close {
-  position: absolute; top: 12px; right: 14px;
-  cursor: pointer; opacity: 0.5; font-size: 18px;
-  background: none; border: none; color: var(--text-md);
-}
-.country-card .cc-close:hover { opacity: 1; }
-.country-card .cc-flag { font-size: 2rem; margin-bottom: 6px; line-height: 1; }
-.country-card .cc-name {
-  font-size: 18px; font-weight: 700; color: var(--text-hi);
-  letter-spacing: -0.01em; margin-bottom: 2px;
-}
-.country-card .cc-subtitle {
-  font-size: 10px; color: var(--text-lo); text-transform: uppercase;
-  letter-spacing: 0.1em; margin-bottom: 14px;
-}
-.country-card .cc-section {
-  margin-top: 14px; padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-.country-card .cc-section-title {
-  font-size: 10px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.1em; color: var(--text-md); margin-bottom: 8px;
-  display: flex; align-items: center; gap: 6px;
-}
-.country-card .cc-kpis {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  margin-bottom: 8px;
-}
-.country-card .cc-kpi {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 8px 10px;
-}
-.country-card .cc-kpi .label { font-size: 9px; text-transform: uppercase; color: var(--text-lo); letter-spacing: 0.1em; }
-.country-card .cc-kpi .value { font-size: 14px; font-weight: 600; color: var(--text-hi); font-variant-numeric: tabular-nums; }
-.country-card .cc-list { font-size: 11px; }
-.country-card .cc-list .row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
-.country-card .cc-list .row .swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-.country-card .cc-list .row .name { flex: 1; color: var(--text-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.country-card .cc-list .row .val { color: var(--text-hi); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 11px; }
-.country-card .cc-bar {
-  height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden;
-  margin-top: 3px;
-}
-.country-card .cc-bar .fill { height: 100%; transition: width 300ms ease; }
-
-/* Power mix donut / list */
-.country-card .fuel-list .row .swatch { border-radius: 50%; }
+/* country-card CSS removed 2026-04-25 — superseded by dossier panel */
 
 /* ============================================================
    COMMODITY FILTER — top-left panel on Resources mode
@@ -611,12 +547,36 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
   backdrop-filter: var(--blur);
   display: flex;
   align-items: center;
-  padding: 0 12px;
+  padding: 0 28px;            /* leave room for chevron arrows */
   gap: 2px;
   overflow-x: auto;
   scrollbar-width: none;
+  /* Fade-mask hints "scroll for more" on either side. The data-scroll-* attrs
+     are toggled by JS so the mask only appears on the side that has more. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+.mmbar[data-scroll-start="true"]  { -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 100%);
+                                            mask-image: linear-gradient(90deg, transparent, #000 24px, #000 100%); }
+.mmbar[data-scroll-end="true"]    { -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent);
+                                            mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent); }
+.mmbar[data-scroll-start="true"][data-scroll-end="true"] {
+  -webkit-mask-image: none; mask-image: none;
 }
 .mmbar::-webkit-scrollbar { display: none; }
+/* Scroll-affordance chevrons (rendered by tw-scroll-arrows.js) */
+.tw-scroll-arrow {
+  position: fixed; z-index: 97;
+  width: 24px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(90deg, rgba(5,7,13,0.9) 0%, rgba(5,7,13,0.4) 100%);
+  color: var(--text-md); cursor: pointer; user-select: none;
+  font-size: 14px; font-weight: 700; line-height: 1;
+  transition: opacity 200ms ease, color 200ms ease;
+}
+.tw-scroll-arrow.right { background: linear-gradient(270deg, rgba(5,7,13,0.9) 0%, rgba(5,7,13,0.4) 100%); }
+.tw-scroll-arrow:hover { color: var(--accent); }
+.tw-scroll-arrow.hidden { opacity: 0; pointer-events: none; }
 .mmbar .mmbar-label {
   flex-shrink: 0;
   padding-right: 12px;
@@ -662,10 +622,19 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 28px;
   gap: 1px;
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+#layerToggles[data-scroll-start="true"]  { -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 100%);
+                                                  mask-image: linear-gradient(90deg, transparent, #000 24px, #000 100%); }
+#layerToggles[data-scroll-end="true"]    { -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent);
+                                                  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent); }
+#layerToggles[data-scroll-start="true"][data-scroll-end="true"] {
+  -webkit-mask-image: none; mask-image: none;
 }
 #layerToggles::-webkit-scrollbar { display: none; }
 .lt-label {
@@ -817,16 +786,17 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
    ============================================================ */
 .narrative-strip { top: 58px !important; height: 26px !important; }
 .events-ticker   { top: 84px !important; height: 26px !important; }
-.modes           { bottom: 0 !important; top: auto !important; }
-.legend-strip    { bottom: 62px !important; }
-.kpi-row         { top: auto !important; bottom: 62px !important; left: 96px !important; max-height: 36px !important; overflow: hidden !important; max-width: 400px !important; }
-.ticker-strip    { top: auto !important; bottom: 100px !important; left: 96px !important; max-width: 500px !important; }
-.commodity-panel { top: 120px !important; left: 96px !important; bottom: 140px !important; max-height: none !important; overflow-y: auto !important; }
-.legend-card, .country-card, .body-card { top: 120px !important; }
+/* Scrubber sits at bottom:14, ~110px tall — push everything else up by ~120px */
+.modes           { bottom: 134px !important; top: auto !important; }
+.legend-strip    { bottom: 196px !important; }
+.kpi-row         { top: auto !important; bottom: 196px !important; left: 96px !important; max-height: 36px !important; overflow: hidden !important; max-width: 400px !important; }
+.ticker-strip    { top: auto !important; bottom: 234px !important; left: 96px !important; max-width: 500px !important; }
+.commodity-panel { top: 120px !important; left: 96px !important; bottom: 270px !important; max-height: none !important; overflow-y: auto !important; }
+.legend-card, .body-card { top: 120px !important; }
 .pulse-panel     { top: 120px !important; left: 96px !important; }
-.layer-browser   { top: 110px !important; }
-.help-btn        { bottom: 68px !important; left: 14px !important; }
-#diagnostics     { bottom: 68px !important; left: 96px !important; }
+.layer-browser   { top: 110px !important; bottom: 200px !important; }
+.help-btn        { bottom: 200px !important; left: 14px !important; }
+#diagnostics     { bottom: 200px !important; left: 96px !important; }
 
 /* ============================================================
    LAYER BROWSER — right-side individual toggle panel (press L)
@@ -891,6 +861,43 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
   cursor: pointer;
 }
 .layer-browser .lb-btn:hover { background: var(--surface-2); color: var(--text-hi); }
+.layer-browser .lb-mapmodes {
+  padding: 0 14px 12px;
+  border-bottom: 1px solid var(--border);
+  max-height: 36vh;
+  overflow-y: auto;
+}
+.layer-browser .lb-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-md);
+  text-transform: uppercase;
+  padding: 12px 0 8px;
+}
+.layer-browser .lb-mm-cat-label {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--text-lo);
+  text-transform: uppercase;
+  padding: 8px 0 4px;
+}
+.layer-browser .lb-mm-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 6px; border-radius: 6px; cursor: pointer;
+  font-size: 12px;
+  color: var(--text-md);
+  transition: background .12s ease;
+}
+.layer-browser .lb-mm-row:hover { background: rgba(255,255,255,0.05); color: var(--text-hi); }
+.layer-browser .lb-mm-row.on   { background: rgba(76,194,255,0.10); color: var(--text-hi); }
+.layer-browser .lb-mm-swatch {
+  width: 10px; height: 10px; border-radius: 2px;
+  flex: 0 0 10px;
+  border: 1px solid rgba(255,255,255,0.25);
+}
+.layer-browser .lb-mm-name { flex: 1; }
+.layer-browser .lb-mm-mark { color: #4cc2ff; font-size: 10px; width: 10px; }
 .layer-browser .lb-groups {
   flex: 1;
   overflow-y: auto;
@@ -956,6 +963,34 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
   flex-shrink: 0;
   height: 4px;
   accent-color: var(--accent);
+}
+/* Time-aware badge — small clock glyph next to the layer name */
+.layer-browser .lb-clock-badge {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 10px;
+  color: #a855f7;
+  opacity: 0.85;
+  cursor: help;
+}
+/* When user scrubs away from Live (body gets data-scrubbed-past), dim all
+   non-time-aware layer rows and frost the layer toggles for the same.
+   Tells the user "this layer shows today's data, not the historical year." */
+body[data-scrubbed-past="true"] .layer-browser .lb-row:not(.lb-time-aware) {
+  opacity: 0.45;
+}
+body[data-scrubbed-past="true"] .layer-browser .lb-row:not(.lb-time-aware) .lb-row-name::after {
+  content: ' · today';
+  color: var(--text-lo);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+body[data-scrubbed-past="true"] #layerToggles .lt-btn:not([data-time-aware="true"]) {
+  opacity: 0.45;
+}
+body[data-scrubbed-past="true"] .mmbar .mmbar-btn:not([data-time-aware="true"]) {
+  opacity: 0.55;
 }
 
 /* ============================================================
@@ -1300,14 +1335,7 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
   <div id="lcBody"></div>
 </div>
 
-<!-- Country card (on country click) -->
-<div class="country-card" id="countryCard">
-  <button class="cc-close" id="ccClose">×</button>
-  <div class="cc-flag" id="ccFlag"></div>
-  <div class="cc-name" id="ccName">—</div>
-  <div class="cc-subtitle" id="ccSub">—</div>
-  <div id="ccBody"></div>
-</div>
+<!-- Country card removed — superseded by dossier.js multi-cache panel -->
 
 <!-- Layer Browser (right side, press L) -->
 <div class="layer-browser" id="layerBrowser"></div>
@@ -1333,7 +1361,15 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
   <div id="diagBody">—</div>
 </div>
 
+<!-- Historical timeline mount -->
+<div id="timeline"></div>
+
 <!-- App scripts -->
+<script src="js/time/clock.js"></script>
+<script src="js/time/cache.js"></script>
+<script src="js/time/series.js"></script>
+<script src="js/time/scrubber.js"></script>
+<script src="js/time/auto-history.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/design.js"></script>
 <script src="js/pickcard.js"></script>
@@ -1343,13 +1379,23 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
 <script src="js/planets.js"></script>
 <script src="js/layers.js"></script>
 <script src="js/layers2.js"></script>
+<script src="js/historical-borders.js"></script>
+<script src="js/historical-events.js"></script>
+<script src="js/historical-wars.js"></script>
+<script src="js/connections.js"></script>
+<script src="js/dossier.js"></script>
+<script src="js/events-pulse.js"></script>
+<script src="js/briefing.js"></script>
+<script src="js/hover-tooltip.js"></script>
+<script src="js/onboarding.js"></script>
+<script src="js/scroll-arrows.js"></script>
+<script src="js/time-awareness-ui.js"></script>
 <script src="js/mapmode.js"></script>
 <script src="js/mapmodes-data.js"></script>
 <script src="js/mapmode-bar.js"></script>
 <script src="js/event-glyphs.js"></script>
 <script src="js/war-hotspots.js"></script>
 <script src="js/energy-viz.js"></script>
-<script src="js/intel-card.js"></script>
 <script src="js/mapmode-card.js"></script>
 <script src="js/layer-browser.js"></script>
 <script src="js/layer-toggles.js"></script>

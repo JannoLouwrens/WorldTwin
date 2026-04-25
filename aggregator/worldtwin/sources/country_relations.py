@@ -90,7 +90,11 @@ BLOCS: dict[str, dict[str, Any]] = {
         ],
     },
     "BRICS": {
-        "color": "#DC3545",
+        # Muted purple — was bright red, but BRICS now spans 4 continents and
+        # was painting Brazil/India/China/Russia/SA/Egypt/Iran/UAE the same
+        # alarming red, dominating the political view. Purple is more neutral
+        # while still distinct from NATO blue.
+        "color": "#7c3aed",
         "members": ["BRA", "RUS", "IND", "CHN", "ZAF", "IRN", "EGY", "ETH", "ARE"],
     },
     "OECD": {
@@ -169,11 +173,16 @@ def _read_cache(name: str) -> Any:
 
 def _primary_bloc(blocs: list[str]) -> str:
     """Return the most visually dominant bloc for a country.
-    Priority: NATO > EU > G7 > BRICS > ASEAN > AU > MERCOSUR > CIS > GCC > COMMONWEALTH > G20 > OECD
+
+    Priority puts REGIONAL/CONTINENTAL blocs first so each country shows its
+    home-region colour by default. Ideological blocs (BRICS, AUKUS, QUAD) are
+    overlaid on hover, not in the base map. Otherwise BRICS — which now spans
+    4 continents — dominates the view and Africa/South America look 'red'
+    instead of green/orange.
     """
     priority = [
-        "NATO", "EU", "G7", "BRICS", "ASEAN", "AU", "MERCOSUR",
-        "CIS", "GCC", "ARABLEAGUE", "COMMONWEALTH", "QUAD", "AUKUS", "G20", "OECD",
+        "EU", "AU", "ASEAN", "MERCOSUR", "CIS", "GCC", "ARABLEAGUE", "NATO",
+        "BRICS", "G7", "QUAD", "AUKUS", "COMMONWEALTH", "G20", "OECD",
     ]
     for p in priority:
         if p in blocs:
