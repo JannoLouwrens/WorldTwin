@@ -118,7 +118,7 @@
   function open(detail) {
     ensureMount();
     const el = _el;
-    const { label = '—', value = '—', source = '', path = '', voice = '' } = detail || {};
+    const { label = '—', value = '—', source = '', path = '', voice = '', data_date = '' } = detail || {};
     const meta = SOURCE_MAP[source] || { cache: null, url: '' };
     const cacheData = meta.cache ? window._cacheStore?.get(meta.cache) : null;
     const digestRoot = window._cacheStore?.get('gemini_narrative')?.digest;
@@ -129,12 +129,29 @@
                    || window._cacheStore?.get('gemini_narrative')?.fetched
                    || '—';
 
+    // Compute trust tier — green if fetched in last 6h, yellow if 6-48h, red if older or null
+    const fetchedDate = fetchedAt && fetchedAt !== '—' ? new Date(fetchedAt) : null;
+    const ageMs = fetchedDate && !isNaN(fetchedDate) ? (Date.now() - fetchedDate.getTime()) : null;
+    let tier = 'red', tierLabel = 'unknown freshness', tierDetail = 'no fetch timestamp';
+    if (ageMs !== null) {
+      const hours = Math.round(ageMs / 3.6e6);
+      if (hours < 6)        { tier = 'green';  tierLabel = 'fresh';     tierDetail = `fetched ${hours}h ago`; }
+      else if (hours < 48)  { tier = 'yellow'; tierLabel = 'recent';    tierDetail = `fetched ${hours}h ago`; }
+      else                  { tier = 'red';    tierLabel = 'stale';     tierDetail = `fetched ${Math.round(hours/24)}d ago`; }
+    }
+    const todayUtc = new Date().toISOString().slice(0, 10);
     el.innerHTML = `
       <div class="tw-inspector-scrim"></div>
       <div class="tw-inspector-card">
         <div class="tw-inspector-head">
           <div class="tw-inspector-eyebrow">Data Inspector</div>
           <button class="tw-inspector-close" id="twInspectorClose" aria-label="Close inspector">×</button>
+        </div>
+        <div class="tw-inspector-trust tw-trust-${tier}" title="${escapeHtml(tierDetail)}">
+          <span class="tw-trust-dot"></span>
+          <span class="tw-trust-lbl">${escapeHtml(tierLabel)}</span>
+          <span class="tw-trust-detail">${escapeHtml(tierDetail)}</span>
+          <span class="tw-trust-today">TODAY ${todayUtc}</span>
         </div>
 
         <div class="tw-inspector-claim">
@@ -146,6 +163,10 @@
           </div>
         </div>
 
+        <div class="tw-inspector-row">
+          <div class="tw-inspector-row-lbl">Data date</div>
+          <div class="tw-inspector-row-v">${data_date ? `<code>${escapeHtml(data_date)}</code> <span style="color:var(--brass);font-style:italic;font-size:9px;margin-left:6px">when this was measured / published</span>` : '<em>unknown</em>'}</div>
+        </div>
         <div class="tw-inspector-row">
           <div class="tw-inspector-row-lbl">Cache</div>
           <div class="tw-inspector-row-v">${meta.cache ? `<code>${escapeHtml(meta.cache)}.json</code>` : '<em>unmapped</em>'}</div>

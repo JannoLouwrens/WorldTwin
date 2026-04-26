@@ -300,6 +300,8 @@ async def fetch(client: httpx.AsyncClient):
         "historical_count": len(full_series),
     }
 
+    # Freshness timestamp — every public number must carry a date
+    v1_data["fetched"] = datetime.now(timezone.utc).isoformat()
     return v1_data, v1_data
 
 

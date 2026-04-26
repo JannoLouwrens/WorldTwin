@@ -61,10 +61,11 @@
               data-value="${escapeAttr(c.value)}"
               data-source="${escapeAttr(c.source)}"
               data-path="${escapeAttr(c.digest_path)}"
-              title="Inspect: ${escapeAttr(c.label)} — click to drill into the data">
+              data-date="${escapeAttr(c.data_date || '')}"
+              title="Inspect: ${escapeAttr(c.label)} (${escapeAttr(c.data_date || 'date unknown')}) — click to drill into the data">
         <span class="tw-cite-lbl">${escapeHtml(c.label)}</span>
         <span class="tw-cite-v">${escapeHtml(c.value)}</span>
-        <span class="tw-cite-src">${escapeHtml(c.source)}</span>
+        <span class="tw-cite-src">${escapeHtml(c.source)}${c.data_date ? ` · ${escapeHtml(c.data_date)}` : ''}</span>
       </button>`).join('');
     return `<div class="tw-voice tw-voice-${voice.hue}">
       <div class="tw-voice-head">
@@ -132,6 +133,7 @@
           source: btn.dataset.source,
           path: btn.dataset.path,
           voice: btn.dataset.voice,
+          data_date: btn.dataset.date,
         };
         if (window.DataInspector?.open) {
           window.DataInspector.open(detail);

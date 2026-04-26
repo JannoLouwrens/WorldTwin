@@ -174,11 +174,25 @@
     const fmt = formatValue(detail);
     const swatch = (window.MAPMODE_COLORS || {})[iso3] || '#94a3b8';
     const prov = window.Clock ? provenance(mode, window.Clock.year) : null;
+    // Provenance now ALWAYS shows even at Live — surface "today" + the
+    // mapmode's source name so the user knows when the data was measured.
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const liveSrc = ({
+      gdp: 'World Bank WDI', gdp_pc: 'World Bank WDI', population: 'World Bank WDI',
+      inflation: 'IMF WEO', debt: 'World Bank WDI', life: 'World Bank WDI',
+      urban: 'World Bank WDI', internet: 'World Bank WDI', co2: 'World Bank WDI',
+      pollution: 'World Bank WDI', renewable: 'OWID Energy', military: 'World Bank WDI',
+      democracy: 'V-Dem v14', political: 'WorldTwin curated blocs',
+      religion: 'WorldTwin curated', ethnicity: 'WorldTwin curated',
+      pulse: 'WorldTwin pulse composite', water_stress: 'WRI Aqueduct', food: 'IPC',
+    })[mode];
     const provHtml = prov
-      ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);font-size:10px;color:#8c95aa${prov.reconstruction ? ';font-style:italic' : ''}">
-           ${window.Clock.label(prov.year)} · ${prov.src}${prov.reconstruction ? ' · reconstruction' : ''}
+      ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);font-size:10px;color:#c9a86b${prov.reconstruction ? ';font-style:italic' : ''}">
+           ${window.Clock.label(prov.year)} · ${prov.src}${prov.reconstruction ? ' · reconstruction' : ''} <span style="color:#8c95aa;margin-left:6px">today: ${todayUtc}</span>
          </div>`
-      : '';
+      : (liveSrc ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.08);font-size:10px;color:#c9a86b">
+           ${liveSrc} · today ${todayUtc}
+         </div>` : '');
     // Causal summary — top trade partner + ally/enemy counts. Surfaces
     // what the causal-lines arcs are showing without clicking each arc.
     const ta = window._cacheStore?.get('trade_annual');

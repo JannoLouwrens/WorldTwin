@@ -131,6 +131,9 @@ async def fetch(client: httpx.AsyncClient):
         "year_range": [final[0][0], final[-1][0]],
         "sample_count": len(final),
     }
+    # Freshness timestamp — every public number must carry a date
+    from datetime import datetime, timezone
+    v1["fetched"] = datetime.now(timezone.utc).isoformat()
     return v1, v1
 
 

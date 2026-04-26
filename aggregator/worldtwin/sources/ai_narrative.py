@@ -555,13 +555,19 @@ def _council_prompt(digest: dict) -> str:
     digest_json = json.dumps(digest, indent=1, default=str)
     if len(digest_json) > 18000:
         digest_json = digest_json[:18000] + "\n[truncated]"
+    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     return (
+        f"TODAY IS {today_utc} (UTC). All your readings must reflect this date.\n"
+        "Never refer to events as 'recent' without a date — say 'on YYYY-MM-DD' or "
+        "'in the past N hours' explicitly. The user is making decisions today; vague "
+        "time language costs them money or lives.\n"
+        "\n"
         "You are running the Council — three independent senior advisors who read the SAME world\n"
         "digest through different lenses. They disagree often. That disagreement is the product.\n"
         "\n"
         "Return STRICT JSON (no markdown, no preamble) with this exact shape:\n"
         "{\n"
-        '  "general":   {"reading": "...", "headline": "...", "citations": [{"label":"...", "value":"...", "source":"...", "digest_path":"..."}]},\n'
+        '  "general":   {"reading": "...", "headline": "...", "citations": [{"label":"...", "value":"...", "source":"...", "digest_path":"...", "data_date":"YYYY-MM-DD"}]},\n'
         '  "treasurer": {"reading": "...", "headline": "...", "citations": [...]},\n'
         '  "augur":     {"reading": "...", "headline": "...", "citations": [...]}\n'
         "}\n"
@@ -584,10 +590,12 @@ def _council_prompt(digest: dict) -> str:
         "   yet. Headline frames a slow-moving warning.\n"
         "\n"
         "RULES (strict, the UI checks these):\n"
-        "  1. EVERY citation must have all 4 fields: label (human), value (the number/text quoted),\n"
+        "  1. EVERY citation must have all 5 fields: label (human), value (the number/text quoted),\n"
         "     source (PortWatch/FRED/UCDP/GDACS/USGS/NHC/Pulse/WHO/DONKI/SWPC/Cloudflare/GFW/\n"
         "     Wikidata/FAO/EIA/IMF/OECD/CoinGecko/Binance), digest_path (JSON pointer like\n"
-        "     'chokepoints[0].ships_today' or 'macros[2].latest').\n"
+        "     'chokepoints[0].ships_today' or 'macros[2].latest'), data_date (YYYY-MM-DD when\n"
+        "     the data was measured/published — read it from the digest field next to the value,\n"
+        "     or use the digest's `as_of` if no per-field date is present).\n"
         "  2. Each voice cites 2-4 numbers. No more, no less. Numbers must be exact strings\n"
         "     from the digest (e.g. \"156\" not \"about 150\").\n"
         "  3. The reading prose may include those numbers in parentheses with the source — same\n"
@@ -614,15 +622,16 @@ def _deterministic_council(digest: dict) -> dict:
     """
     cites_g, cites_t, cites_a = [], [], []
     g_lines, t_lines, a_lines = [], [], []
+    today = (digest.get("as_of") or "")[:10]
 
     # GENERAL — conflict, hazards (security), chokepoints, top concerning
     c24 = digest.get("conflict_24h") or {}
     if c24.get("event_count") is not None:
         cites_g.append({"label": "Conflict events 24h", "value": str(c24["event_count"]),
-                        "source": "UCDP", "digest_path": "conflict_24h.event_count"})
+                        "source": "UCDP", "digest_path": "conflict_24h.event_count", "data_date": today})
         if c24.get("fatalities_estimated"):
             cites_g.append({"label": "Estimated fatalities 24h", "value": str(c24["fatalities_estimated"]),
-                            "source": "UCDP", "digest_path": "conflict_24h.fatalities_estimated"})
+                            "source": "UCDP", "digest_path": "conflict_24h.fatalities_estimated", "data_date": today})
             g_lines.append(f"Conflict ledger: {c24['event_count']} events with ~{c24['fatalities_estimated']} fatalities in the past day (UCDP).")
         else:
             g_lines.append(f"The conflict front is quiet: {c24['event_count']} recorded events in the past day (UCDP).")
@@ -630,13 +639,13 @@ def _deterministic_council(digest: dict) -> dict:
     if chokes:
         primary = chokes[0]
         cites_g.append({"label": f"{primary['name']} ships today", "value": str(primary.get("ships_today", "—")),
-                        "source": "PortWatch", "digest_path": "chokepoints[0].ships_today"})
+                        "source": "PortWatch", "digest_path": "chokepoints[0].ships_today", "data_date": today})
         g_lines.append(f"At sea, {primary.get('ships_today', '—')} ships transited the {primary['name']} today (PortWatch).")
     top_conc = digest.get("top_concerning") or []
     if top_conc:
         worst = top_conc[0]
         cites_g.append({"label": f"{worst.get('name','—')} pulse score", "value": str(worst.get("composite", "—")),
-                        "source": "Pulse", "digest_path": "top_concerning[0].composite"})
+                        "source": "Pulse", "digest_path": "top_concerning[0].composite", "data_date": today})
         g_lines.append(f"Strategic pressure remains highest on {worst.get('name','—')} (composite {worst.get('composite','—')}/100, Pulse).")
     g_headline = "Pressure on the Gulf, quiet on the front" if top_conc and not c24.get("fatalities_estimated") \
                   else ("Active conflict, watch the chokepoints" if c24.get("fatalities_estimated") else "Quiet day on the strategic front")
@@ -649,7 +658,7 @@ def _deterministic_council(digest: dict) -> dict:
         top_mover = movers[0]
         idx = macros.index(top_mover)
         cites_t.append({"label": top_mover["label"], "value": f"{top_mover['pct_change']:+.2f}%",
-                        "source": "FRED", "digest_path": f"macros[{idx}].pct_change"})
+                        "source": "FRED", "digest_path": f"macros[{idx}].pct_change", "data_date": today})
         t_lines.append(f"{top_mover['label']} moved {top_mover['pct_change']:+.2f}% over {top_mover['pct_change_over']} (FRED).")
         if len(movers) > 1:
             mv2 = movers[1]
@@ -658,14 +667,14 @@ def _deterministic_council(digest: dict) -> dict:
     if cup.get("highest_inflation"):
         worst_inf = cup["highest_inflation"][0]
         cites_t.append({"label": f"{worst_inf['iso3']} inflation", "value": f"{worst_inf['pct']}%",
-                        "source": "IMF", "digest_path": "countries_under_pressure.highest_inflation[0].pct"})
+                        "source": "IMF", "digest_path": "countries_under_pressure.highest_inflation[0].pct", "data_date": today})
         t_lines.append(f"Inflation peaks at {worst_inf['pct']}% in {worst_inf['iso3']} (IMF).")
     crypto = digest.get("crypto") or []
     btc = next((c for c in crypto if (c.get("sym") or "").lower() == "btc"), None)
     if btc and btc.get("change_24h_pct") is not None:
         idx = crypto.index(btc)
         cites_t.append({"label": "BTC 24h", "value": f"{btc['change_24h_pct']:+.2f}%",
-                        "source": "CoinGecko", "digest_path": f"crypto[{idx}].change_24h_pct"})
+                        "source": "CoinGecko", "digest_path": f"crypto[{idx}].change_24h_pct", "data_date": today})
     t_headline = (f"{movers[0]['label'].split()[0]} is the story" if movers
                   else "Capital quiet, watch the periphery")
 
@@ -676,18 +685,18 @@ def _deterministic_council(digest: dict) -> dict:
     if quakes:
         big = quakes[0]
         cites_a.append({"label": f"M{big['mag']} earthquake", "value": big.get("place", "—"),
-                        "source": "USGS", "digest_path": "quakes_24h.biggest[0].place"})
+                        "source": "USGS", "digest_path": "quakes_24h.biggest[0].place", "data_date": today})
         a_lines.append(f"Geologically: a notable M{big['mag']} earthquake struck {big.get('place','—')} (USGS).")
     if cyc:
         c0 = cyc[0]
         cites_a.append({"label": "Active cyclone", "value": c0.get("name", "—"),
-                        "source": "NHC", "digest_path": "cyclones[0].name"})
+                        "source": "NHC", "digest_path": "cyclones[0].name", "data_date": today})
         a_lines.append(f"{c0.get('name','—')} active in the basin (NHC).")
     elif haz:
         droughts = [h for h in haz if "drought" in (h.get("title", "").lower())]
         if droughts:
             cites_a.append({"label": "Active hazard", "value": droughts[0].get("title", "")[:60],
-                            "source": "GDACS", "digest_path": "hazards[0].title"})
+                            "source": "GDACS", "digest_path": "hazards[0].title", "data_date": today})
             a_lines.append(f"Slow signal: {droughts[0].get('title','')[:80]} (GDACS).")
     if not a_lines:
         a_lines.append("Atmosphere quiet — no cyclones tracked, no major hazards active in the digest.")
@@ -766,6 +775,7 @@ async def _generate_council(client: httpx.AsyncClient, digest: dict) -> dict | N
                 "value": str(c.get("value", "")).strip(),
                 "source": str(c.get("source", "")).strip(),
                 "digest_path": str(c.get("digest_path", "")).strip(),
+                "data_date": str(c.get("data_date", "")).strip(),
             })
         out[voice] = {
             "reading": reading,

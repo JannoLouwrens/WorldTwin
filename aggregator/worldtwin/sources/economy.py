@@ -65,6 +65,9 @@ async def fetch(client: httpx.AsyncClient):
         pass
     if "forex" not in result and "crypto" not in result:
         return None
+    # Freshness timestamp — every public number must carry a date
+    from datetime import datetime, timezone
+    result["fetched"] = datetime.now(timezone.utc).isoformat()
     return result, result
 
 

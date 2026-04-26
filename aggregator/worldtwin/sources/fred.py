@@ -167,6 +167,9 @@ async def fetch(client: httpx.AsyncClient):
     if not result["series"]:
         return None
     result["by_category"] = by_category
+    # Freshness timestamp — every public number must carry a date
+    from datetime import datetime, timezone
+    result["fetched"] = datetime.now(timezone.utc).isoformat()
     return result
 
 

@@ -44,6 +44,9 @@ async def fetch(client: httpx.AsyncClient):
             time_ms=props.get("time"),
             usgs_url=props.get("url", ""),
         ))
+    # Freshness timestamp — injected into both shapes
+    from datetime import datetime, timezone
+    geo["fetched"] = datetime.now(timezone.utc).isoformat()
     # Legacy: raw GeoJSON (current frontend expects this exact shape)
     return points, geo
 

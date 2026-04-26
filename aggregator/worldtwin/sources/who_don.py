@@ -67,6 +67,8 @@ async def fetch(client: httpx.AsyncClient):
                     "lon": coords[1] if coords else None,
                 })
             outbreaks = [o for o in outbreaks if o["lat"] is not None]
+            # Newest first — WHO APIs sometimes return oldest-first
+            outbreaks.sort(key=lambda o: (o.get("date") or ""), reverse=True)
             return {
                 "source": "WHO DON (JSON API)",
                 "fetched": datetime.now(timezone.utc).isoformat(),
@@ -104,6 +106,8 @@ async def fetch(client: httpx.AsyncClient):
             })
 
         outbreaks = [o for o in outbreaks if o.get("lat") is not None]
+        # Newest first — RSS pubDate ordering can drift; force descending
+        outbreaks.sort(key=lambda o: (o.get("date") or ""), reverse=True)
         return {
             "source": "WHO DON RSS",
             "fetched": datetime.now(timezone.utc).isoformat(),
