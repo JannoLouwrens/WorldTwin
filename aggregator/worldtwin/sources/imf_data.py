@@ -57,19 +57,34 @@ async def fetch(client: httpx.AsyncClient):
     results = await asyncio.gather(*[_fetch_one(client, c, l) for c, l in INDICATORS])
     by_country: dict[str, dict[str, Any]] = {}
     labels = {c: l for c, l in INDICATORS}
+    # IMF WEO ships forecasts 5+ years past the current calendar year.
+    # We must distinguish "latest actual reading" from "latest forecast" so
+    # the dashboard never quotes a 2031 prediction as "today's inflation."
+    # Strategy: `latest` = nearest year ≤ current calendar year. If somehow
+    # the cache has only forecasts (shouldn't happen), fall back to the
+    # earliest forecast year so we still have a value but year is correct.
+    current_year = datetime.now(timezone.utc).year
     for code, country_map in results:
         for iso3, year_map in country_map.items():
             if not year_map:
                 continue
-            latest_year = max(year_map.keys())
-            latest_value = year_map[latest_year]
+            historical = {y: v for y, v in year_map.items()
+                          if (isinstance(y, str) and int(y) <= current_year)
+                          or (isinstance(y, int) and y <= current_year)}
+            if historical:
+                latest_year = max(historical.keys(), key=lambda y: int(y))
+                latest_value = historical[latest_year]
+            else:
+                # All entries are forecasts (rare). Pick the earliest forecast.
+                latest_year = min(year_map.keys(), key=lambda y: int(y))
+                latest_value = year_map[latest_year]
             rec = by_country.setdefault(iso3, {})
             # Keep history (for time-aware mapmodes) AND latest (for current readers)
             rec[code] = {
                 "year": latest_year,
                 "value": latest_value,
                 "latest": {"year": latest_year, "value": latest_value},
-                "history": year_map,    # already {year_str: value}
+                "history": year_map,    # already {year_str: value} — full series including forecasts
             }
 
     return {

@@ -131,16 +131,104 @@
           extract: 'features.length' },
       ],
     },
-    {
-      id: 'iran_inflation_pct',
-      label: 'Iran inflation (% per IMF WEO)',
+    // Inflation — multi-country, the "global south" view.
+    // Each adds an IMF WEO source. Some have CB-published rates that could
+    // serve as a future cross-check (left external blank for now since most
+    // require keys or scraping).
+    ...[
+      ['IRN', 'Iran'],          ['ARG', 'Argentina'],   ['TUR', 'Türkiye'],
+      ['VEN', 'Venezuela'],     ['EGY', 'Egypt'],       ['PAK', 'Pakistan'],
+      ['NGA', 'Nigeria'],       ['ZAF', 'South Africa'],['BRA', 'Brazil'],
+      ['IND', 'India'],         ['CHN', 'China'],       ['DEU', 'Germany'],
+      ['GBR', 'United Kingdom'],
+    ].map(([iso, name]) => ({
+      id: `${iso.toLowerCase()}_inflation_pct`,
+      label: `${name} inflation (% per IMF WEO)`,
       unit: '%',
       tolerance: { abs: 1.0 },
       sources: [
-        { name: 'IMF WEO (cached)', cache: 'imf_data', path: 'countries.IRN.PCPIPCH.value' },
+        { name: 'IMF WEO (cached)', cache: 'imf_data', path: `countries.${iso}.PCPIPCH.value` },
       ],
       external: [],
+    })),
+
+    // Sovereign 10Y yields — major economies, FRED-fed
+    ...[
+      ['DGS10',     'United States 10Y yield (%)'],
+      ['IRLTLT01DEM156N', 'Germany 10Y yield (%)'],
+      ['IRLTLT01JPM156N', 'Japan 10Y yield (%)'],
+      ['IRLTLT01GBM156N', 'United Kingdom 10Y yield (%)'],
+    ].map(([series, label]) => ({
+      id: `${series.toLowerCase()}_yield`,
+      label,
+      unit: '%',
+      tolerance: { abs: 0.05 },
+      sources: [
+        { name: 'FRED (cached)', cache: 'fred', path: `series.${series}.latest` },
+      ],
+      external: [],
+    })),
+
+    // Global commodities — the markets that move emerging economies
+    {
+      id: 'copper_usd_t',
+      label: 'Copper price (USD/tonne)',
+      unit: '$/t',
+      tolerance: { pct: 2.0 },
+      sources: [{ name: 'FRED (cached)', cache: 'fred', path: 'series.PCOPPUSDM.latest' }],
+      external: [],
     },
+    {
+      id: 'wheat_usd_t',
+      label: 'Wheat price (USD/tonne)',
+      unit: '$/t',
+      tolerance: { pct: 2.0 },
+      sources: [{ name: 'FRED (cached)', cache: 'fred', path: 'series.PWHEAMTUSDM.latest' }],
+      external: [],
+    },
+    {
+      id: 'natgas_usd',
+      label: 'Henry Hub natural gas (USD/MMBtu)',
+      unit: '$/MMBtu',
+      tolerance: { pct: 2.0 },
+      sources: [{ name: 'FRED (cached)', cache: 'fred', path: 'series.DHHNGSP.latest' }],
+      external: [],
+    },
+
+    // FX rates — the trade-weighted USD already covered, add a few key pairs
+    {
+      id: 'cny_usd',
+      label: 'CNY/USD exchange rate',
+      unit: 'CNY/USD',
+      tolerance: { pct: 0.5 },
+      sources: [{ name: 'FRED (cached)', cache: 'fred', path: 'series.DEXCHUS.latest' }],
+      external: [],
+    },
+    {
+      id: 'eur_usd',
+      label: 'EUR/USD exchange rate',
+      unit: 'EUR/USD',
+      tolerance: { pct: 0.5 },
+      sources: [{ name: 'FRED (cached)', cache: 'fred', path: 'series.DEXUSEU.latest' }],
+      external: [],
+    },
+
+    // Other major chokepoints (Hormuz already covered)
+    ...[
+      ['suez',    'Suez Canal'],
+      ['malacca', 'Malacca Strait'],
+      ['panama',  'Panama Canal'],
+      ['bab',     'Bab el-Mandeb'],
+    ].map(([key, label]) => ({
+      id: `${key}_ships_today`,
+      label: `${label} vessel count today`,
+      unit: 'ships',
+      tolerance: { abs: 10 },
+      sources: [
+        { name: 'PortWatch IMF (cached)', cache: 'portwatch_chokepoints', path: `chokepoints[?name~${key}].n_total` },
+      ],
+      external: [],
+    })),
   ];
 
   // ---- Path resolver — supports JSON pointer + array predicates ----

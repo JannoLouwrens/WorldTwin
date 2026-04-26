@@ -92,25 +92,36 @@
       });
     }
 
-    // New conflict events
+    // New conflict events — also pick the largest by fatalities for the flyTo target
     const ucdpDelta = now.ucdp_count - prev.ucdp_count;
     if (ucdpDelta > 0) {
+      const cs = window._cacheStore;
+      const ucdpEvents = (cs?.get('ucdp_ged')?.events || [])
+        .slice().sort((a, b) => (b.best || 0) - (a.best || 0));
+      const top = ucdpEvents[0];
       items.push({
         kind: 'conflict',
         label: 'new conflict events',
         value: `+${ucdpDelta}`,
         source: 'UCDP',
+        target: top && top.latitude != null ? { lat: top.latitude, lon: top.longitude } : null,
+        activate: { mapmode: 'political', layers: ['historical_wars'] },
       });
     }
 
     // GDACS hazards
     const gdacsDelta = now.gdacs_count - prev.gdacs_count;
     if (gdacsDelta !== 0) {
+      const cs = window._cacheStore;
+      const events = cs?.get('gdacs_events')?.events || [];
+      const top = events[0];
       items.push({
         kind: 'hazard',
         label: gdacsDelta > 0 ? 'new active hazards' : 'hazards resolved',
         value: `${gdacsDelta > 0 ? '+' : ''}${gdacsDelta}`,
         source: 'GDACS',
+        target: top && top.lat != null ? { lat: top.lat, lon: top.lon } : null,
+        activate: { mapmode: 'pulse', layers: ['gdacs_events'] },
       });
     }
 
@@ -120,21 +131,36 @@
     const formed = now.cyclone_names.filter(n => !prevSet.has(n));
     const dissipated = prev.cyclone_names.filter(n => !nowSet.has(n));
     if (formed.length) {
-      items.push({ kind: 'cyclone', label: 'cyclone formed', value: formed[0], source: 'NHC' });
+      const cs = window._cacheStore;
+      const storms = cs?.get('nhc_cyclones')?.storms || [];
+      const matching = storms.find(s => s.name === formed[0]);
+      items.push({
+        kind: 'cyclone', label: 'cyclone formed', value: formed[0], source: 'NHC',
+        target: matching && matching.lat != null ? { lat: matching.lat, lon: matching.lon } : null,
+        activate: { mapmode: 'pulse', layers: ['nhc_cyclones'] },
+      });
     }
     if (dissipated.length) {
-      items.push({ kind: 'cyclone', label: 'cyclone dissipated', value: dissipated[0], source: 'NHC' });
+      items.push({
+        kind: 'cyclone', label: 'cyclone dissipated', value: dissipated[0], source: 'NHC',
+        activate: { mapmode: 'pulse', layers: ['nhc_cyclones'] },
+      });
     }
 
-    // WHO — new outbreaks
+    // WHO — new outbreaks (try to extract a country to fly to)
     const prevWHO = new Set(prev.who_titles);
     const newWHO = now.who_titles.filter(t => !prevWHO.has(t));
     if (newWHO.length) {
+      const cs = window._cacheStore;
+      const outbreaks = cs?.get('who_don')?.outbreaks || [];
+      const matching = outbreaks.find(o => (o.title || o.disease) === newWHO[0]);
       items.push({
         kind: 'health',
         label: 'new disease outbreak',
         value: newWHO[0].length > 50 ? newWHO[0].slice(0, 50) + '…' : newWHO[0],
         source: 'WHO',
+        target: matching && matching.lat != null ? { lat: matching.lat, lon: matching.lon } : null,
+        activate: { mapmode: 'pulse', layers: ['who_don'] },
       });
     }
 
@@ -142,11 +168,15 @@
     const prevPulse = new Set(prev.pulse_top.slice(0, 5));
     const newWorst = now.pulse_top.slice(0, 5).filter(iso => !prevPulse.has(iso));
     if (newWorst.length) {
+      const cs = window._cacheStore;
+      const country = (cs?.get('pulse_mode')?.countries || {})[newWorst[0]];
       items.push({
         kind: 'pulse',
         label: 'newly concerning',
         value: newWorst.join(', '),
         source: 'Pulse',
+        target: country && country.lat != null ? { lat: country.lat, lon: country.lon, iso3: newWorst[0] } : null,
+        activate: { mapmode: 'pulse', layers: [] },
       });
     }
 
@@ -196,10 +226,35 @@
       </div>`;
     el.classList.add('tw-diff-on');
 
-    // Wire clicks → Data Inspector
+    // Wire clicks → fly camera + activate mapmode/layer + open Data Inspector.
+    // Vision: closes the loop from "what changed" → "show me the world where
+    // it changed." The user reads the change, then sees it.
     el.querySelectorAll('.tw-diff-item').forEach((btn, i) => {
       btn.addEventListener('click', () => {
         const it = items[i];
+
+        // 1. Fly the camera if we have a target
+        if (it.target && window.viewer && window.Cesium) {
+          try {
+            window.viewer.camera.flyTo({
+              destination: window.Cesium.Cartesian3.fromDegrees(
+                it.target.lon, it.target.lat, 4_000_000),
+              duration: 1.6,
+            });
+          } catch (e) { console.warn('[diff] flyTo failed', e); }
+        }
+
+        // 2. Activate relevant mapmode + layers
+        if (it.activate?.mapmode && window.Mapmode?.activate) {
+          window.Mapmode.activate(it.activate.mapmode);
+        }
+        for (const layerId of (it.activate?.layers || [])) {
+          if (window.LAYERS?.[layerId]?.render) {
+            try { window.LAYERS[layerId].render(); } catch {}
+          }
+        }
+
+        // 3. Open Inspector for the underlying claim
         if (window.DataInspector?.open) {
           window.DataInspector.open({
             label: it.label,
