@@ -59,25 +59,35 @@ INDICATORS = [
 ]
 
 
-async def _fetch_one(client: httpx.AsyncClient, code: str, label: str):
-    try:
-        r = await client.get(
-            f"https://www.imf.org/external/datamapper/api/v1/{code}",
-            timeout=30,
-        )
-        if r.status_code != 200:
-            return code, {}
-        body = r.json()
-        values = body.get("values", {}).get(code, {}) or {}
-        # values = { "USA": { "2022": 76, "2023": 80, ... }, ... }
-        return code, values
-    except Exception as e:
-        print(f"[imf_data] {code} error: {e}")
+async def _fetch_one(client: httpx.AsyncClient, code: str, label: str, sem: asyncio.Semaphore):
+    """Polite, retried fetch — IMF DataMapper 503s under heavy parallelism."""
+    async with sem:
+        for attempt in range(3):
+            try:
+                r = await client.get(
+                    f"https://www.imf.org/external/datamapper/api/v1/{code}",
+                    timeout=60,
+                    headers={"User-Agent": "WorldTwin/1.0"},
+                )
+                if r.status_code == 200:
+                    body = r.json()
+                    values = body.get("values", {}).get(code, {}) or {}
+                    await asyncio.sleep(0.4)   # politeness between calls
+                    return code, values
+                if r.status_code in (429, 503):
+                    await asyncio.sleep(5 + attempt * 5)
+                    continue
+                return code, {}
+            except Exception as e:
+                if attempt == 2:
+                    print(f"[imf_data] {code} error after 3 tries: {type(e).__name__}: {e}")
+                await asyncio.sleep(2)
         return code, {}
 
 
 async def fetch(client: httpx.AsyncClient):
-    results = await asyncio.gather(*[_fetch_one(client, c, l) for c, l in INDICATORS])
+    sem = asyncio.Semaphore(2)    # IMF doesn't like parallelism > 2
+    results = await asyncio.gather(*[_fetch_one(client, c, l, sem) for c, l in INDICATORS])
     by_country: dict[str, dict[str, Any]] = {}
     labels = {c: l for c, l in INDICATORS}
     # IMF WEO ships forecasts 5+ years past the current calendar year.

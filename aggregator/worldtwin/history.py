@@ -162,6 +162,116 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
                     ))
             return rows
 
+    # ---- Pattern: top-level history dict ----
+    # eia_petroleum: payload.history.<series_id> = [{t,v}, ...]
+    history_dict = payload.get("history")
+    if isinstance(history_dict, dict) and history_dict:
+        first_v = next(iter(history_dict.values()), None)
+        if isinstance(first_v, list) and first_v and isinstance(first_v[0], dict) \
+           and ("t" in first_v[0] or "v" in first_v[0]):
+            for sid, samples in history_dict.items():
+                if not isinstance(samples, list):
+                    continue
+                for sample in samples:
+                    if not isinstance(sample, dict):
+                        continue
+                    t = sample.get("t") or sample.get("date")
+                    v = sample.get("v")
+                    if t is None or v is None:
+                        continue
+                    rows.append((
+                        f"{layer_id}.{sid}", str(t), fetched_at,
+                        float(v) if isinstance(v, _NUMERIC_TYPES) else None,
+                        None if isinstance(v, _NUMERIC_TYPES) else str(v),
+                        None, None,
+                    ))
+            if rows:
+                return rows
+
+    # ---- Pattern: by_country dict (country_relations, gdelt_relations) ----
+    by_country = payload.get("by_country")
+    if isinstance(by_country, dict) and by_country:
+        for iso3, entry in by_country.items():
+            if not isinstance(entry, dict):
+                continue
+            rows.append((
+                f"{layer_id}.{iso3}", fetched_at[:10], fetched_at,
+                None,
+                str(entry.get("bloc_primary") or entry.get("name") or "")[:200],
+                json.dumps(entry, default=str)[:5000],
+                json.dumps({"iso3": iso3}),
+            ))
+        if rows:
+            return rows
+
+    # ---- Pattern: by_country_year dict (cow_alliances) ----
+    bcy = payload.get("by_country_year")
+    if isinstance(bcy, dict) and bcy:
+        for iso3, year_map in bcy.items():
+            if not isinstance(year_map, dict):
+                continue
+            for y_str, val in year_map.items():
+                if not _is_year_string(y_str):
+                    continue
+                rows.append((
+                    f"{layer_id}.{iso3}", _year_to_iso(y_str), fetched_at,
+                    None,
+                    str(val)[:200],
+                    None, json.dumps({"iso3": iso3}),
+                ))
+        if rows:
+            return rows
+
+    # ---- Pattern: top-level annual list (berkeley_earth) ----
+    annual_list = payload.get("annual")
+    if isinstance(annual_list, list) and annual_list and isinstance(annual_list[0], dict) and "year" in annual_list[0]:
+        for sample in annual_list:
+            yr = sample.get("year")
+            if not isinstance(yr, _NUMERIC_TYPES):
+                continue
+            anomaly = sample.get("anomaly_c")
+            rows.append((
+                f"{layer_id}.annual", _year_to_iso(int(yr)), fetched_at,
+                float(anomaly) if isinstance(anomaly, _NUMERIC_TYPES) else None,
+                None, json.dumps(sample, default=str), None,
+            ))
+        if rows:
+            return rows
+
+    # ---- Pattern: economy.crypto list of dicts with id/symbol ----
+    crypto_list = payload.get("crypto")
+    if isinstance(crypto_list, list) and crypto_list and isinstance(crypto_list[0], dict) \
+       and ("symbol" in crypto_list[0] or "id" in crypto_list[0]):
+        for c in crypto_list:
+            sym = (c.get("symbol") or c.get("id") or "").upper()
+            if not sym:
+                continue
+            price = c.get("price_usd") or c.get("current_price")
+            ch = c.get("change_24h") or c.get("price_change_percentage_24h")
+            rows.append((
+                f"{layer_id}.crypto.{sym}.price_usd", fetched_at[:10], fetched_at,
+                float(price) if isinstance(price, _NUMERIC_TYPES) else None,
+                None, None, json.dumps({"symbol": sym, "name": c.get("name")}),
+            ))
+            if isinstance(ch, _NUMERIC_TYPES):
+                rows.append((
+                    f"{layer_id}.crypto.{sym}.change_24h_pct", fetched_at[:10], fetched_at,
+                    float(ch), None, None, json.dumps({"symbol": sym}),
+                ))
+        # Don't return — let other rules also run if they match (e.g. forex below)
+    forex = payload.get("forex")
+    if isinstance(forex, dict):
+        rates = forex.get("rates") or {}
+        date = forex.get("date") or fetched_at[:10]
+        for ccy, rate in rates.items():
+            if isinstance(rate, _NUMERIC_TYPES):
+                rows.append((
+                    f"{layer_id}.forex.USD_{ccy}", date, fetched_at,
+                    float(rate), None, None, json.dumps({"ccy": ccy}),
+                ))
+    if rows:
+        return rows
+
     # ---- Pattern: World Bank country×indicator ----
     # payload.countries[iso3][indicator_code] = { value, year, history: {year_str: value} }
     countries = payload.get("countries")
@@ -234,6 +344,23 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
                         json.dumps({"iso3": iso3, "name": entry.get("name"),
                                     "trend": entry.get("trend")}),
                     ))
+            if rows:
+                return rows
+
+            # Categorical / per-country dict — country_culture, country_relations,
+            # cow_alliances etc. Emit one row per country with the full entry
+            # as value_json so the user can drill in.
+            for iso3, entry in countries.items():
+                if not isinstance(entry, dict):
+                    continue
+                rows.append((
+                    f"{layer_id}.{iso3}", fetched_at[:10], fetched_at,
+                    None,
+                    str(entry.get("name") or entry.get("religion_primary") or
+                        entry.get("ethnicity_primary") or entry.get("bloc_primary") or "")[:200],
+                    json.dumps(entry, default=str)[:5000],
+                    json.dumps({"iso3": iso3}),
+                ))
             if rows:
                 return rows
 
