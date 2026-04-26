@@ -2686,3 +2686,108 @@ body.tw-booted .tw-scrubber { opacity: 1 !important; transform: none !important;
 }
 .tw-council-synth { color: var(--brass); border: 1px dotted var(--brass-faint); }
 .tw-council-llm   { color: var(--phosphor); border: 1px solid rgba(255,181,71,0.3); }
+
+/* ============================================================
+   RAW MODE — "trust nobody, including me"
+   Vision: A lab where anyone — from the king of Rome to a sceptical
+   citizen — can read the world from raw, dated, cross-checked sources
+   instead of someone else's framing.
+
+   When body.tw-raw is set: every PROSE element disappears, every NUMBER
+   stays. The user reads citations, KPI values, ground-truth chips, the
+   pollution inset, hover values — without the framing layer.
+   ============================================================ */
+
+/* Hide the prose */
+body.tw-raw .tw-voice-headline,
+body.tw-raw .tw-voice-body,
+body.tw-raw .tw-voice-quiet,
+body.tw-raw .tw-brief-summary,
+body.tw-raw .tw-brief-summarytext,
+body.tw-raw .narrative-strip,
+body.tw-raw .narrative-expanded,
+body.tw-raw #neBody {
+  display: none !important;
+}
+
+/* Replace the briefing's "Today" group label with a raw-mode marker
+   so the section is still anchored. */
+body.tw-raw .tw-council .tw-brief-grouplabel::after {
+  content: ' · raw';
+  color: var(--phosphor);
+  letter-spacing: 0.18em;
+  font-size: 8.5px;
+  margin-left: 6px;
+}
+
+/* Raw-mode citation chips: emphasise the value + date, dim the label */
+body.tw-raw .tw-cite {
+  background: rgba(0, 0, 0, 0.18);
+  border-color: rgba(255, 230, 195, 0.18);
+}
+body.tw-raw .tw-cite-lbl { color: rgba(255, 230, 195, 0.65); }
+body.tw-raw .tw-cite-v   { color: var(--phosphor); }
+
+/* Voice header in raw mode: keep the sigil + name + title (so the user
+   knows which lens cited each thing) but suppress the headline + body */
+body.tw-raw .tw-voice {
+  padding: 8px 10px;
+  background: transparent;
+}
+body.tw-raw .tw-voice::after {
+  content: '';
+  display: block;
+  height: 0;
+}
+
+/* Hide the AI-summary drop-cap area entirely */
+body.tw-raw .tw-brief-section.tw-brief-summary { display: none !important; }
+
+/* Indicator pill — top-right, beneath the events ticker */
+.tw-raw-indicator {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 120;
+  display: none;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 12px 6px 10px;
+  background: linear-gradient(180deg,
+    rgba(255, 181, 71, 0.16) 0%,
+    rgba(255, 181, 71, 0.08) 100%);
+  border: 1px solid var(--phosphor);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--phosphor);
+}
+.tw-raw-indicator.tw-raw-indicator-on { display: inline-flex; }
+.tw-raw-indicator .tw-raw-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--phosphor);
+  box-shadow: 0 0 8px var(--phosphor-glow);
+  animation: twHeartbeat 2.4s ease-in-out infinite;
+}
+.tw-raw-indicator .tw-raw-lbl { font-weight: 700; letter-spacing: 0.28em; }
+.tw-raw-indicator .tw-raw-meta {
+  color: rgba(255, 230, 195, 0.65);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  font-style: italic;
+}
+.tw-raw-indicator .tw-raw-kbd {
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  color: rgba(255, 230, 195, 0.45);
+  border-left: 1px solid rgba(255, 181, 71, 0.3);
+  padding-left: 9px;
+  margin-left: 3px;
+}
+
+/* When raw mode is on, push the diff strip down so it doesn't collide
+   with the indicator pill */
+body.tw-raw #twDiffStrip { top: 50px !important; }
