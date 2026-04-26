@@ -157,6 +157,14 @@
       window.Briefing._councilWrapped = true;
     }
     setInterval(render, 60000);
+    // Aggressive early polling — re-render every 4s for the first 60s so the
+    // moment the cache populates from the network we surface it. After 60s
+    // the standard 60s interval takes over.
+    let n = 0;
+    const fast = setInterval(() => {
+      render();
+      if (++n > 15) clearInterval(fast);
+    }, 4000);
   }
 
   function waitAndStart() {
