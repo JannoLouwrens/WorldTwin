@@ -309,16 +309,35 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
             return rows
 
     # ---- Pattern: features_by_year — historical_borders ----
+    # 1 row per (era, polity) so each border boundary becomes queryable —
+    # plus a summary row per era with the count.
     if isinstance(payload.get("features_by_year"), dict):
         for y_str, feats in payload["features_by_year"].items():
             if not _is_year_string(y_str):
                 continue
-            n_feats = len(feats) if isinstance(feats, list) else 0
+            if not isinstance(feats, list):
+                continue
+            n_feats = len(feats)
+            # Summary row
             rows.append((
-                f"{layer_id}.borders", _year_to_iso(y_str), fetched_at,
+                f"{layer_id}.summary.{y_str}", _year_to_iso(y_str), fetched_at,
                 float(n_feats), None, None,
                 json.dumps({"year": y_str, "feature_count": n_feats}),
             ))
+            # Per-polity row — keep the geometry in value_json so the user
+            # can drill from a border claim to the actual polygon
+            name_prop = payload.get("name_property") or "name"
+            for f in feats:
+                if not isinstance(f, dict):
+                    continue
+                props = f.get("properties") or {}
+                polity = props.get(name_prop) or props.get("name") or props.get("admin") or "?"
+                rows.append((
+                    f"{layer_id}.{polity}", _year_to_iso(y_str), fetched_at,
+                    None, str(polity)[:120],
+                    json.dumps(f, default=str)[:8000],
+                    json.dumps({"year": y_str, "polity": polity}),
+                ))
         if rows:
             return rows
 
