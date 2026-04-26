@@ -55,7 +55,18 @@ def write_legacy(layer_id: str, legacy_data: Any) -> None:
     """Write the legacy flat file at /cache/<layer>.json — the path the
     current CesiumJS frontend expects (Caddy serves /api/cache/<layer>.json
     from this directory directly, bypassing the backend entirely).
+
+    Vision: A lab where anyone can read the world from raw, dated,
+    cross-checked sources. We pass every payload through sanity.sweep_and_tag
+    so impossible values (BTC -113%, ship_count 999999, magnitude 12) get
+    nulled with a `_sanity_warnings` field attached. The Inspector surfaces
+    those warnings to the user.
     """
+    try:
+        from . import sanity
+        legacy_data = sanity.sweep_and_tag(legacy_data)
+    except Exception as e:
+        print(f"[cache] sanity sweep failed for {layer_id}: {e}")
     _atomic_write(CACHE_DIR / f"{layer_id}.json", legacy_data)
 
 

@@ -190,6 +190,10 @@
           <div class="tw-inspector-row-v"><code>${escapeHtml(fetchedAt)}</code></div>
         </div>
 
+        <div class="tw-inspector-section tw-triangulation" id="twTriangulationSlot">
+          <!-- Filled in by triangulate() if a concept matches this claim -->
+        </div>
+
         ${history && history.length ? `
         <div class="tw-inspector-section">
           <div class="tw-inspector-section-lbl">Recent samples</div>
@@ -206,6 +210,19 @@
           <pre class="tw-inspector-pre">${escapeHtml(fmtJson(resolved?.value ?? '(unresolved)'))}</pre>
         </div>
 
+        ${cacheData?._sanity_warnings ? `
+        <div class="tw-inspector-section tw-inspector-sanity">
+          <div class="tw-inspector-section-lbl tw-inspector-sanity-lbl">Sanity warnings · ${cacheData._sanity_warnings.count} rejection${cacheData._sanity_warnings.count === 1 ? '' : 's'} this fetch</div>
+          <div class="tw-inspector-sanity-note">${escapeHtml(cacheData._sanity_warnings.note || '')}</div>
+          <div class="tw-inspector-sanity-list">
+            ${(cacheData._sanity_warnings.rejections || []).slice(0, 8).map(r => `
+              <div class="tw-inspector-sanity-row">
+                <code>${escapeHtml(r.path)}</code> = <code class="tw-inspector-sanity-v">${escapeHtml(String(r.value))}</code>
+                <span class="tw-inspector-sanity-rule">violates rule: ${escapeHtml(r.rule)}</span>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+
         ${cacheData ? `
         <div class="tw-inspector-section">
           <div class="tw-inspector-section-lbl">Cache root · ${escapeHtml(meta.cache)} · top keys</div>
@@ -218,6 +235,112 @@
       </div>`;
     el.classList.add('tw-inspector-open');
     el.setAttribute('aria-hidden', 'false');
+
+    // Async triangulation — fires AFTER the inspector is rendered so the user
+    // gets immediate feedback. Updates the slot in-place when external
+    // sources resolve.
+    triangulate(meta.cache, path);
+  }
+
+  // Triangulate the opened claim against alternative sources defined in
+  // window.ConceptMap. Renders into #twTriangulationSlot.
+  async function triangulate(cacheName, path) {
+    const slot = document.getElementById('twTriangulationSlot');
+    if (!slot || !window.ConceptMap) return;
+    const concept = window.ConceptMap.findConcept(cacheName, path);
+    if (!concept) {
+      slot.innerHTML = '';
+      return;
+    }
+    // Show loading immediately
+    slot.innerHTML = `
+      <div class="tw-inspector-section-lbl">Triangulation · ${escapeHtml(concept.label)}</div>
+      <div class="tw-tri-loading">Fetching alternative sources…</div>`;
+
+    // Resolve cached sources first
+    const rows = [];
+    for (const src of concept.sources) {
+      const cd = window._cacheStore?.get(src.cache);
+      const val = window.ConceptMap.resolvePath(cd, src.path);
+      rows.push({ name: src.name, value: typeof val === 'number' ? val : null,
+                  display: val == null ? '—' : (typeof val === 'number' ? fmtNum(val) : String(val)) });
+    }
+    // Fetch external sources in parallel
+    const externalPromises = (concept.external || []).map(async ext => {
+      try {
+        const v = await fetchExternal(ext);
+        return { name: ext.name, value: v, display: v == null ? '—' : fmtNum(v) };
+      } catch (e) {
+        return { name: ext.name, value: null, display: 'fetch failed', error: String(e) };
+      }
+    });
+    const externalRows = await Promise.all(externalPromises);
+    rows.push(...externalRows);
+
+    // Compute pairwise tier badges relative to the first cached value (anchor)
+    const anchor = rows.find(r => r.value != null)?.value;
+    const tiered = rows.map(r => ({
+      ...r,
+      tier: anchor != null && r.value != null
+        ? window.ConceptMap.tierFor(r.value, anchor, concept.tolerance)
+        : 'unknown',
+    }));
+    const allGreen = tiered.length >= 2 && tiered.every(r => r.tier === 'green' || r.value == null);
+    const anyRed = tiered.some(r => r.tier === 'red');
+    const headerTier = anyRed ? 'red' : allGreen ? 'green' : 'yellow';
+
+    slot.innerHTML = `
+      <div class="tw-inspector-section-lbl">
+        Triangulation · ${escapeHtml(concept.label)}
+        <span class="tw-tri-badge tw-tri-${headerTier}">${headerTier === 'green' ? 'sources agree' : headerTier === 'yellow' ? 'close' : 'sources diverge'}</span>
+      </div>
+      <div class="tw-tri-table">
+        ${tiered.map(r => `
+          <div class="tw-tri-row tw-tri-row-${r.tier}">
+            <span class="tw-tri-dot"></span>
+            <span class="tw-tri-name">${escapeHtml(r.name)}</span>
+            <span class="tw-tri-val">${escapeHtml(r.display)}${concept.unit ? ' ' + escapeHtml(concept.unit) : ''}</span>
+          </div>`).join('')}
+      </div>
+      <div class="tw-tri-note">tolerance: ${concept.tolerance.pct ? `±${concept.tolerance.pct}%` : `±${concept.tolerance.abs}${concept.unit ? ' ' + concept.unit : ''}`}</div>`;
+  }
+
+  function fmtNum(v) {
+    if (typeof v !== 'number') return String(v);
+    if (Math.abs(v) >= 100) return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return v.toFixed(Math.abs(v) < 1 ? 4 : 2);
+  }
+
+  // Fetch one external source per its definition. Currently supports JSON +
+  // simple property path (e.g. "lastPrice", "bitcoin.usd") and CSV last-numeric
+  // (NOAA Mauna Loa).
+  async function fetchExternal(ext) {
+    if (ext.extract === 'csv_last_co2') {
+      const r = await fetch(ext.url);
+      const txt = await r.text();
+      for (const line of txt.split('\n').reverse()) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const parts = trimmed.split(',').map(s => s.trim());
+        if (parts.length >= 5) {
+          const v = parseFloat(parts[4]);
+          if (Number.isFinite(v) && v > 0) return v;
+        }
+      }
+      return null;
+    }
+    const r = await fetch(ext.url);
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (ext.extract === 'features.length') return (j.features || []).length;
+    // Dot-path extract
+    let cur = j;
+    for (const part of String(ext.extract || '').split('.')) {
+      if (cur == null) return null;
+      cur = cur[part];
+    }
+    if (typeof cur === 'string' && /^-?\d+(\.\d+)?$/.test(cur)) return parseFloat(cur);
+    return cur;
   }
 
   function openCache(cacheName, path) {

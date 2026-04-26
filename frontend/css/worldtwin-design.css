@@ -2791,3 +2791,121 @@ body.tw-raw .tw-brief-section.tw-brief-summary { display: none !important; }
 /* When raw mode is on, push the diff strip down so it doesn't collide
    with the indicator pill */
 body.tw-raw #twDiffStrip { top: 50px !important; }
+
+/* Inspector sanity warnings — appears when the cache had values rejected.
+   Vision: trace every claim back to the instrument; this is the lab
+   admitting that an instrument returned an impossible reading. */
+.tw-inspector-sanity {
+  border-left: 2px solid #d94747;
+  padding-left: 10px;
+  background: rgba(217, 71, 71, 0.05);
+}
+.tw-inspector-sanity-lbl { color: #ff8a8a !important; }
+.tw-inspector-sanity-lbl::before { content: '⚠ '; color: #d94747; }
+.tw-inspector-sanity-note {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 11.5px;
+  color: rgba(255, 230, 195, 0.75);
+  margin: 4px 0 8px;
+  line-height: 1.4;
+}
+.tw-inspector-sanity-list {
+  display: grid;
+  gap: 4px;
+}
+.tw-inspector-sanity-row {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 4px 8px;
+  color: rgba(255, 230, 195, 0.85);
+  letter-spacing: 0.02em;
+}
+.tw-inspector-sanity-row code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--phosphor);
+}
+.tw-inspector-sanity-v { color: #ff8a8a !important; }
+.tw-inspector-sanity-rule {
+  display: block;
+  color: rgba(255, 230, 195, 0.5);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Triangulation block — multi-source agreement check.
+   Vision: cross-checked sources, no single voice owns the truth. */
+.tw-triangulation:empty { display: none; }
+.tw-tri-loading {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 11.5px;
+  color: rgba(255, 230, 195, 0.55);
+  padding: 8px 0;
+}
+.tw-tri-badge {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-left: 10px;
+  padding: 1px 7px;
+  border: 1px solid;
+  font-weight: 700;
+}
+.tw-tri-green  { color: #5fbf7d;       border-color: rgba(95, 191, 125, 0.5); background: rgba(95, 191, 125, 0.08); }
+.tw-tri-yellow { color: var(--phosphor); border-color: rgba(255, 181, 71, 0.5); background: rgba(255, 181, 71, 0.08); }
+.tw-tri-red    { color: #d94747;       border-color: rgba(217, 71, 71, 0.5); background: rgba(217, 71, 71, 0.08); }
+
+.tw-tri-table {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+.tw-tri-row {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.18);
+  border-left: 2px solid var(--brass-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.tw-tri-row-green   { border-left-color: #5fbf7d; }
+.tw-tri-row-yellow  { border-left-color: var(--phosphor); }
+.tw-tri-row-red     { border-left-color: #d94747; }
+.tw-tri-row-unknown { border-left-color: rgba(255, 230, 195, 0.18); }
+.tw-tri-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.tw-tri-row-green   .tw-tri-dot { background: #5fbf7d; }
+.tw-tri-row-yellow  .tw-tri-dot { background: var(--phosphor); }
+.tw-tri-row-red     .tw-tri-dot { background: #d94747; }
+.tw-tri-row-unknown .tw-tri-dot { background: rgba(255, 230, 195, 0.3); }
+.tw-tri-name {
+  color: rgba(255, 230, 195, 0.78);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+.tw-tri-val {
+  color: #f4ecdc;
+  font-weight: 700;
+  font-feature-settings: "tnum" 1;
+}
+.tw-tri-note {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 230, 195, 0.45);
+}

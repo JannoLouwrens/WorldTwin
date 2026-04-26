@@ -134,3 +134,109 @@ def check_dict(d: dict, fields: dict[str, str]) -> dict:
     for k, rule_name in fields.items():
         out[k] = check(rule_name, out.get(k))
     return out
+
+
+# ============================================================
+# Auto-sweep — applied to every cache write so impossible values
+# never reach the dashboard. Maps common field names to rules.
+# Conservative: only fields that are unambiguous get checked
+# (we don't want to silently null a legitimate field that happens
+# to share a name).
+# ============================================================
+AUTO_SWEEP_KEYS: dict[str, str] = {
+    # Crypto — economy.crypto[].* and similar
+    "price_usd":              "price_usd",
+    "current_price":          "price_usd",
+    "change_24h":             "change_24h_pct",
+    "change_24h_pct":         "change_24h_pct",
+    "price_change_percentage_24h": "change_24h_pct",
+    "change_7d":              "change_7d_pct",
+    "change_7d_pct":          "change_7d_pct",
+    # FRED-ish
+    "vix":                    "vix",
+    "yield_pct":              "yield_pct",
+    "fed_funds_pct":          "fed_funds_pct",
+    "inflation_pct":          "inflation_pct",
+    "debt_pct_gdp":           "debt_pct_gdp",
+    "growth_pct":             "growth_pct",
+    "unemployment_pct":       "unemployment_pct",
+    # Earthquakes
+    "mag":                    "earthquake_mag",
+    "magnitude":              "earthquake_mag",
+    # Counts
+    "ship_count":             "ship_count",
+    "n_total":                "ship_count",
+    "fatalities":             "fatality_count",
+    "fatalities_estimated":   "fatality_count",
+    "best":                   "fatality_count",
+    "deaths_total":           "fatality_count",
+    "kp":                     "kp_index",
+    "Kp":                     "kp_index",
+    # Pcts
+    "renewable_pct":          "renewable_pct",
+    "internet_pct":           "internet_pct",
+    "urban_pct":              "urban_pct",
+    "military_pct_gdp":       "military_pct_gdp",
+    # Demographics
+    "life_expectancy":        "life_expectancy",
+    "life_exp":               "life_expectancy",
+}
+
+
+def auto_sweep(payload, depth: int = 0, max_depth: int = 8) -> tuple[object, list[dict]]:
+    """Recursively walk a JSON-serialisable structure, applying auto-sweep rules.
+
+    Returns (new_payload, list_of_warnings). Warnings record which key-path was
+    rejected so the Inspector can surface them to the user.
+
+    Doesn't mutate; returns a deep-ish copy of the modified branches.
+    """
+    warnings: list[dict] = []
+    new_payload = _sweep_walk(payload, [], warnings, depth=depth, max_depth=max_depth)
+    return new_payload, warnings
+
+
+def _sweep_walk(node, path: list, warnings: list[dict], depth: int, max_depth: int):
+    if depth > max_depth:
+        return node
+    if isinstance(node, dict):
+        out = {}
+        for k, v in node.items():
+            new_path = path + [str(k)]
+            rule = AUTO_SWEEP_KEYS.get(k)
+            if rule and isinstance(v, (int, float)):
+                checked = check(rule, v)
+                if checked is None and v is not None:
+                    warnings.append({
+                        "path": ".".join(new_path),
+                        "key": k,
+                        "rule": rule,
+                        "value": v,
+                    })
+                out[k] = checked
+            else:
+                out[k] = _sweep_walk(v, new_path, warnings, depth + 1, max_depth)
+        return out
+    if isinstance(node, list):
+        return [_sweep_walk(v, path + [str(i)], warnings, depth + 1, max_depth)
+                for i, v in enumerate(node)]
+    return node
+
+
+def sweep_and_tag(payload):
+    """Run auto_sweep on a top-level dict cache payload and ATTACH the warnings
+    as a `_sanity_warnings` field so the UI/Inspector can surface them.
+
+    If the payload isn't a dict, returns it unchanged. If there are no
+    warnings, no field is added (clean caches stay clean).
+    """
+    if not isinstance(payload, dict):
+        return payload
+    swept, warnings = auto_sweep(payload)
+    if warnings:
+        swept["_sanity_warnings"] = {
+            "count": len(warnings),
+            "rejections": warnings[:20],   # cap to avoid bloating the cache
+            "note": "Values listed here failed sanity bounds and were nulled. The Inspector surfaces this; the LLM is told to avoid them.",
+        }
+    return swept
