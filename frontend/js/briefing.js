@@ -17,19 +17,7 @@
     if (_el) return _el;
     const el = document.createElement('div');
     el.id = 'twBriefing';
-    Object.assign(el.style, {
-      position: 'fixed', left: '96px', bottom: '200px',
-      width: '420px',
-      background: 'linear-gradient(180deg, rgba(20,28,48,0.94), rgba(14,19,32,0.96))',
-      border: '1px solid rgba(76,194,255,0.25)',
-      borderRadius: '12px',
-      backdropFilter: 'blur(16px)',
-      boxShadow: '0 12px 36px rgba(0,0,0,0.55)',
-      color: '#f5f7fa',
-      font: '12px Inter, sans-serif',
-      zIndex: 80,
-      overflow: 'hidden',
-    });
+    el.className = 'tw-brief';
     document.body.appendChild(el);
     _el = el;
     return el;
@@ -85,14 +73,14 @@
       const last = card.s?.[card.s.length - 1]?.v;
       const first = card.s?.[0]?.v;
       const delta = (last != null && first != null) ? ((last - first) / Math.abs(first)) * 100 : null;
-      const dColor = delta == null ? '#8c95aa' : delta >= 0 ? '#22c55e' : '#ef4444';
-      return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:6px 8px;flex:1;min-width:0">
-        <div style="display:flex;justify-content:space-between;align-items:baseline">
-          <div style="font-size:9px;color:#8c95aa;letter-spacing:0.1em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${card.label}</div>
-          <div style="font-size:9px;color:${dColor};font-feature-settings:'tnum' 1">${delta == null ? '' : fmtPct(delta)}</div>
+      const dCls = delta == null ? 'tw-d-flat' : delta >= 0 ? 'tw-d-up' : 'tw-d-dn';
+      return `<div class="tw-kpi">
+        <div class="tw-kpi-row">
+          <div class="tw-kpi-lbl">${card.label}</div>
+          <div class="tw-kpi-d ${dCls}">${delta == null ? '' : fmtPct(delta)}</div>
         </div>
-        <div style="font-size:13px;font-weight:600;font-feature-settings:'tnum' 1;color:#f5f7fa">${card.v != null ? card.v.toFixed(card.unit === '%' || card.label === 'VIX' ? 2 : 1) : '—'}<span style="font-size:9px;color:#8c95aa;margin-left:2px">${card.unit}</span></div>
-        <div style="margin-top:2px;height:18px">${spark(card.s, 90, 18, card.c)}</div>
+        <div class="tw-kpi-v">${card.v != null ? card.v.toFixed(card.unit === '%' || card.label === 'VIX' ? 2 : 1) : '—'}<span class="tw-kpi-unit">${card.unit}</span></div>
+        <div class="tw-kpi-spark">${spark(card.s, 90, 18, card.c)}</div>
       </div>`;
     }).join('');
   }
@@ -157,44 +145,43 @@
     const truth = buildGroundTruth();
 
     el.innerHTML = `
-      <div style="padding:9px 14px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;cursor:pointer" id="twBriefHead">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="width:8px;height:8px;border-radius:50%;background:#4cc2ff;box-shadow:0 0 10px rgba(76,194,255,0.7)"></span>
-          <span style="font-weight:700;letter-spacing:0.06em;font-size:11px;text-transform:uppercase">World Briefing</span>
-          <span style="color:#8c95aa;font-size:10px">${gem?.fetched ? gem.fetched.slice(11, 16) + 'Z' : ''}</span>
+      <div class="tw-brief-head" id="twBriefHead">
+        <div class="tw-brief-headleft">
+          <span class="tw-brief-pulse"></span>
+          <span class="tw-brief-title">World Briefing</span>
+          <span class="tw-brief-stamp">${gem?.fetched ? gem.fetched.slice(11, 16) + 'Z' : ''}</span>
         </div>
-        <div style="color:#8c95aa;font-size:14px" id="twBriefToggle">${_collapsed ? '▸' : '▾'}</div>
+        <div class="tw-brief-toggle" id="twBriefToggle">${_collapsed ? '+' : '−'}</div>
       </div>
-      <div id="twBriefBody" style="display:${_collapsed ? 'none' : 'block'}">
-        ${today ? `<div style="padding:10px 14px 8px;color:#cfe6ff;font-size:11.5px;line-height:1.5;border-bottom:1px solid rgba(255,255,255,0.05);font-style:italic">${today}</div>` : ''}
+      <div id="twBriefBody" class="tw-brief-body${_collapsed ? ' tw-collapsed' : ''}">
+        ${today ? `<div class="tw-brief-section tw-brief-summary"><div class="tw-brief-grouplabel">Today</div><div class="tw-brief-summarytext">${today}</div></div>` : ''}
 
-        ${truth.length ? `<div style="padding:7px 14px;border-bottom:1px solid rgba(255,255,255,0.05);background:rgba(34,197,94,0.04)">
-          <div style="font-size:9px;color:#22c55e;letter-spacing:0.16em;text-transform:uppercase;font-weight:700;margin-bottom:4px">By the numbers · ground truth</div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px">${truth.map(t => `
-            <span style="font-size:10.5px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);padding:2px 7px;border-radius:5px;color:#cfe6ff;font-feature-settings:'tnum' 1">
-              <span style="color:#8c95aa">${t.label}:</span> <b style="color:#f5f7fa">${t.val}</b> <span style="color:#6b7790;font-size:9px">${t.src}</span>
-            </span>`).join('')}</div>
+        ${truth.length ? `<div class="tw-brief-section tw-brief-truth">
+          <div class="tw-brief-grouplabel tw-brief-grouplabel-truth">By the numbers · ground truth</div>
+          <div class="tw-brief-chips">${truth.map(t => `
+            <span class="tw-chip"><span class="tw-chip-lbl">${t.label}:</span> <b class="tw-chip-v">${t.val}</b> <span class="tw-chip-src">${t.src}</span></span>`).join('')}</div>
         </div>` : ''}
 
-        <div style="padding:8px 12px 4px;display:flex;gap:5px;border-bottom:1px solid rgba(255,255,255,0.05)">${kpis}</div>
+        <div class="tw-brief-section tw-brief-kpis-wrap">
+          <div class="tw-brief-grouplabel">Macros</div>
+          <div class="tw-brief-kpis">${kpis}</div>
+        </div>
 
-        <div style="padding:8px 14px 10px">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
-            <div style="font-size:9px;color:#8c95aa;letter-spacing:0.14em;text-transform:uppercase;font-weight:700">Most concerning</div>
-            <div style="font-size:9px;color:#8c95aa">${concerns.length} countries</div>
+        <div class="tw-brief-section tw-brief-concerns-wrap">
+          <div class="tw-brief-headerrow">
+            <div class="tw-brief-grouplabel">Most concerning</div>
+            <div class="tw-brief-meta">${concerns.length} countries</div>
           </div>
           ${concerns.map(c => {
             const score = c.composite || 0;
-            const color = score >= 70 ? '#dc2626' : score >= 50 ? '#ef4444' : score >= 30 ? '#f97316' : score >= 15 ? '#facc15' : '#22c55e';
-            return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer" data-iso3="${c.iso3 || ''}" class="tw-brief-concern">
-              <div style="width:30px;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
-                <div style="width:${Math.min(100, score)}%;height:100%;background:${color}"></div>
-              </div>
-              <div style="font-weight:600;color:#f5f7fa;font-size:12px;flex:1">${c.name || c.iso3}</div>
-              <div style="font-size:11px;color:${color};font-weight:600;font-feature-settings:'tnum' 1">${score.toFixed(0)}</div>
-              ${c.trend ? `<div style="font-size:10px;color:${c.trend === 'rising' ? '#ef4444' : '#8c95aa'}">${c.trend === 'rising' ? '↑' : c.trend === 'ok' ? '·' : '↓'}</div>` : ''}
+            const sevCls = score >= 70 ? 'tw-sev-x' : score >= 50 ? 'tw-sev-h' : score >= 30 ? 'tw-sev-m' : score >= 15 ? 'tw-sev-l' : 'tw-sev-ok';
+            return `<div class="tw-concern ${sevCls}" data-iso3="${c.iso3 || ''}">
+              <div class="tw-concern-bar"><div class="tw-concern-fill" style="width:${Math.min(100, score)}%"></div></div>
+              <div class="tw-concern-name">${c.name || c.iso3}</div>
+              <div class="tw-concern-score">${score.toFixed(0)}</div>
+              ${c.trend ? `<div class="tw-concern-trend tw-trend-${c.trend}">${c.trend === 'rising' ? '↑' : c.trend === 'ok' ? '·' : '↓'}</div>` : ''}
             </div>`;
-          }).join('') || '<div style="color:#6b7790;font-style:italic;font-size:11px">No data</div>'}
+          }).join('') || '<div class="tw-brief-empty">No data</div>'}
         </div>
       </div>
     `;
@@ -203,7 +190,7 @@
       _collapsed = !_collapsed;
       build();
     };
-    el.querySelectorAll('.tw-brief-concern').forEach(row => {
+    el.querySelectorAll('.tw-concern').forEach(row => {
       row.onclick = (e) => {
         e.stopPropagation();
         const iso3 = row.dataset.iso3;
