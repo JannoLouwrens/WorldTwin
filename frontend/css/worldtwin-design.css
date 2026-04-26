@@ -2165,3 +2165,488 @@ body.tw-booted .tw-scrubber { opacity: 1 !important; transform: none !important;
    since our strata bar now does this job better */
 .tw-scrubber .scrubber-era-labels,
 .tw-scrubber .era-labels { display: none !important; }
+
+/* ============================================================
+   THE COUNCIL — three voices, one digest, visible disagreement.
+   The biggest UX bet: replaces the single AI paragraph with
+   General/Treasurer/Augur readings stacked side-by-side.
+   ============================================================ */
+.tw-council { padding: 12px 16px 14px !important; }
+.tw-council-loading {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: rgba(255, 230, 195, 0.55);
+  font-size: 12.5px;
+  padding: 8px 0;
+}
+.tw-council-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+.tw-voice {
+  position: relative;
+  padding: 10px 12px 12px;
+  background: rgba(255, 230, 195, 0.025);
+  border-left: 2px solid var(--brass-faint);
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.tw-voice:hover { background: rgba(255, 230, 195, 0.05); }
+
+/* Per-voice hue — applied to the left rule + sigil + cite accents.
+   Three distinct hues let the eye locate each voice instantly:
+   General = vermillion red (military), Treasurer = brass amber (gold),
+   Augur = signal cyan (atmosphere/horizon). */
+.tw-voice-general   { border-left-color: #d94747; }
+.tw-voice-treasurer { border-left-color: var(--phosphor); }
+.tw-voice-augur     { border-left-color: var(--signal); }
+
+.tw-voice-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.tw-voice-sigil {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1;
+}
+.tw-voice-general   .tw-voice-sigil { color: #d94747; }
+.tw-voice-treasurer .tw-voice-sigil { color: var(--phosphor); }
+.tw-voice-augur     .tw-voice-sigil { color: var(--signal); }
+
+.tw-voice-name {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: #f4ecdc;
+}
+.tw-voice-title {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 230, 195, 0.45);
+  margin-left: auto;
+}
+
+.tw-voice-headline {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 13px;
+  color: #ede4d3;
+  margin: 4px 0 6px;
+  letter-spacing: 0.005em;
+  line-height: 1.3;
+}
+.tw-voice-general   .tw-voice-headline { color: #f0c8c0; }
+.tw-voice-treasurer .tw-voice-headline { color: #ffd9a8; }
+.tw-voice-augur     .tw-voice-headline { color: #b8e6f4; }
+
+.tw-voice-body {
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(255, 230, 195, 0.86);
+  letter-spacing: 0.005em;
+}
+.tw-voice-quiet { color: rgba(255, 230, 195, 0.4); font-style: italic; }
+
+.tw-voice-cites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.tw-cite {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 7px;
+  background: transparent;
+  border: 1px solid rgba(255, 230, 195, 0.10);
+  border-left: 2px solid var(--brass);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: rgba(255, 230, 195, 0.78);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+.tw-cite:hover {
+  background: rgba(255, 181, 71, 0.06);
+  color: #f4ecdc;
+  border-color: rgba(255, 181, 71, 0.4);
+}
+.tw-voice-general   .tw-cite { border-left-color: #d94747; }
+.tw-voice-treasurer .tw-cite { border-left-color: var(--phosphor); }
+.tw-voice-augur     .tw-cite { border-left-color: var(--signal); }
+.tw-cite-lbl { color: rgba(255, 230, 195, 0.50); }
+.tw-cite-v   { color: #f4ecdc; font-weight: 600; }
+.tw-cite-src { color: var(--brass); font-style: italic; opacity: 0.85; font-size: 8.5px; }
+.tw-cite::after {
+  content: '↗';
+  margin-left: 2px;
+  color: var(--brass);
+  opacity: 0.55;
+  font-size: 10px;
+}
+.tw-cite:hover::after { color: var(--phosphor); opacity: 1; }
+
+/* On wide screens, lay the three voices SIDE-BY-SIDE for the king's
+   council feel (three advisors at the table). On narrow screens stack. */
+@media (min-width: 1500px) {
+  .tw-brief { width: 720px !important; }
+  .tw-council-grid { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .tw-voice { padding: 9px 10px 10px; }
+  .tw-voice-title { display: none; }
+  .tw-voice-cites { flex-direction: column; align-items: stretch; }
+}
+
+/* ============================================================
+   DATA INSPECTOR — global drill-into-data overlay.
+   Slides in from right when ANY claim is clicked. Shows cache
+   name, JSON path, resolved value, source URL, fetch timestamp,
+   recent samples, raw JSON. Esc to close.
+   ============================================================ */
+.tw-inspector {
+  position: fixed;
+  top: 0; right: 0;
+  width: 480px;
+  height: 100vh;
+  z-index: 200;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-body);
+}
+.tw-inspector-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 10, 0.45);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms cubic-bezier(.2,.8,.2,1);
+}
+.tw-inspector-card {
+  position: relative;
+  margin-left: auto;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg,
+    rgba(10, 12, 18, 0.96) 0%,
+    rgba(8, 10, 16, 0.98) 100%);
+  backdrop-filter: blur(18px) saturate(1.2);
+  border-left: 1px solid var(--brass-faint);
+  box-shadow: -28px 0 80px -24px rgba(0, 0, 0, 0.7);
+  padding: 22px 24px 30px;
+  overflow-y: auto;
+  color: rgba(255, 230, 195, 0.9);
+  transform: translateX(100%);
+  transition: transform 320ms cubic-bezier(.2,.8,.2,1);
+  pointer-events: auto;
+}
+.tw-inspector-open { pointer-events: auto; }
+.tw-inspector-open .tw-inspector-scrim { opacity: 1; pointer-events: auto; }
+.tw-inspector-open .tw-inspector-card { transform: translateX(0); }
+
+.tw-inspector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--brass-faint);
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+}
+.tw-inspector-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--phosphor);
+}
+.tw-inspector-eyebrow::before { content: '◉ '; font-size: 8px; }
+.tw-inspector-close {
+  width: 28px; height: 28px;
+  border: 1px solid var(--brass-faint);
+  border-radius: 50%;
+  color: var(--brass);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 24px;
+  text-align: center;
+  background: transparent;
+  cursor: pointer;
+  transition: color 160ms, border-color 160ms;
+}
+.tw-inspector-close:hover { color: var(--phosphor); border-color: var(--phosphor); }
+
+.tw-inspector-claim {
+  padding: 14px 16px 16px;
+  background: rgba(255, 181, 71, 0.04);
+  border-left: 2px solid var(--phosphor);
+  margin-bottom: 18px;
+}
+.tw-inspector-claim-lbl {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 230, 195, 0.5);
+}
+.tw-inspector-claim-v {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 24px;
+  color: #f4ecdc;
+  margin: 4px 0 6px;
+  letter-spacing: 0.005em;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+.tw-inspector-claim-meta {
+  display: flex;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: rgba(255, 230, 195, 0.7);
+}
+.tw-inspector-claim-src { color: var(--brass); text-transform: uppercase; }
+.tw-inspector-claim-voice { color: rgba(255, 230, 195, 0.45); font-style: italic; }
+
+.tw-inspector-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px dotted rgba(255, 230, 195, 0.07);
+  align-items: baseline;
+}
+.tw-inspector-row-lbl {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 230, 195, 0.5);
+}
+.tw-inspector-row-v {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #ede4d3;
+  word-break: break-all;
+}
+.tw-inspector-row-v code {
+  font-family: var(--font-mono);
+  background: rgba(255, 230, 195, 0.05);
+  padding: 1px 6px;
+  border-radius: 0;
+  border-left: 2px solid var(--brass);
+}
+.tw-inspector-row-v a { color: var(--phosphor); text-decoration: none; border-bottom: 1px dotted var(--brass-faint); }
+.tw-inspector-row-v a:hover { border-bottom-color: var(--phosphor); }
+
+.tw-inspector-section { margin-top: 18px; }
+.tw-inspector-section-lbl {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 230, 195, 0.55);
+  margin-bottom: 6px;
+}
+.tw-inspector-section-lbl::before {
+  content: '— ';
+  color: var(--brass);
+}
+
+.tw-inspector-history {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  padding: 4px 0;
+}
+.tw-inspector-sample {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 3px 8px;
+  background: rgba(255, 230, 195, 0.025);
+  border-left: 2px solid var(--brass-faint);
+  letter-spacing: 0.04em;
+}
+.tw-inspector-sample-t { color: var(--brass); }
+.tw-inspector-sample-v { color: #f4ecdc; font-weight: 600; text-align: right; }
+
+.tw-inspector-pre {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: rgba(255, 230, 195, 0.03);
+  border-left: 2px solid var(--brass);
+  padding: 10px 12px;
+  color: rgba(255, 230, 195, 0.82);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 280px;
+  overflow-y: auto;
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+}
+
+.tw-inspector-foot {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid var(--brass-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: rgba(255, 230, 195, 0.5);
+}
+.tw-inspector-hint kbd {
+  font-family: var(--font-mono);
+  background: rgba(255, 230, 195, 0.08);
+  border: 1px solid var(--brass-faint);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 9px;
+  color: var(--phosphor);
+  margin: 0 3px;
+}
+
+/* ============================================================
+   DIFF STRIP — "since you last looked"
+   Persistent thin band positioned just under the header plate.
+   Shows everything that has changed since the user's last visit.
+   ============================================================ */
+.tw-diff {
+  position: fixed;
+  top: 178px;       /* same row as the legacy ticker — replaces it visually */
+  left: 320px;
+  right: 16px;
+  z-index: 65;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 6px 14px 7px;
+  background: linear-gradient(90deg,
+    rgba(8, 10, 16, 0.68) 0%,
+    rgba(8, 10, 16, 0.78) 100%);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255, 230, 195, 0.04);
+  border-bottom: 1px solid var(--brass-faint);
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 320ms cubic-bezier(.2,.8,.2,1), transform 320ms cubic-bezier(.2,.8,.2,1);
+  overflow: hidden;
+}
+.tw-diff-on { opacity: 1; transform: none; pointer-events: auto; }
+
+.tw-diff-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 230, 195, 0.55);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.tw-diff-since { color: var(--phosphor); }
+.tw-diff-quiet {
+  font-family: var(--font-display);
+  font-style: italic;
+  color: rgba(255, 230, 195, 0.55);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+}
+
+.tw-diff-items {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 230, 195, 0.2) transparent;
+  flex: 1;
+  min-width: 0;
+}
+.tw-diff-items::-webkit-scrollbar { height: 4px; }
+.tw-diff-items::-webkit-scrollbar-thumb { background: rgba(255, 230, 195, 0.2); }
+
+.tw-diff-item {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 8px;
+  background: transparent;
+  border: 0;
+  border-right: 1px dotted rgba(255, 230, 195, 0.10);
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: rgba(255, 230, 195, 0.85);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+  white-space: nowrap;
+}
+.tw-diff-item:hover { background: rgba(255, 181, 71, 0.06); color: #f4ecdc; }
+.tw-diff-glyph {
+  width: 18px; height: 18px;
+  border: 1px solid var(--brass-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--brass);
+  border-radius: 50%;
+}
+.tw-diff-markets   .tw-diff-glyph { color: var(--phosphor); border-color: var(--phosphor); }
+.tw-diff-conflict  .tw-diff-glyph { color: #d94747; border-color: rgba(217, 71, 71, 0.5); }
+.tw-diff-hazard    .tw-diff-glyph { color: #ff8a4d; border-color: rgba(255, 138, 77, 0.5); }
+.tw-diff-cyclone   .tw-diff-glyph { color: var(--signal); border-color: rgba(0, 212, 255, 0.4); }
+.tw-diff-health    .tw-diff-glyph { color: #5fbf7d; border-color: rgba(95, 191, 125, 0.4); }
+.tw-diff-pulse     .tw-diff-glyph { color: var(--phosphor); }
+.tw-diff-council   .tw-diff-glyph { color: var(--brass); }
+
+.tw-diff-lbl { color: rgba(255, 230, 195, 0.6); font-size: 10.5px; letter-spacing: 0.04em; }
+.tw-diff-v {
+  font-family: var(--font-mono);
+  color: #f4ecdc;
+  font-weight: 600;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+.tw-diff-src {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--brass);
+  font-style: italic;
+  letter-spacing: 0.08em;
+  opacity: 0.82;
+}
+
+/* Push events ticker further down so diff strip occupies its old slot */
+#eventsTicker, .events-ticker { top: 215px !important; }
+
+/* Council provenance badge */
+.tw-council-synth, .tw-council-llm {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 0;
+  cursor: help;
+}
+.tw-council-synth { color: var(--brass); border: 1px dotted var(--brass-faint); }
+.tw-council-llm   { color: var(--phosphor); border: 1px solid rgba(255,181,71,0.3); }

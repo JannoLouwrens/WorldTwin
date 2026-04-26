@@ -544,6 +544,241 @@ async def _binance_crosscheck(client: httpx.AsyncClient, digest: dict) -> None:
         print(f"[ai_narrative] Binance cross-check failed: {e}")
 
 
+def _council_prompt(digest: dict) -> str:
+    """Three-voice king's-council prompt. Returns strict JSON with 3 readings.
+
+    Each voice reads the SAME digest through a different lens. They are
+    expected to disagree — that's the value. Each voice cites the exact
+    digest field path it relied on, so the UI can drill from claim → number
+    → cache → source.
+    """
+    digest_json = json.dumps(digest, indent=1, default=str)
+    if len(digest_json) > 18000:
+        digest_json = digest_json[:18000] + "\n[truncated]"
+    return (
+        "You are running the Council — three independent senior advisors who read the SAME world\n"
+        "digest through different lenses. They disagree often. That disagreement is the product.\n"
+        "\n"
+        "Return STRICT JSON (no markdown, no preamble) with this exact shape:\n"
+        "{\n"
+        '  "general":   {"reading": "...", "headline": "...", "citations": [{"label":"...", "value":"...", "source":"...", "digest_path":"..."}]},\n'
+        '  "treasurer": {"reading": "...", "headline": "...", "citations": [...]},\n'
+        '  "augur":     {"reading": "...", "headline": "...", "citations": [...]}\n'
+        "}\n"
+        "\n"
+        "VOICES — each is a 2-3 sentence reading (40-70 words) plus a 4-7 word headline:\n"
+        "\n"
+        "GENERAL (military / strategic) — reads conflict_24h, hazards (security-relevant ones),\n"
+        "   chokepoints (military implications), recent_battles, top_concerning, dark_vessel_signals,\n"
+        "   internet_outages, double_trouble. Asks: where is escalation possible, who is moving forces,\n"
+        "   what alliance pressure is building. Headline frames a strategic question.\n"
+        "\n"
+        "TREASURER (markets / trade / capital) — reads macros, crypto, forex_top, live_commodities,\n"
+        "   us_oil, food_index, chokepoints (trade flow), countries_under_pressure, oecd_cli_extremes.\n"
+        "   Asks: where does capital flee to today, what commodity is moving, which sovereign is in\n"
+        "   trouble. Headline frames a market posture.\n"
+        "\n"
+        "AUGUR (climate / hazards / disease / migration / slow signals) — reads cyclones, quakes_24h,\n"
+        "   hazards (natural), disease_outbreaks, space_weather, humanitarian_crises, top_news_themes\n"
+        "   (qualitative). Asks: what is the slow signal, what is approaching that nobody is naming\n"
+        "   yet. Headline frames a slow-moving warning.\n"
+        "\n"
+        "RULES (strict, the UI checks these):\n"
+        "  1. EVERY citation must have all 4 fields: label (human), value (the number/text quoted),\n"
+        "     source (PortWatch/FRED/UCDP/GDACS/USGS/NHC/Pulse/WHO/DONKI/SWPC/Cloudflare/GFW/\n"
+        "     Wikidata/FAO/EIA/IMF/OECD/CoinGecko/Binance), digest_path (JSON pointer like\n"
+        "     'chokepoints[0].ships_today' or 'macros[2].latest').\n"
+        "  2. Each voice cites 2-4 numbers. No more, no less. Numbers must be exact strings\n"
+        "     from the digest (e.g. \"156\" not \"about 150\").\n"
+        "  3. The reading prose may include those numbers in parentheses with the source — same\n"
+        "     format as the citations.\n"
+        "  4. Voices must DIFFER. Don't have all three say the same thing. Each surfaces what\n"
+        "     ONLY their lens would surface.\n"
+        "  5. If a voice's domain has no signal in the digest, say so honestly: 'Quiet on the\n"
+        "     conflict front today; only X minor incidents (UCDP).' Do not fabricate a story.\n"
+        "  6. British English. Sober. No exclamation marks. No emoji. No 'In summary'.\n"
+        "  7. Output ONLY the JSON object, starting with { and ending with }. Nothing else.\n"
+        "\n"
+        f"WORLD DIGEST (as of {digest.get('as_of')}):\n{digest_json}\n"
+    )
+
+
+def _deterministic_council(digest: dict) -> dict:
+    """LLM-free fallback Council. Reads the digest deterministically and
+    produces three voices with cited numbers, so the UI always has something
+    to render even when Gemini/Claude quotas are exhausted.
+
+    The voices are templated but they cite REAL digest values — so the user
+    can still drill from any number to its source via the Data Inspector.
+    Reads as 'an analyst on a quiet day' rather than fabricating drama.
+    """
+    cites_g, cites_t, cites_a = [], [], []
+    g_lines, t_lines, a_lines = [], [], []
+
+    # GENERAL — conflict, hazards (security), chokepoints, top concerning
+    c24 = digest.get("conflict_24h") or {}
+    if c24.get("event_count") is not None:
+        cites_g.append({"label": "Conflict events 24h", "value": str(c24["event_count"]),
+                        "source": "UCDP", "digest_path": "conflict_24h.event_count"})
+        if c24.get("fatalities_estimated"):
+            cites_g.append({"label": "Estimated fatalities 24h", "value": str(c24["fatalities_estimated"]),
+                            "source": "UCDP", "digest_path": "conflict_24h.fatalities_estimated"})
+            g_lines.append(f"Conflict ledger: {c24['event_count']} events with ~{c24['fatalities_estimated']} fatalities in the past day (UCDP).")
+        else:
+            g_lines.append(f"The conflict front is quiet: {c24['event_count']} recorded events in the past day (UCDP).")
+    chokes = digest.get("chokepoints") or []
+    if chokes:
+        primary = chokes[0]
+        cites_g.append({"label": f"{primary['name']} ships today", "value": str(primary.get("ships_today", "—")),
+                        "source": "PortWatch", "digest_path": "chokepoints[0].ships_today"})
+        g_lines.append(f"At sea, {primary.get('ships_today', '—')} ships transited the {primary['name']} today (PortWatch).")
+    top_conc = digest.get("top_concerning") or []
+    if top_conc:
+        worst = top_conc[0]
+        cites_g.append({"label": f"{worst.get('name','—')} pulse score", "value": str(worst.get("composite", "—")),
+                        "source": "Pulse", "digest_path": "top_concerning[0].composite"})
+        g_lines.append(f"Strategic pressure remains highest on {worst.get('name','—')} (composite {worst.get('composite','—')}/100, Pulse).")
+    g_headline = "Pressure on the Gulf, quiet on the front" if top_conc and not c24.get("fatalities_estimated") \
+                  else ("Active conflict, watch the chokepoints" if c24.get("fatalities_estimated") else "Quiet day on the strategic front")
+
+    # TREASURER — macros, crypto, commodities, countries under pressure
+    macros = digest.get("macros") or []
+    movers = sorted([m for m in macros if m.get("pct_change") is not None],
+                    key=lambda m: -abs(m["pct_change"]))[:3]
+    if movers:
+        top_mover = movers[0]
+        idx = macros.index(top_mover)
+        cites_t.append({"label": top_mover["label"], "value": f"{top_mover['pct_change']:+.2f}%",
+                        "source": "FRED", "digest_path": f"macros[{idx}].pct_change"})
+        t_lines.append(f"{top_mover['label']} moved {top_mover['pct_change']:+.2f}% over {top_mover['pct_change_over']} (FRED).")
+        if len(movers) > 1:
+            mv2 = movers[1]
+            t_lines.append(f"{mv2['label']} {mv2['pct_change']:+.2f}% (FRED).")
+    cup = digest.get("countries_under_pressure") or {}
+    if cup.get("highest_inflation"):
+        worst_inf = cup["highest_inflation"][0]
+        cites_t.append({"label": f"{worst_inf['iso3']} inflation", "value": f"{worst_inf['pct']}%",
+                        "source": "IMF", "digest_path": "countries_under_pressure.highest_inflation[0].pct"})
+        t_lines.append(f"Inflation peaks at {worst_inf['pct']}% in {worst_inf['iso3']} (IMF).")
+    crypto = digest.get("crypto") or []
+    btc = next((c for c in crypto if (c.get("sym") or "").lower() == "btc"), None)
+    if btc and btc.get("change_24h_pct") is not None:
+        idx = crypto.index(btc)
+        cites_t.append({"label": "BTC 24h", "value": f"{btc['change_24h_pct']:+.2f}%",
+                        "source": "CoinGecko", "digest_path": f"crypto[{idx}].change_24h_pct"})
+    t_headline = (f"{movers[0]['label'].split()[0]} is the story" if movers
+                  else "Capital quiet, watch the periphery")
+
+    # AUGUR — cyclones, quakes, hazards (natural), disease, space weather
+    cyc = digest.get("cyclones") or []
+    quakes = (digest.get("quakes_24h") or {}).get("biggest") or []
+    haz = digest.get("hazards") or []
+    if quakes:
+        big = quakes[0]
+        cites_a.append({"label": f"M{big['mag']} earthquake", "value": big.get("place", "—"),
+                        "source": "USGS", "digest_path": "quakes_24h.biggest[0].place"})
+        a_lines.append(f"Geologically: a notable M{big['mag']} earthquake struck {big.get('place','—')} (USGS).")
+    if cyc:
+        c0 = cyc[0]
+        cites_a.append({"label": "Active cyclone", "value": c0.get("name", "—"),
+                        "source": "NHC", "digest_path": "cyclones[0].name"})
+        a_lines.append(f"{c0.get('name','—')} active in the basin (NHC).")
+    elif haz:
+        droughts = [h for h in haz if "drought" in (h.get("title", "").lower())]
+        if droughts:
+            cites_a.append({"label": "Active hazard", "value": droughts[0].get("title", "")[:60],
+                            "source": "GDACS", "digest_path": "hazards[0].title"})
+            a_lines.append(f"Slow signal: {droughts[0].get('title','')[:80]} (GDACS).")
+    if not a_lines:
+        a_lines.append("Atmosphere quiet — no cyclones tracked, no major hazards active in the digest.")
+    a_headline = "Drought is the slow story" if any("drought" in (h.get("title","").lower()) for h in haz) \
+                  else ("Tectonics, not weather" if quakes else "Atmosphere is quiet")
+
+    return {
+        "general":   {"reading": " ".join(g_lines)[:500] or "Strategic front quiet today.", "headline": g_headline, "citations": cites_g[:4]},
+        "treasurer": {"reading": " ".join(t_lines)[:500] or "Markets quiet — no series moved meaningfully today.", "headline": t_headline, "citations": cites_t[:4]},
+        "augur":     {"reading": " ".join(a_lines)[:500], "headline": a_headline, "citations": cites_a[:4]},
+        "_synthesized": True,   # so the UI can show 'reading written deterministically'
+    }
+
+
+async def _generate_council(client: httpx.AsyncClient, digest: dict) -> dict | None:
+    """Call the model with the council prompt, parse JSON, return None on failure.
+
+    Tries OpenRouter (Claude) first if configured, then Gemini Pro, then Flash.
+    Falls back to a deterministic stub if everything fails so the UI still has
+    something to render.
+    """
+    prompt = _council_prompt(digest)
+    text = None
+    if OPENROUTER_API_KEY:
+        text = await _call_openrouter(client, prompt)
+    if not text:
+        text = await _call_gemini_pro(client, prompt)
+    if not text:
+        text = await _call_gemini_flash(client, prompt)
+    if not text:
+        # All LLMs failed — return a deterministic Council so the UI is
+        # never empty. The numbers are still real (from the digest); only
+        # the prose is templated.
+        print("[ai_narrative] council LLM failed, using deterministic synth")
+        return _deterministic_council(digest)
+
+    # Extract JSON — model sometimes wraps in ```json fences despite instructions
+    raw = text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        # Try to find the outer { ... }
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                parsed = json.loads(raw[start:end+1])
+            except json.JSONDecodeError as e:
+                print(f"[ai_narrative] council JSON parse fail, using synth: {e}")
+                return _deterministic_council(digest)
+        else:
+            return _deterministic_council(digest)
+
+    # Validate shape
+    out = {}
+    for voice in ("general", "treasurer", "augur"):
+        v = parsed.get(voice)
+        if not isinstance(v, dict):
+            continue
+        reading = (v.get("reading") or "").strip()
+        headline = (v.get("headline") or "").strip()
+        cites = v.get("citations") or []
+        if not isinstance(cites, list):
+            cites = []
+        cleaned_cites = []
+        for c in cites[:5]:
+            if not isinstance(c, dict):
+                continue
+            cleaned_cites.append({
+                "label": str(c.get("label", "")).strip(),
+                "value": str(c.get("value", "")).strip(),
+                "source": str(c.get("source", "")).strip(),
+                "digest_path": str(c.get("digest_path", "")).strip(),
+            })
+        out[voice] = {
+            "reading": reading,
+            "headline": headline,
+            "citations": cleaned_cites,
+        }
+    if len(out) >= 2:
+        return out
+    # Model returned something but not in our shape — fall back to synth
+    print(f"[ai_narrative] council shape invalid ({list(out.keys())}), using synth")
+    return _deterministic_council(digest)
+
+
 async def fetch(client: httpx.AsyncClient):
     try:
         digest = _build_digest()
@@ -577,6 +812,9 @@ async def fetch(client: httpx.AsyncClient):
     while len(paragraphs) < 3:
         paragraphs.append("")
 
+    # Council — three voices reading the same digest. Same model, separate call.
+    council = await _generate_council(client, digest)
+
     return {
         "source": used_model,
         "fetched": datetime.now(timezone.utc).isoformat(),
@@ -585,7 +823,12 @@ async def fetch(client: httpx.AsyncClient):
         "biggest_risk": paragraphs[1],
         "trend_of_week": paragraphs[2],
         "raw": text,
+        # Three-voice king's-council reading. Each voice has its own citations.
+        # Frontend (council.js) reads this; falls back to the 3-paragraph form
+        # above if the council call failed.
+        "council": council,
         # Expose the digest so the frontend can render the "By the numbers" strip
+        # AND the Data Inspector can resolve any cited digest_path back to its value.
         "digest": digest,
         "input_events_count": len(digest.get("events_today") or []),
     }
