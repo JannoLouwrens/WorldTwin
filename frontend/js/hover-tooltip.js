@@ -179,6 +179,40 @@
            ${window.Clock.label(prov.year)} · ${prov.src}${prov.reconstruction ? ' · reconstruction' : ''}
          </div>`
       : '';
+    // Causal summary — top trade partner + ally/enemy counts. Surfaces
+    // what the causal-lines arcs are showing without clicking each arc.
+    const ta = window._cacheStore?.get('trade_annual');
+    const flows = ta?.flows || [];
+    let topPartnerName = null, topPartnerVal = 0, topPartnerKind = null;
+    for (const f of flows) {
+      const v = f.value_usd || 0;
+      if (f.from_iso3 === iso3 && v > topPartnerVal) { topPartnerVal = v; topPartnerName = f.to_name; topPartnerKind = 'export'; }
+      if (f.to_iso3 === iso3 && v > topPartnerVal) { topPartnerVal = v; topPartnerName = f.from_name; topPartnerKind = 'import'; }
+    }
+    const rel2 = window._cacheStore?.get('country_relations');
+    const r2 = rel2?.by_country?.[iso3];
+    const allyCount = r2?.allies?.length || 0;
+    const enemyCount = r2?.enemies?.length || 0;
+    const blocs = (r2?.blocs || []).slice(0, 3).join(' · ');
+
+    let causalHtml = '';
+    if (topPartnerName || allyCount || enemyCount) {
+      const lines = [];
+      if (topPartnerName && topPartnerVal > 0) {
+        const symbol = topPartnerKind === 'export' ? '→' : '←';
+        const color = topPartnerKind === 'export' ? '#ffb547' : '#00d4ff';
+        lines.push(`<span style="color:${color}">${symbol} ${topPartnerName}</span> $${(topPartnerVal/1e9).toFixed(1)}B`);
+      }
+      if (allyCount || enemyCount) {
+        const parts = [];
+        if (allyCount)  parts.push(`<span style="color:#5fbf7d">${allyCount} allies</span>`);
+        if (enemyCount) parts.push(`<span style="color:#d94747">${enemyCount} adversaries</span>`);
+        lines.push(parts.join(' · '));
+      }
+      if (blocs) lines.push(`<span style="color:#c9a86b;font-style:italic">${blocs}</span>`);
+      causalHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px dotted rgba(255,230,195,0.18);font-size:10px;letter-spacing:0.02em;color:#cfe6ff">${lines.join('<br>')}</div>`;
+    }
+
     t.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <div style="width:10px;height:10px;border-radius:2px;background:${swatch};border:1px solid rgba(255,255,255,0.3)"></div>
@@ -189,6 +223,7 @@
         <span>${fmt.label || ''}</span>
         <span style="color:#f5f7fa;font-weight:600;font-feature-settings:'tnum' 1">${fmt.value || ''}</span>
       </div>
+      ${causalHtml}
       ${provHtml}`;
     t.style.opacity = '1';
     place();

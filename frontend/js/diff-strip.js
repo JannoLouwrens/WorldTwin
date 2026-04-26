@@ -246,11 +246,39 @@
     if (el) el.classList.remove('tw-diff-on');
   }
 
+  // Demo mode — backdate the snapshot 4h AND mutate it so the diff has
+  // visible items even on first load. Press Alt+D to trigger.
+  function demoMode() {
+    const now = snapshotNow();
+    if (!now) return;
+    const fake = JSON.parse(JSON.stringify(now));
+    fake.t = Date.now() - 4 * 3600 * 1000;
+    // Mutate fake values so diff produces visible items
+    for (const k of Object.keys(fake.macros)) {
+      if (typeof fake.macros[k] === 'number') {
+        fake.macros[k] = fake.macros[k] * 0.97;   // simulate 3% drift
+      }
+    }
+    fake.ucdp_count = Math.max(0, (fake.ucdp_count || 0) - 12);
+    fake.gdacs_count = Math.max(0, (fake.gdacs_count || 0) - 1);
+    fake.cyclone_names = fake.cyclone_names.slice(0, Math.max(0, fake.cyclone_names.length - 1));
+    fake.who_titles = fake.who_titles.slice(2);
+    fake.pulse_top = fake.pulse_top.slice(2).concat(fake.pulse_top.slice(0, 2));
+    saveSnapshot(fake);
+    tick();
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && e.key.toLowerCase() === 'd') {
+      e.preventDefault();
+      demoMode();
+    }
+  });
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => setTimeout(tick, 4500));
   } else {
     setTimeout(tick, 4500);
   }
 
-  window.DiffStrip = { tick, commit, snapshotNow };
+  window.DiffStrip = { tick, commit, snapshotNow, demoMode };
 })();
