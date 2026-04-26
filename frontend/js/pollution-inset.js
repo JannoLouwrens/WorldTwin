@@ -263,19 +263,26 @@
 
   // ---- Data load ----
   async function loadData() {
-    if (_ppmSeries && _tempSeries) return;
-    try {
-      const co2 = await window.fetchCache('noaa_co2');
-      if (co2 && Array.isArray(co2.historical_series)) {
-        _ppmSeries = co2.historical_series.filter(r => r[0] >= _viewMin - 200);
-      }
-    } catch (e) { console.warn('[pollution-inset] noaa_co2 load failed', e); }
-    try {
-      const tmp = await window.fetchCache('paleo_temperature');
-      if (tmp && Array.isArray(tmp.series)) {
-        _tempSeries = tmp.series.filter(r => r[0] >= _viewMin - 200);
-      }
-    } catch (e) { console.warn('[pollution-inset] paleo_temperature load failed', e); }
+    // Each series independently — never short-circuit on the first load
+    // because a partial success previously made the second never retry.
+    if (!_ppmSeries) {
+      try {
+        const co2 = await window.fetchCache('noaa_co2');
+        if (co2 && Array.isArray(co2.historical_series)) {
+          _ppmSeries = co2.historical_series.filter(r => Array.isArray(r) && typeof r[0] === 'number' && r[0] >= _viewMin - 200);
+          console.log('[pollution-inset] ppm loaded', _ppmSeries.length, 'samples');
+        }
+      } catch (e) { console.warn('[pollution-inset] noaa_co2 load failed', e); }
+    }
+    if (!_tempSeries) {
+      try {
+        const tmp = await window.fetchCache('paleo_temperature');
+        if (tmp && Array.isArray(tmp.series)) {
+          _tempSeries = tmp.series.filter(r => Array.isArray(r) && typeof r[0] === 'number' && r[0] >= _viewMin - 200);
+          console.log('[pollution-inset] temp loaded', _tempSeries.length, 'samples');
+        }
+      } catch (e) { console.warn('[pollution-inset] paleo_temperature load failed', e); }
+    }
     drawTraces();
   }
 
@@ -302,10 +309,16 @@
 
   function init() {
     ensureMount();
-    // Subscribe to Clock
+    // Subscribe to Clock — if the data isn't loaded yet, kick off load+full
+    // repaint instead of just moving the playhead (otherwise readouts blank).
     if (window.Clock && window.Clock.subscribe) {
       window.Clock.subscribe((y) => {
-        if (host && host.classList.contains('pi-on')) drawPlayhead(y);
+        if (!host || !host.classList.contains('pi-on')) return;
+        if (!_ppmSeries || !_tempSeries) {
+          loadData().then(() => { drawTraces(); drawPlayhead(y); });
+        } else {
+          drawPlayhead(y);
+        }
       });
     }
     // Wrap Mapmode.activate so we know when it changes
