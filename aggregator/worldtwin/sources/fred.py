@@ -111,6 +111,10 @@ LAYER = LayerMeta(
 
 
 async def _fetch_one(client: httpx.AsyncClient, series_id: str, name: str, unit: str, category: str, sem: asyncio.Semaphore):
+    """Pull the FULL FRED history for this series (ascending order, no limit).
+    Some series go back to 1947. Daily series ~20k samples; monthly ~900.
+    The History Store ingests every sample; the cache file's `series` keeps
+    only the most recent 12 for the briefing/UI to render quickly."""
     async with sem:
         try:
             r = await client.get(
@@ -119,31 +123,37 @@ async def _fetch_one(client: httpx.AsyncClient, series_id: str, name: str, unit:
                     "series_id": series_id,
                     "api_key": FRED_KEY,
                     "file_type": "json",
-                    "limit": 12,
-                    "sort_order": "desc",
+                    "observation_start": "1900-01-01",
+                    "sort_order": "asc",
                 },
-                timeout=30,
+                timeout=60,
             )
             if r.status_code != 200:
                 return None
             obs = r.json().get("observations", [])
             if not obs:
                 return None
-            series = [
+            full_series = [
                 timeseries_point(
                     t=o.get("date"),
                     v=float(o.get("value")) if o.get("value") not in ("", ".") else None,
                 )
-                for o in reversed(obs)
+                for o in obs
             ]
-            latest = next((o for o in obs if o.get("value") not in ("", ".")), None)
+            # Drop missing samples
+            full_series = [s for s in full_series if s.get("v") is not None]
+            # Latest = chronologically last with a real value
+            latest = full_series[-1] if full_series else None
             return series_id, {
                 "name": name,
                 "unit": unit,
                 "category": category,
-                "latest": float(latest["value"]) if latest else None,
-                "latest_date": latest.get("date") if latest else None,
-                "series": series,
+                "latest": latest["v"] if latest else None,
+                "latest_date": latest["t"] if latest else None,
+                # UI keeps a 12-point sparkline; History Store gets the full series
+                "series": full_series[-12:],
+                "series_full": full_series,   # picked up by the decomposer
+                "series_full_count": len(full_series),
             }
         except Exception as e:
             print(f"[fred] {series_id} failed: {type(e).__name__}: {e}")

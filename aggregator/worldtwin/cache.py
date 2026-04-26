@@ -69,6 +69,15 @@ def write_legacy(layer_id: str, legacy_data: Any) -> None:
         print(f"[cache] sanity sweep failed for {layer_id}: {e}")
     _atomic_write(CACHE_DIR / f"{layer_id}.json", legacy_data)
 
+    # History store — append every fetch to /data/history/history.sqlite
+    # so the lab REMEMBERS. Never block the live cache write on a history
+    # failure; this is best-effort persistence.
+    try:
+        from . import history
+        history.snapshot(layer_id, legacy_data)
+    except Exception as e:
+        print(f"[cache] history snapshot failed for {layer_id}: {e}")
+
 
 def read_envelope(layer_id: str) -> dict[str, Any] | None:
     """Read a v1 envelope back from disk."""

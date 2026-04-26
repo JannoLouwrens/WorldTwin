@@ -21,7 +21,7 @@ from ..registry import register
 
 LAYER = LayerMeta(
     id="world_bank",
-    name="World Bank Indicators (30 per country, 1960-2024 history)",
+    name="World Bank Indicators (102 per country, 1960-2024 history)",
     category="resources",
     kind="raw",
     source="World Bank API v2",
@@ -29,43 +29,143 @@ LAYER = LayerMeta(
     license="CC BY 4.0",
     refresh_s=86400 * 7,
     initial_delay_s=265,
-    description="30 key World Bank indicators per country with 64-year history. Per-indicator series enable timeline scrubbing.",
+    description="102 World Bank indicators per country with 64-year history (economic, trade, fiscal, labour, demographic, health, education, infrastructure, energy, environment, security, governance, innovation). Per-indicator series enable timeline scrubbing.",
     requires_key=False,
 )
 
 
 INDICATORS = [
+    # ==== ECONOMIC — output, prices, capital ====
     ("NY.GDP.MKTP.CD",         "GDP current USD"),
+    ("NY.GDP.MKTP.KD",         "GDP constant 2015 USD"),
     ("NY.GDP.PCAP.CD",         "GDP per capita USD"),
+    ("NY.GDP.PCAP.KD",         "GDP per capita constant 2015 USD"),
     ("NY.GDP.MKTP.KD.ZG",      "GDP growth %"),
-    ("SP.POP.TOTL",            "Population total"),
-    ("SP.POP.GROW",            "Population growth %"),
-    ("SP.DYN.LE00.IN",         "Life expectancy"),
-    ("SP.URB.TOTL.IN.ZS",      "Urban population %"),
-    ("EN.GHG.CO2.PC.CE.AR5",   "CO2 per capita (t)"),
-    ("EG.USE.PCAP.KG.OE",      "Energy per capita"),
-    ("EG.ELC.ACCS.ZS",         "Electricity access %"),
-    ("EG.ELC.RNEW.ZS",         "Renewable electricity %"),
-    ("IT.NET.USER.ZS",         "Internet users %"),
-    ("MS.MIL.XPND.GD.ZS",      "Military spend % GDP"),
-    ("FP.CPI.TOTL.ZG",         "Inflation %"),
-    ("SL.UEM.TOTL.ZS",         "Unemployment %"),
+    ("NY.GDP.PCAP.KD.ZG",      "GDP per capita growth %"),
+    ("NY.GNP.MKTP.CD",         "GNI current USD"),
+    ("NY.GNP.PCAP.PP.CD",      "GNI PPP per capita"),
+    ("NY.GDP.PCAP.PP.CD",      "GDP PPP per capita"),
+    ("NV.IND.MANF.ZS",         "Manufacturing value-added % GDP"),
+    ("NV.SRV.TOTL.ZS",         "Services value-added % GDP"),
+    ("NV.AGR.TOTL.ZS",         "Agriculture value-added % GDP"),
+    ("NV.IND.TOTL.ZS",         "Industry value-added % GDP"),
+    ("FP.CPI.TOTL.ZG",         "Inflation % (CPI)"),
+    ("FP.CPI.TOTL",            "CPI index 2010=100"),
+    ("FR.INR.RINR",            "Real interest rate %"),
+    ("FR.INR.LEND",            "Lending interest rate %"),
+    ("FR.INR.DPST",            "Deposit interest rate %"),
+    ("BX.KLT.DINV.WD.GD.ZS",   "FDI net inflows % GDP"),
+    ("BX.KLT.DINV.CD.WD",      "FDI net inflows BoP USD"),
+    ("BN.CAB.XOKA.GD.ZS",      "Current account balance % GDP"),
+    ("CM.MKT.LCAP.GD.ZS",      "Stock market cap % GDP"),
+    ("CM.MKT.TRAD.GD.ZS",      "Stocks traded % GDP"),
+
+    # ==== TRADE ====
     ("NE.IMP.GNFS.ZS",         "Imports % GDP"),
     ("NE.EXP.GNFS.ZS",         "Exports % GDP"),
-    ("BX.KLT.DINV.WD.GD.ZS",   "FDI net inflows % GDP"),
+    ("NE.IMP.GNFS.CD",         "Imports current USD"),
+    ("NE.EXP.GNFS.CD",         "Exports current USD"),
+    ("TX.VAL.TECH.CD",         "High-tech exports USD"),
+    ("TX.VAL.TECH.MF.ZS",      "High-tech exports % manufactured"),
+    ("TM.TAX.MRCH.SM.AR.ZS",   "Tariff rate % (manufactured)"),
+
+    # ==== FISCAL / DEBT ====
     ("GC.DOD.TOTL.GD.ZS",      "Central gov debt % GDP"),
-    ("AG.LND.FRST.ZS",         "Forest area %"),
-    ("AG.LND.AGRI.ZS",         "Agricultural land %"),
-    ("ER.H2O.FWTL.ZS",         "Freshwater withdrawal %"),
-    ("SH.DYN.MORT",            "Under-5 mortality (per 1000)"),
-    ("SE.XPD.TOTL.GD.ZS",      "Education spend % GDP"),
-    ("SH.XPD.CHEX.GD.ZS",      "Health spend % GDP"),
-    ("IT.CEL.SETS.P2",         "Mobile subs per 100"),
-    ("SM.POP.REFG",            "Refugees by country"),
-    ("NY.GNP.PCAP.PP.CD",      "GNI PPP per capita"),
+    ("GC.REV.XGRT.GD.ZS",      "Revenue % GDP"),
+    ("GC.XPN.TOTL.GD.ZS",      "Expense % GDP"),
+    ("GC.NLD.TOTL.GD.ZS",      "Net lending % GDP"),
+    ("DT.DOD.DECT.CD",         "External debt stocks USD"),
+    ("DT.TDS.DECT.GN.ZS",      "External debt service % GNI"),
+
+    # ==== LABOUR / EMPLOYMENT ====
+    ("SL.UEM.TOTL.ZS",         "Unemployment %"),
+    ("SL.UEM.TOTL.MA.ZS",      "Unemployment male %"),
+    ("SL.UEM.TOTL.FE.ZS",      "Unemployment female %"),
+    ("SL.UEM.1524.ZS",         "Youth unemployment %"),
+    ("SL.TLF.CACT.ZS",         "Labour force participation %"),
+    ("SL.AGR.EMPL.ZS",         "Employment in agriculture %"),
+    ("SL.IND.EMPL.ZS",         "Employment in industry %"),
+    ("SL.SRV.EMPL.ZS",         "Employment in services %"),
+
+    # ==== POPULATION / DEMOGRAPHICS ====
+    ("SP.POP.TOTL",            "Population total"),
+    ("SP.POP.GROW",            "Population growth %"),
+    ("SP.URB.TOTL.IN.ZS",      "Urban population %"),
     ("SP.RUR.TOTL.ZS",         "Rural population %"),
+    ("SP.DYN.CBRT.IN",         "Birth rate per 1000"),
+    ("SP.DYN.CDRT.IN",         "Death rate per 1000"),
+    ("SP.DYN.TFRT.IN",         "Fertility rate"),
+    ("SP.POP.65UP.TO.ZS",      "Population 65+ %"),
+    ("SP.POP.0014.TO.ZS",      "Population 0-14 %"),
+    ("SP.POP.DPND",            "Age dependency ratio %"),
+    ("SM.POP.REFG",            "Refugees by country of asylum"),
+    ("SM.POP.REFG.OR",         "Refugees by country of origin"),
+    ("SM.POP.NETM",            "Net migration"),
+
+    # ==== HEALTH ====
+    ("SP.DYN.LE00.IN",         "Life expectancy"),
+    ("SP.DYN.LE00.MA.IN",      "Life expectancy male"),
+    ("SP.DYN.LE00.FE.IN",      "Life expectancy female"),
+    ("SH.DYN.MORT",            "Under-5 mortality per 1000"),
+    ("SH.DYN.NMRT",            "Neonatal mortality per 1000"),
+    ("SH.STA.MMRT",            "Maternal mortality per 100k"),
+    ("SH.XPD.CHEX.GD.ZS",      "Health spend % GDP"),
+    ("SH.XPD.CHEX.PC.CD",      "Health spend per capita USD"),
+    ("SH.MED.PHYS.ZS",         "Physicians per 1000"),
+    ("SH.MED.BEDS.ZS",         "Hospital beds per 1000"),
+    ("SH.IMM.MEAS",            "Measles immunisation % age 12-23m"),
+
+    # ==== EDUCATION ====
+    ("SE.XPD.TOTL.GD.ZS",      "Education spend % GDP"),
+    ("SE.PRM.ENRR",            "Primary school enrolment % gross"),
+    ("SE.SEC.ENRR",            "Secondary school enrolment %"),
+    ("SE.TER.ENRR",            "Tertiary enrolment %"),
+    ("SE.ADT.LITR.ZS",         "Literacy rate adults %"),
+
+    # ==== INFRASTRUCTURE / TECH ====
+    ("IT.NET.USER.ZS",         "Internet users %"),
+    ("IT.CEL.SETS.P2",         "Mobile subs per 100"),
+    ("IT.NET.BBND.P2",         "Fixed broadband subs per 100"),
+    ("EG.ELC.ACCS.ZS",         "Electricity access %"),
+    ("SH.H2O.SMDW.ZS",         "Safely managed drinking water %"),
+    ("SH.STA.SMSS.ZS",         "Safely managed sanitation %"),
+
+    # ==== ENERGY / EMISSIONS ====
+    ("EG.USE.PCAP.KG.OE",      "Energy per capita kg oil-eq"),
+    ("EG.USE.COMM.GD.PP.KD",   "Energy use per $ GDP PPP"),
+    ("EG.ELC.RNEW.ZS",         "Renewable electricity %"),
+    ("EG.FEC.RNEW.ZS",         "Renewable energy total %"),
+    ("EN.GHG.CO2.PC.CE.AR5",   "CO2 per capita t"),
+    ("EN.GHG.CO2.MT.CE.AR5",   "CO2 emissions Mt"),
+    ("EN.GHG.ALL.MT.CE.AR5",   "Total GHG Mt"),
+    ("EN.GHG.CH4.AG.MT.CE.AR5", "Methane Mt"),
+
+    # ==== ENVIRONMENT / LAND ====
+    ("AG.LND.FRST.ZS",         "Forest area %"),
+    ("AG.LND.FRST.K2",         "Forest area km2"),
+    ("AG.LND.AGRI.ZS",         "Agricultural land %"),
+    ("AG.LND.ARBL.ZS",         "Arable land %"),
+    ("ER.H2O.FWTL.ZS",         "Freshwater withdrawal %"),
+    ("ER.H2O.FWTL.K3",         "Freshwater withdrawal km3"),
+    ("EN.URB.MCTY.TL.ZS",      "Population in cities >1M %"),
+
+    # ==== SECURITY ====
+    ("MS.MIL.XPND.GD.ZS",      "Military spend % GDP"),
+    ("MS.MIL.XPND.CD",         "Military spend USD"),
+    ("MS.MIL.TOTL.P1",         "Armed forces personnel"),
+    ("VC.IHR.PSRC.P5",         "Intentional homicides per 100k"),
+
+    # ==== GOVERNANCE / SOCIAL ====
     ("SG.GEN.PARL.ZS",         "Women in parliament %"),
-    ("IP.JRN.ARTC.SC",         "Scientific articles"),
+    ("IC.BUS.EASE.XQ",         "Ease of doing business score"),
+    ("SI.POV.GINI",            "Gini index"),
+    ("SI.POV.NAHC",            "Poverty headcount national %"),
+    ("SI.POV.DDAY",            "Poverty <$2.15/day %"),
+
+    # ==== INNOVATION ====
+    ("IP.JRN.ARTC.SC",         "Scientific articles published"),
+    ("IP.PAT.RESD",            "Patent applications residents"),
+    ("GB.XPD.RSDV.GD.ZS",      "R&D spend % GDP"),
 ]
 
 

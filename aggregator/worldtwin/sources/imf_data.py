@@ -27,12 +27,35 @@ LAYER = LayerMeta(
 
 
 INDICATORS = [
-    ("NGDPDPC", "GDP per capita USD"),
-    ("PCPIPCH", "Inflation %"),
-    ("BCA_NGDPD", "Current account % GDP"),
-    ("LUR", "Unemployment %"),
+    # Core macro
+    ("NGDPD",       "GDP USD bn (current)"),
+    ("NGDPDPC",     "GDP per capita USD"),
+    ("PPPGDP",      "GDP PPP USD bn"),
+    ("PPPPC",       "GDP PPP per capita"),
+    ("NGDP_RPCH",   "Real GDP growth %"),
+    ("NGDPRPPPPCPCH", "Real GDP per capita growth %"),
+    ("PPPSH",       "Share of world GDP PPP %"),
+    # Inflation / prices
+    ("PCPIPCH",     "Inflation avg % (CPI)"),
+    ("PCPIEPCH",    "Inflation end-of-year %"),
+    ("PCPI",        "Average CPI index"),
+    # External
+    ("BCA",         "Current account USD bn"),
+    ("BCA_NGDPD",   "Current account % GDP"),
+    # Labour
+    ("LUR",         "Unemployment %"),
+    ("LP",          "Population millions"),
+    ("LE",          "Employment millions"),
+    # Fiscal
     ("GGXWDG_NGDP", "Gov gross debt % GDP"),
-    ("NID_NGDP", "Total investment % GDP"),
+    ("GGXWDG",      "Gov gross debt USD bn"),
+    ("GGXCNL_NGDP", "Gov net lending % GDP"),
+    ("GGR_NGDP",    "Gov revenue % GDP"),
+    ("GGX_NGDP",    "Gov expenditure % GDP"),
+    ("GGSB_NPGDP",  "Gov structural balance % GDP"),
+    # Investment / saving
+    ("NID_NGDP",    "Total investment % GDP"),
+    ("NGSD_NGDP",   "Gross national savings % GDP"),
 ]
 
 
