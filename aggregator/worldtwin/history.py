@@ -168,6 +168,13 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
     The snapshot is still saved either way, so we can re-decompose later.
     """
     rows: list[tuple] = []
+
+    # Top-level list payloads (population/rest_countries, satellites/celestrak,
+    # ships/aisstream, radio/radio_browser, air_quality/open_meteo_aq).
+    # Must run BEFORE the dict guard.
+    if isinstance(payload, list):
+        return _decompose_list(layer_id, payload, fetched_at)
+
     if not isinstance(payload, dict):
         return rows
 
@@ -272,6 +279,114 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
             if rows:
                 return rows
 
+    # ---- Pattern: youtube_trending — countries[] each with videos[] ----
+    if isinstance(payload.get("countries"), list) and payload["countries"] \
+       and isinstance(payload["countries"][0], dict) \
+       and "videos" in payload["countries"][0]:
+        for country in payload["countries"]:
+            cc = country.get("code") or country.get("name") or "?"
+            for vid in (country.get("videos") or []):
+                if not isinstance(vid, dict):
+                    continue
+                vid_id = vid.get("id") or vid.get("videoId")
+                if not vid_id:
+                    continue
+                views = vid.get("viewCount") or vid.get("views")
+                rows.append((
+                    f"{layer_id}.{cc}.{vid_id}", fetched_at[:10], fetched_at,
+                    float(views) if isinstance(views, _NUMERIC_TYPES) else None,
+                    str(vid.get("title", ""))[:200],
+                    json.dumps(vid, default=str)[:3000],
+                    json.dumps({"country": cc, "lat": country.get("lat"),
+                                "lon": country.get("lon")}),
+                ))
+        if rows:
+            return rows
+
+    # ---- Pattern: opensky flights — states[] is list-of-LISTS ----
+    # OpenSky state vector: [icao24, callsign, origin_country, ts_pos, ts_contact,
+    #   lon, lat, baro_alt, on_ground, velocity, true_track, vertical_rate,
+    #   sensors, geo_alt, squawk, spi, position_source]
+    if isinstance(payload.get("states"), list) and payload["states"] \
+       and isinstance(payload["states"][0], list):
+        for state in payload["states"]:
+            if not isinstance(state, list) or len(state) < 17:
+                continue
+            icao24 = state[0]
+            if not icao24:
+                continue
+            ts = state[3] or state[4] or 0
+            from datetime import datetime as _dt, timezone as _tz
+            try:
+                observed = _dt.fromtimestamp(ts, tz=_tz.utc).isoformat() if ts else fetched_at
+            except Exception:
+                observed = fetched_at
+            rows.append((
+                f"{layer_id}.{icao24}", observed, fetched_at,
+                float(state[7]) if isinstance(state[7], (int, float)) else None,
+                state[1] or None,
+                None,
+                json.dumps({"icao24": icao24, "callsign": state[1],
+                            "country": state[2], "lat": state[6], "lon": state[5],
+                            "alt_m": state[7], "velocity": state[9],
+                            "on_ground": state[8]}),
+            ))
+        if rows:
+            return rows
+
+    # ---- Pattern: FAO food-price raw_csv ----
+    # Header: Date,Food Price Index,Meat,Dairy,Cereals,Oils,Sugar
+    # Rows: "Jan-90, 108.7, 112.3, 94.3, 106.4, 73, 201.5"
+    if "raw_csv" in payload and isinstance(payload.get("raw_csv"), str):
+        import csv as _csv
+        import io as _io
+        import re as _re
+        text = payload["raw_csv"]
+        try:
+            reader = _csv.reader(_io.StringIO(text))
+            header = None
+            for row in reader:
+                if not row or not row[0].strip():
+                    continue
+                if header is None:
+                    if row[0].lower().startswith("date"):
+                        header = [c.strip() for c in row]
+                    continue
+                date_str = row[0].strip()
+                # Parse "Jan-90" → 1990-01-01
+                m = _re.match(r"^([A-Za-z]+)-(\d{2,4})$", date_str)
+                if not m:
+                    continue
+                mname, yy = m.group(1), m.group(2)
+                month_map = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,
+                             "jul":7,"aug":8,"sep":9,"oct":10,"nov":11,"dec":12}
+                month = month_map.get(mname.lower())
+                if not month:
+                    continue
+                year = int(yy)
+                if year < 100:
+                    year += 2000 if year < 50 else 1900
+                observed_iso = f"{year:04d}-{month:02d}-01"
+                for i, val in enumerate(row[1:], 1):
+                    if i >= len(header):
+                        break
+                    val = val.strip()
+                    if not val:
+                        continue
+                    try:
+                        v = float(val)
+                    except ValueError:
+                        continue
+                    field = header[i]
+                    rows.append((
+                        f"{layer_id}.{field}", observed_iso, fetched_at,
+                        v, None, None, json.dumps({"index": field}),
+                    ))
+            if rows:
+                return rows
+        except Exception:
+            pass
+
     # ---- Pattern: by_ba dict (eia_930_grid) ----
     by_ba = payload.get("by_ba")
     if isinstance(by_ba, dict) and by_ba:
@@ -280,6 +395,10 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
                 continue
             for key in ("D", "NG", "TI", "DF"):
                 v = entry.get(key)
+                # EIA returns numerics as strings sometimes — coerce
+                if isinstance(v, str):
+                    try: v = float(v)
+                    except (ValueError, TypeError): v = None
                 if isinstance(v, _NUMERIC_TYPES):
                     period = entry.get(f"{key}_period") or fetched_at[:13]
                     rows.append((
@@ -763,8 +882,15 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
                   "pairs", "pairs_full",
                   "history_records",
                   "kp_index_history", "solar_wind_history",
-                  "ports_full", "chokepoints_full",
-                  "annual", "monthly_global_trend", "daily_trend")
+                  "annual", "monthly_global_trend", "daily_trend",
+                  "articles",          # gdelt_news, gdelt_conflicts
+                  "data",              # crises (HDX-derived)
+                  "top",               # wikipedia_trends
+                  "webcams",           # windy_webcams
+                  "renderable",        # eia_930_grid alt list
+                  "rovers",            # nasa_mars (also dict-handled above)
+                  "by_country_top20",  # openaq stations summary
+                  )
     seen_event_keys = set()
     for key in EVENT_KEYS:
         seq = payload.get(key)
