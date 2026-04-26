@@ -34,6 +34,7 @@
     'internet',       // World Bank 1990-now
     // Environment
     'co2',            // World Bank 1960-now
+    'pollution',      // WB CO2 per cap + atmospheric ppm + temp anomaly inset
     'renewable',      // OWID 1985-now
     // Threats
     'military',       // World Bank 1960-now

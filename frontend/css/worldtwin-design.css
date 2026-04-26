@@ -1207,3 +1207,110 @@ body[data-scrubbed-past="true"] .layer-browser .lb-row:not(.lb-time-aware) .lb-r
   .mode { min-width: 50px; padding: 5px 8px; }
   .mode .ttl { font-size: 8px; }
 }
+
+/* ============================================================
+   POLLUTION INSET — only visible when 'pollution' mapmode is on.
+   Sits above the timeline at bottom-right. Two-trace chart of
+   atmospheric CO2 ppm (red) and global temp anomaly (amber) with
+   a vertical playhead that tracks the scrubber year. Lets the
+   reader SEE the cause-effect chain (emissions → temperature) in
+   one frame as they scrub through time.
+   ============================================================ */
+#pollutionInset {
+  position: fixed;
+  right: 16px;
+  bottom: 92px;
+  width: 320px;
+  z-index: 90;
+  background: linear-gradient(180deg, rgba(12,16,24,0.92) 0%, rgba(20,25,38,0.86) 100%);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 10px;
+  padding: 10px 12px 8px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 14px 40px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.02) inset;
+  font-family: var(--font-body);
+  color: var(--ink-50);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 220ms ease, transform 220ms ease;
+  display: none;
+}
+#pollutionInset.pi-on { display: block; opacity: 1; transform: translateY(0); }
+#pollutionInset .pi-head { margin-bottom: 4px; }
+#pollutionInset .pi-title {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-100);
+}
+#pollutionInset .pi-sub { font-size: 10px; color: var(--ink-300); margin-top: 1px; letter-spacing: 0.02em; }
+#pollutionInset svg { display: block; width: 100%; height: auto; }
+
+#pollutionInset .pi-frame { fill: rgba(255,255,255,0.015); stroke: var(--hairline); stroke-width: 1; }
+#pollutionInset .pi-grid { stroke: rgba(255,255,255,0.05); stroke-width: 0.6; stroke-dasharray: 2 3; }
+#pollutionInset .pi-tick { stroke: var(--ink-300); stroke-width: 0.7; }
+#pollutionInset .pi-axislabel {
+  fill: var(--ink-200);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+}
+#pollutionInset .pi-axisleft  { fill: #ff6b6b; opacity: 0.85; }
+#pollutionInset .pi-axisright { fill: #f6c453; opacity: 0.85; }
+#pollutionInset .pi-axistitle {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+#pollutionInset .pi-axistitle-ppm  { fill: #ff6b6b; }
+#pollutionInset .pi-axistitle-temp { fill: #f6c453; }
+
+#pollutionInset .pi-line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+#pollutionInset .pi-line-ppm  { stroke: #ff6b6b; stroke-width: 1.6; filter: drop-shadow(0 0 3px rgba(255,107,107,0.4)); }
+#pollutionInset .pi-line-temp { stroke: #f6c453; stroke-width: 1.4; opacity: 0.95; }
+
+#pollutionInset .pi-playhead { stroke: var(--signal); stroke-width: 1.2; stroke-dasharray: 3 2; opacity: 0.85; }
+#pollutionInset .pi-yearlabel {
+  fill: var(--signal);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+#pollutionInset .pi-dot { stroke: var(--ink-900); stroke-width: 1.2; }
+#pollutionInset .pi-dot-ppm  { fill: #ff6b6b; }
+#pollutionInset .pi-dot-temp { fill: #f6c453; }
+
+#pollutionInset .pi-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--ink-200);
+  flex-wrap: wrap;
+}
+#pollutionInset .pi-sw {
+  display: inline-block;
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+#pollutionInset .pi-sw-ppm  { background: #ff6b6b; box-shadow: 0 0 4px rgba(255,107,107,0.6); }
+#pollutionInset .pi-sw-temp { background: #f6c453; }
+#pollutionInset .pi-readout { color: var(--ink-50); font-weight: 600; font-feature-settings: "tnum" 1; }
+#pollutionInset .pi-sep { width: 1px; height: 10px; background: var(--hairline-strong); display: inline-block; }
+
+@media (max-width: 1366px) {
+  #pollutionInset { width: 280px; bottom: 86px; }
+}

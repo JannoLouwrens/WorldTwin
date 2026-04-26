@@ -15,7 +15,7 @@
     { id: 'economy',     label: 'Economy',     ids: ['gdp', 'gdp_pc', 'population', 'urban', 'inflation', 'debt'] },
     { id: 'people',      label: 'People',      ids: ['life', 'internet'] },
     { id: 'threats',     label: 'Threats',     ids: ['military', 'water_stress', 'food', 'pulse'] },
-    { id: 'environment', label: 'Environment', ids: ['co2', 'renewable'] },
+    { id: 'environment', label: 'Environment', ids: ['co2', 'pollution', 'renewable'] },
   ];
 
   function buildBar() {

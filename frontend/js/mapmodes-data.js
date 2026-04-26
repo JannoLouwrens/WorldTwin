@@ -482,7 +482,33 @@
   // mapmodes which auto-fall-back to Maddison/HYDE when the scrubber is in
   // historical years. One mapmode per concept, time-aware everywhere.
 
-  // 17) Pulse composite (apocalypse radar) — BAD (high score = trouble)
+  // 17) Pollution — per-capita CO2 emissions, with global atmospheric CO2 ppm
+  // and temperature anomaly shown in a paired inset chart so you can SEE
+  // the cause-effect chain through time. — BAD — TIME-AWARE (WB 1960-now)
+  // Pre-1960: no per-country emissions data exists → grey (honest).
+  // The inset (pollution-inset.js) tracks the scrubber and shows ppm + °C.
+  window.Mapmode.register(
+    'pollution',
+    'Pollution & climate',
+    (iso3) => {
+      const v = wbValue(iso3, 'EN.GHG.CO2.PC.CE.AR5');
+      if (v == null) return null;
+      // Same scaling as 'co2' but ramp tuned tighter so the ramp shows
+      // meaningful contrast across all countries (cap at 20 t/cap).
+      return sampleRamp('bad', Math.max(0, Math.min(1, v / 20)));
+    },
+    {
+      title: 'Per-capita CO₂ + global ppm + temp anomaly',
+      ramp: 'bad',
+      min: '0 t/cap (clean)',
+      max: '20+ t/cap (heavy)',
+      semantic: 'bad',
+    },
+    'factory',
+    { timeAware: true, years: [1960, 2024] }
+  );
+
+  // 18) Pulse composite (apocalypse radar) — BAD (high score = trouble)
   window.Mapmode.register(
     'pulse',
     'Pulse (apocalypse radar)',
