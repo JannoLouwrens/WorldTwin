@@ -132,10 +132,9 @@ def _decompose_list(layer_id: str, payload: list, fetched_at: str) -> list[tuple
                    or item.get("OBJECT_ID") or item.get("NORAD_CAT_ID")
                    or item.get("name") or item.get("portid")
                    or item.get("ICAO24") or item.get("country") or i)
-        # Best-guess time
-        observed = (item.get("date") or item.get("time") or item.get("EPOCH")
-                    or item.get("acq_date") or item.get("seendate")
-                    or item.get("startTime") or fetched_at[:10])
+        # Best-guess time — drill into common nested locations.
+        # ALWAYS prefer the data's own datetime over fetched_at.
+        observed = _extract_observed_at(item, fetched_at)
         # Best-guess numeric
         num_val = None
         for nk in ("value", "aqi", "pm25", "magnitude", "severity",
@@ -152,12 +151,78 @@ def _decompose_list(layer_id: str, payload: list, fetched_at: str) -> list[tuple
             if mk in item:
                 meta[mk] = item[mk]
         rows.append((
-            f"{layer_id}.{item_id}", str(observed)[:25], fetched_at,
+            f"{layer_id}.{item_id}", observed, fetched_at,
             num_val, txt or None,
             json.dumps(item, default=str)[:3000],
             json.dumps(meta, default=str) if meta else None,
         ))
     return rows
+
+
+def _extract_observed_at(item: dict, fallback: str) -> str:
+    """Extract the data's OWN datetime from an event dict. Honors the vision:
+    prefer the upstream's measurement timestamp over our fetch time. Drills
+    into nested .props if needed (GDELT events). Decodes Unix timestamps.
+
+    Order of preference:
+      1. Top-level direct date fields
+      2. Nested under .props (GDELT) or .properties (GeoJSON)
+      3. Unix timestamps (int/float seconds)
+      4. fetched_at fallback
+    """
+    # Direct top-level date fields
+    DATE_FIELDS = ("date", "datetime", "date_start", "date_added",
+                   "startDate", "start", "pubDate", "EPOCH",
+                   "acq_date", "seendate", "startTime", "fromdate",
+                   "from_date", "publication_date", "PublicationDateAndTime",
+                   "observed_at", "measurement_time", "ts", "lastUpdatedOn")
+    for f in DATE_FIELDS:
+        v = item.get(f)
+        if isinstance(v, str) and len(v) >= 4:
+            return v[:25]
+        if isinstance(v, (int, float)) and v > 1_000_000_000:
+            # Unix epoch seconds
+            try:
+                from datetime import datetime as _dt, timezone as _tz
+                return _dt.fromtimestamp(v, tz=_tz.utc).isoformat()[:25]
+            except Exception:
+                pass
+
+    # Unix epoch ms field
+    for f in ("time", "updated", "time_position"):
+        v = item.get(f)
+        if isinstance(v, (int, float)):
+            try:
+                from datetime import datetime as _dt, timezone as _tz
+                # Heuristic: > 1e12 means milliseconds
+                ts = v / 1000.0 if v > 1e12 else float(v)
+                return _dt.fromtimestamp(ts, tz=_tz.utc).isoformat()[:25]
+            except Exception:
+                pass
+        if isinstance(v, str) and len(v) >= 4:
+            return v[:25]
+
+    # Drill into nested props / properties (GDELT events, GeoJSON features)
+    for nest_key in ("props", "properties"):
+        nested = item.get(nest_key)
+        if isinstance(nested, dict):
+            for f in DATE_FIELDS:
+                v = nested.get(f)
+                if isinstance(v, str) and len(v) >= 4:
+                    return v[:25]
+            # Properties.time is often Unix ms
+            for f in ("time", "updated"):
+                v = nested.get(f)
+                if isinstance(v, (int, float)):
+                    try:
+                        from datetime import datetime as _dt, timezone as _tz
+                        ts = v / 1000.0 if v > 1e12 else float(v)
+                        return _dt.fromtimestamp(ts, tz=_tz.utc).isoformat()[:25]
+                    except Exception:
+                        pass
+
+    # Fallback — fetched_at, but trimmed to the day
+    return fallback[:25] if fallback else ""
 
 
 def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
@@ -910,13 +975,10 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
                 continue
             evt_id = (evt.get("id") or evt.get("uuid") or evt.get("name")
                       or evt.get("title") or evt.get("eventId") or f"{key}_{i}")
-            observed = (evt.get("date") or evt.get("date_start") or evt.get("startDate")
-                        or evt.get("pubDate") or evt.get("time") or evt.get("date_added")
-                        or evt.get("fetched") or fetched_at)
-            if isinstance(observed, str):
-                observed = observed[:25] or fetched_at
-            else:
-                observed = fetched_at
+            # Use the data's own datetime (drills into props/properties,
+            # decodes Unix timestamps). Falls back to fetched_at only if
+            # the upstream payload truly carries no datetime.
+            observed = _extract_observed_at(evt, fetched_at)
             value_text = (evt.get("title") or evt.get("name") or evt.get("label")
                           or evt.get("description") or "")[:200]
             meta = {}
