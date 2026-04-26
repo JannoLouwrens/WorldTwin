@@ -665,7 +665,7 @@ body[data-scrubbed-past="true"] .lt-btn:not([data-time-aware="true"]):not(.activ
   font-style: italic;
   color: var(--signal);
 }
-.tw-scrubber-era {
+.tw-strat-era {
   font-family: var(--font-mono);
   font-size: var(--t-2xs);
   color: var(--ink-300);
@@ -2032,7 +2032,7 @@ body::after {
 .tw-brief .tw-concern:hover::before { color: var(--phosphor); }
 
 /* SCRUBBER STRATA — geological era labels above the rail */
-.tw-scrubber-eras {
+.tw-strat-eras {
   display: grid;
   grid-template-columns: 6fr 10fr 12fr 14fr 16fr 14fr 14fr 14fr;
   gap: 0;
@@ -2044,7 +2044,7 @@ body::after {
   letter-spacing: 0.04em;
   color: rgba(255, 230, 195, 0.75);
 }
-.tw-scrubber-era {
+.tw-strat-era {
   position: relative;
   padding: 0 6px 4px;
   border-right: 1px solid var(--brass-faint);
@@ -2053,8 +2053,8 @@ body::after {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tw-scrubber-era:last-child { border-right: 0; }
-.tw-scrubber-era::before {
+.tw-strat-era:last-child { border-right: 0; }
+.tw-strat-era::before {
   content: '';
   position: absolute;
   bottom: 0; left: 0;
@@ -2062,7 +2062,7 @@ body::after {
   border-left: 1px solid var(--brass);
   border-bottom: 1px solid var(--brass);
 }
-.tw-scrubber-era-mono {
+.tw-strat-era-mono {
   font-family: var(--font-mono);
   font-style: normal;
   font-size: 8px;
@@ -2117,3 +2117,51 @@ body.tw-booted .tw-header   { opacity: 1; transform: none; transition-delay: 140
 body.tw-booted .tw-brief    { opacity: 1; transform: none; transition-delay: 280ms; }
 body.tw-booted #pollutionInset { opacity: 1; transform: none; transition-delay: 420ms; }
 body.tw-booted #timeline    { opacity: 1; transform: none; transition-delay: 360ms; }
+body.tw-booted .tw-scrubber { opacity: 1 !important; transform: none !important; }
+.tw-scrubber { transition: opacity 700ms cubic-bezier(.2,.8,.2,1); }
+
+/* Push the events ticker BELOW the new tw-header plate */
+#eventsTicker, .events-ticker {
+  top: 178px !important;   /* clears the 16px+145px tw-header */
+  z-index: 60 !important;
+}
+
+/* Make masthead meta line readable on bright satellite imagery */
+.tw-masthead-meta { color: rgba(255, 230, 195, 0.78) !important; }
+.tw-masthead-meta span:not(:last-child)::after {
+  color: var(--phosphor);
+  opacity: 0.7;
+}
+
+/* Briefing collapse toggle — give it a circular brass border so it
+   reads as a button, not a stray dash */
+.tw-brief .tw-brief-toggle {
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  width: 18px; height: 18px;
+  line-height: 16px;
+  text-align: center;
+  border: 1px solid var(--brass-faint);
+  color: var(--brass) !important;
+  border-radius: 50%;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.tw-brief .tw-brief-toggle:hover {
+  color: var(--phosphor) !important;
+  border-color: var(--phosphor);
+}
+
+/* Strata bar inside .tw-scrubber sits above the rail */
+.tw-scrubber .tw-strat-eras {
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+/* When scrubber compacts the rail height, give the strata room */
+.tw-scrubber {
+  padding-top: 8px !important;
+}
+
+/* Hide the scrubber's own little era labels (built-in scrubber)
+   since our strata bar now does this job better */
+.tw-scrubber .scrubber-era-labels,
+.tw-scrubber .era-labels { display: none !important; }

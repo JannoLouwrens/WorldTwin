@@ -56,20 +56,23 @@
   }
 
   function mountStrata() {
-    const tl = document.getElementById('timeline');
-    if (!tl || tl.querySelector('.tw-scrubber-eras')) return;
+    // Scrubber.js mounts a .tw-scrubber div directly to <body> (not into
+    // #timeline). Wait for it, then prepend the strata bar inside it.
+    const tl = document.querySelector('.tw-scrubber');
+    if (!tl) return;
+    if (tl.querySelector('.tw-strat-eras')) return;
     const eras = document.createElement('div');
-    eras.className = 'tw-scrubber-eras';
+    eras.className = 'tw-strat-eras';
     eras.setAttribute('aria-hidden', 'true');
     eras.innerHTML = `
-      <div class="tw-scrubber-era">Pleistocene<span class="tw-scrubber-era-mono">800k–10k BC</span></div>
-      <div class="tw-scrubber-era">Neolithic<span class="tw-scrubber-era-mono">10k–3k BC</span></div>
-      <div class="tw-scrubber-era">Bronze · Iron<span class="tw-scrubber-era-mono">3k–500 BC</span></div>
-      <div class="tw-scrubber-era">Classical<span class="tw-scrubber-era-mono">500 BC–500 AD</span></div>
-      <div class="tw-scrubber-era">Medieval<span class="tw-scrubber-era-mono">500–1500</span></div>
-      <div class="tw-scrubber-era">Early Modern<span class="tw-scrubber-era-mono">1500–1800</span></div>
-      <div class="tw-scrubber-era">Industrial<span class="tw-scrubber-era-mono">1800–1945</span></div>
-      <div class="tw-scrubber-era">Contemporary<span class="tw-scrubber-era-mono">1945–Live</span></div>`;
+      <div class="tw-strat-era">Pleistocene<span class="tw-strat-era-mono">800k–10k BC</span></div>
+      <div class="tw-strat-era">Neolithic<span class="tw-strat-era-mono">10k–3k BC</span></div>
+      <div class="tw-strat-era">Bronze · Iron<span class="tw-strat-era-mono">3k–500 BC</span></div>
+      <div class="tw-strat-era">Classical<span class="tw-strat-era-mono">500 BC–500 AD</span></div>
+      <div class="tw-strat-era">Medieval<span class="tw-strat-era-mono">500–1500</span></div>
+      <div class="tw-strat-era">Early Modern<span class="tw-strat-era-mono">1500–1800</span></div>
+      <div class="tw-strat-era">Industrial<span class="tw-strat-era-mono">1800–1945</span></div>
+      <div class="tw-strat-era">Contemporary<span class="tw-strat-era-mono">1945–Live</span></div>`;
     tl.insertBefore(eras, tl.firstChild);
   }
 
