@@ -118,6 +118,48 @@ def _year_to_iso(year: int | str) -> str:
     return f"-{abs(y):04d}-01-01"
 
 
+def _decompose_list(layer_id: str, payload: list, fetched_at: str) -> list[tuple]:
+    """Top-level list of dicts (air_quality, population, ships, satellites,
+    radio). One observation row per item, identified by the most-specific
+    available id field."""
+    rows: list[tuple] = []
+    for i, item in enumerate(payload):
+        if not isinstance(item, dict):
+            continue
+        # Best-guess identifier
+        item_id = (item.get("id") or item.get("uuid") or item.get("stationuuid")
+                   or item.get("mmsi") or item.get("norad")
+                   or item.get("OBJECT_ID") or item.get("NORAD_CAT_ID")
+                   or item.get("name") or item.get("portid")
+                   or item.get("ICAO24") or item.get("country") or i)
+        # Best-guess time
+        observed = (item.get("date") or item.get("time") or item.get("EPOCH")
+                    or item.get("acq_date") or item.get("seendate")
+                    or item.get("startTime") or fetched_at[:10])
+        # Best-guess numeric
+        num_val = None
+        for nk in ("value", "aqi", "pm25", "magnitude", "severity",
+                   "population", "viewers", "players", "score"):
+            v = item.get(nk)
+            if isinstance(v, (int, float)):
+                num_val = float(v); break
+        # Friendly text
+        txt = (item.get("name") or item.get("title") or item.get("OBJECT_NAME")
+               or item.get("city") or "")[:200]
+        meta = {}
+        for mk in ("lat", "lon", "country", "iso3", "country_iso3",
+                   "category", "type", "url"):
+            if mk in item:
+                meta[mk] = item[mk]
+        rows.append((
+            f"{layer_id}.{item_id}", str(observed)[:25], fetched_at,
+            num_val, txt or None,
+            json.dumps(item, default=str)[:3000],
+            json.dumps(meta, default=str) if meta else None,
+        ))
+    return rows
+
+
 def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
     """Walk a plugin payload and return a list of observation row tuples
     (source_id, observed_at, fetched_at, value_num, value_text, value_json, meta_json).
@@ -161,6 +203,240 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
                         None, meta_json,
                     ))
             return rows
+
+    # ---- Pattern: top-level list of dicts (no envelope) ----
+    # air_quality, population (rest_countries), satellites (celestrak),
+    # ships, radio.
+    if isinstance(payload, list):
+        return _decompose_list(layer_id, payload, fetched_at)
+
+    # ---- Pattern: assets (climatetrace_assets) ----
+    if isinstance(payload.get("assets"), list):
+        for asset in payload["assets"]:
+            if not isinstance(asset, dict):
+                continue
+            aid = asset.get("id") or asset.get("name")
+            emissions = asset.get("emissions_quantity") or asset.get("emissions") or asset.get("activity")
+            rows.append((
+                f"{layer_id}.asset.{aid}", fetched_at[:10], fetched_at,
+                float(emissions) if isinstance(emissions, _NUMERIC_TYPES) else None,
+                str(asset.get("name") or "")[:200],
+                json.dumps(asset, default=str)[:5000],
+                json.dumps({"sector": asset.get("sector"), "country": asset.get("country"),
+                            "lat": asset.get("lat"), "lon": asset.get("lon")}),
+            ))
+        if rows:
+            return rows
+
+    # ---- Pattern: countries dict where each value has nested fact sheets ----
+    # country_deep_dive (water/food/oil/emissions), country_intel (snapshot/risks),
+    # country_resources (top_exports/top_imports/total_exports_usd).
+    countries_raw = payload.get("countries")
+    if isinstance(countries_raw, dict) and countries_raw:
+        first = next(iter(countries_raw.values()), None)
+        if isinstance(first, dict) and any(k in first for k in
+            ("snapshot", "electricity", "water", "food", "oil", "emissions",
+             "total_exports_usd", "top_exports", "risks", "meta")):
+            for iso3, entry in countries_raw.items():
+                if not isinstance(entry, dict):
+                    continue
+                rows.append((
+                    f"{layer_id}.{iso3}", fetched_at[:10], fetched_at,
+                    None,
+                    str(entry.get("name") or "")[:200],
+                    json.dumps(entry, default=str)[:8000],
+                    json.dumps({"iso3": iso3, "lat": entry.get("lat"), "lon": entry.get("lon")}),
+                ))
+            if rows:
+                return rows
+
+    # ---- Pattern: oecd_cli — countries[iso3] = [{period, value}] ----
+    if isinstance(countries_raw, dict) and countries_raw:
+        first = next(iter(countries_raw.values()), None)
+        if isinstance(first, list) and first and isinstance(first[0], dict) and "period" in first[0]:
+            for iso3, samples in countries_raw.items():
+                if not isinstance(samples, list):
+                    continue
+                for s in samples:
+                    if not isinstance(s, dict):
+                        continue
+                    period = s.get("period")
+                    val = s.get("value")
+                    if period is None or val is None:
+                        continue
+                    rows.append((
+                        f"{layer_id}.{iso3}", str(period), fetched_at,
+                        float(val) if isinstance(val, _NUMERIC_TYPES) else None,
+                        None, None, json.dumps({"iso3": iso3}),
+                    ))
+            if rows:
+                return rows
+
+    # ---- Pattern: by_ba dict (eia_930_grid) ----
+    by_ba = payload.get("by_ba")
+    if isinstance(by_ba, dict) and by_ba:
+        for ba_id, entry in by_ba.items():
+            if not isinstance(entry, dict):
+                continue
+            for key in ("D", "NG", "TI", "DF"):
+                v = entry.get(key)
+                if isinstance(v, _NUMERIC_TYPES):
+                    period = entry.get(f"{key}_period") or fetched_at[:13]
+                    rows.append((
+                        f"{layer_id}.{ba_id}.{key}", str(period), fetched_at,
+                        float(v), None, None,
+                        json.dumps({"ba": ba_id, "name": entry.get("name"),
+                                    "lat": entry.get("lat"), "lon": entry.get("lon")}),
+                    ))
+        if rows:
+            return rows
+
+    # ---- Pattern: gemini_narrative council + digest snapshot ----
+    council = payload.get("council")
+    if isinstance(council, dict):
+        for voice in ("general", "treasurer", "augur"):
+            entry = council.get(voice)
+            if not isinstance(entry, dict):
+                continue
+            rows.append((
+                f"{layer_id}.council.{voice}", fetched_at[:10], fetched_at,
+                None,
+                str(entry.get("headline") or "")[:200],
+                json.dumps(entry, default=str)[:5000],
+                json.dumps({"voice": voice}),
+            ))
+        if rows:
+            return rows
+
+    # ---- Pattern: features_by_year — historical_borders ----
+    if isinstance(payload.get("features_by_year"), dict):
+        for y_str, feats in payload["features_by_year"].items():
+            if not _is_year_string(y_str):
+                continue
+            n_feats = len(feats) if isinstance(feats, list) else 0
+            rows.append((
+                f"{layer_id}.borders", _year_to_iso(y_str), fetched_at,
+                float(n_feats), None, None,
+                json.dumps({"year": y_str, "feature_count": n_feats}),
+            ))
+        if rows:
+            return rows
+
+    # ---- Pattern: rovers (nasa_mars_photos) — rovers.<name>.photos ----
+    rovers = payload.get("rovers")
+    if isinstance(rovers, dict):
+        for rover_name, info in rovers.items():
+            if not isinstance(info, dict):
+                continue
+            photos = info.get("photos") or []
+            rows.append((
+                f"{layer_id}.{rover_name}", fetched_at[:10], fetched_at,
+                float(len(photos)), None,
+                json.dumps(info, default=str)[:5000],
+                json.dumps({"rover": rover_name}),
+            ))
+        if rows:
+            return rows
+
+    # ---- Pattern: rainviewer radar/satellite frames ----
+    if "radar" in payload and isinstance(payload.get("radar"), dict):
+        for kind in ("past", "nowcast"):
+            frames = payload["radar"].get(kind) or []
+            for f in frames:
+                t = f.get("time")
+                rows.append((
+                    f"{layer_id}.radar.{kind}", str(t), fetched_at,
+                    None, f.get("path"), None,
+                    json.dumps({"kind": kind}),
+                ))
+        if rows:
+            return rows
+
+    # ---- Pattern: iss + crew (wheretheiss) ----
+    iss = payload.get("iss")
+    if isinstance(iss, dict) and iss.get("latitude") is not None:
+        rows.append((
+            f"{layer_id}.position", fetched_at[:19], fetched_at,
+            None, "ISS",
+            json.dumps(iss, default=str)[:1000],
+            json.dumps({"lat": iss.get("latitude"), "lon": iss.get("longitude"),
+                        "altitude_km": iss.get("altitude")}),
+        ))
+        for crew_member in (payload.get("crew") or []):
+            if isinstance(crew_member, dict):
+                rows.append((
+                    f"{layer_id}.crew.{crew_member.get('name', '?')}",
+                    fetched_at[:10], fetched_at,
+                    None, str(crew_member.get("name", ""))[:120],
+                    json.dumps(crew_member, default=str), None,
+                ))
+        if rows:
+            return rows
+
+    # ---- Pattern: gaming snapshot (steam+twitch) ----
+    if "topGames" in payload and isinstance(payload.get("topGames"), list):
+        for game in payload["topGames"]:
+            if not isinstance(game, dict):
+                continue
+            rows.append((
+                f"{layer_id}.game.{game.get('appid', game.get('name', '?'))}",
+                fetched_at[:10], fetched_at,
+                float(game.get("players", 0)) if isinstance(game.get("players"), _NUMERIC_TYPES) else None,
+                str(game.get("name", ""))[:120],
+                None, json.dumps({"appid": game.get("appid"), "store": game.get("store")}),
+            ))
+        for region in (payload.get("regions") or []):
+            if isinstance(region, dict):
+                rows.append((
+                    f"{layer_id}.region.{region.get('code', '?')}",
+                    fetched_at[:10], fetched_at,
+                    float(region.get("viewers", 0)) if isinstance(region.get("viewers"), _NUMERIC_TYPES) else None,
+                    str(region.get("name", ""))[:120],
+                    None,
+                    json.dumps({"lat": region.get("lat"), "lon": region.get("lon"),
+                                "topGame": region.get("topGame")}),
+                ))
+        if rows:
+            return rows
+
+    # ---- Pattern: top-level Open-Meteo grid ----
+    if isinstance(payload.get("grid"), list):
+        for cell in payload["grid"]:
+            if not isinstance(cell, dict):
+                continue
+            lat, lon = cell.get("lat"), cell.get("lon")
+            for k, v in cell.items():
+                if k in ("lat", "lon"):
+                    continue
+                if isinstance(v, _NUMERIC_TYPES):
+                    rows.append((
+                        f"{layer_id}.{k}.{lat}_{lon}",
+                        fetched_at[:13], fetched_at,
+                        float(v), None, None,
+                        json.dumps({"lat": lat, "lon": lon, "field": k}),
+                    ))
+        if rows:
+            return rows
+
+    # ---- Pattern: spacetrack_gp — flat lists already in payload ----
+    for plist_key in ("payloads", "rocket_bodies", "debris_sample"):
+        plist = payload.get(plist_key)
+        if isinstance(plist, list):
+            for item in plist:
+                if not isinstance(item, dict):
+                    continue
+                norad = item.get("norad")
+                if norad is None:
+                    continue
+                rows.append((
+                    f"{layer_id}.{plist_key}.{norad}", fetched_at[:10], fetched_at,
+                    None, str(item.get("name", ""))[:120],
+                    json.dumps(item, default=str)[:3000],
+                    json.dumps({"type": item.get("type"), "country": item.get("country"),
+                                "regime": item.get("regime")}),
+                ))
+    if rows:
+        return rows
 
     # ---- Pattern: top-level history dict ----
     # eia_petroleum: payload.history.<series_id> = [{t,v}, ...]
@@ -657,6 +933,54 @@ def coverage() -> dict:
         "db_path": str(HISTORY_DB),
         "as_of": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def redecompose_all(only_layer: str | None = None) -> dict:
+    """Walk every snapshot in the store, decompose each, and write any new
+    observation rows. PRIMARY KEY (source_id, observed_at, fetched_at) means
+    re-runs are idempotent — existing rows are silently ignored.
+
+    Uses a 60-second busy_timeout to coexist with the live aggregator writers,
+    plus per-snapshot retries on lock errors.
+    """
+    c = _conn()
+    c.execute("PRAGMA busy_timeout=60000")
+    sql = "SELECT layer_id, fetched_at, payload FROM snapshots"
+    args: list = []
+    if only_layer:
+        sql += " WHERE layer_id = ?"; args.append(only_layer)
+    sql += " ORDER BY layer_id, fetched_at"
+    stats = {"snapshots_processed": 0, "observations_added": 0,
+             "errors": 0, "by_layer": {}}
+    snaps = list(c.execute(sql, args))
+    for row in snaps:
+        layer_id, fetched_at, payload_blob = row["layer_id"], row["fetched_at"], row["payload"]
+        try:
+            payload = json.loads(zlib.decompress(payload_blob).decode("utf-8"))
+        except Exception:
+            continue
+        decomposed = _decompose(layer_id, payload, fetched_at)
+        if decomposed:
+            for attempt in range(5):
+                try:
+                    c.executemany(
+                        "INSERT OR IGNORE INTO observations "
+                        "(source_id, observed_at, fetched_at, value_num, value_text, value_json, meta_json) "
+                        "VALUES (?,?,?,?,?,?,?)",
+                        decomposed,
+                    )
+                    stats["observations_added"] += len(decomposed)
+                    stats["by_layer"][layer_id] = stats["by_layer"].get(layer_id, 0) + len(decomposed)
+                    break
+                except sqlite3.OperationalError:
+                    import time
+                    time.sleep(0.5 * (attempt + 1))
+                except sqlite3.Error as e:
+                    stats["errors"] += 1
+                    print(f"[redecompose] {layer_id}: {e}")
+                    break
+        stats["snapshots_processed"] += 1
+    return stats
 
 
 def compact() -> dict:
