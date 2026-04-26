@@ -19,9 +19,9 @@ LAYER = LayerMeta(
     source="NASA DONKI",
     source_url="https://api.nasa.gov/DONKI/",
     license="Public Domain (NASA)",
-    refresh_s=3600,
+    refresh_s=86400,        # was 3600 — full 2010+ archive is heavier; daily refresh is plenty
     initial_delay_s=40,
-    description="CME, solar flares, GST, SEP, radiation belt, interplanetary shock, high-speed stream (90-day lookback).",
+    description="CME, solar flares, GST, SEP, radiation belt, interplanetary shock, high-speed stream — FULL DONKI archive 2010 → present, paginated in 6-month chunks.",
     requires_key=True,
     key_env="NASA_API_KEY",
     enabled=bool(NASA_API_KEY),
@@ -42,35 +42,41 @@ async def fetch(client: httpx.AsyncClient):
     if not NASA_API_KEY:
         return None
     end = datetime.now(timezone.utc)
-    start = end - timedelta(days=90)
-    start_str = start.strftime("%Y-%m-%d")
-    end_str = end.strftime("%Y-%m-%d")
+    # Pull the FULL DONKI archive back to 2010 in 6-month chunks. Each chunk
+    # is a separate API call; sem limits concurrency. The 7 event types ×
+    # ~30 chunks = ~210 requests per fetch, well within the 1000/hr limit.
+    DEEP_BACKFILL_START = datetime(2010, 1, 1, tzinfo=timezone.utc)
+
+    def _chunks(start_dt, end_dt, days=180):
+        c = start_dt
+        while c < end_dt:
+            n = min(c + timedelta(days=days), end_dt)
+            yield c.strftime("%Y-%m-%d"), n.strftime("%Y-%m-%d")
+            c = n
 
     sem = asyncio.Semaphore(3)
     all_events = []
 
-    async def _fetch_type(code, endpoint):
+    async def _fetch_chunk(code, endpoint, start_str, end_str):
         async with sem:
             try:
-                # Retry up to 3 times — DONKI backend has intermittent 503s
                 r = None
                 for attempt in range(3):
                     r = await client.get(
                         f"https://api.nasa.gov/DONKI/{endpoint}",
                         params={"startDate": start_str, "endDate": end_str, "api_key": NASA_API_KEY},
-                        timeout=30,
+                        timeout=45,
                     )
                     if r.status_code == 503:
-                        await asyncio.sleep(5)  # wait and retry
+                        await asyncio.sleep(5)
                         continue
                     break
                 if not r or r.status_code != 200:
-                    print(f"[nasa_donki] {code}: HTTP {r.status_code if r else 'no response'}")
                     return
                 data = r.json()
                 if not isinstance(data, list):
                     return
-                for ev in data[:100]:
+                for ev in data:
                     severity = 1
                     if code == "CME":
                         speed = ev.get("speed") or ev.get("speed_kms") or 0
@@ -104,9 +110,13 @@ async def fetch(client: httpx.AsyncClient):
                         "link": ev.get("link", ""),
                     })
             except Exception as e:
-                print(f"[nasa_donki] {code}: {e}")
+                print(f"[nasa_donki] {code} {start_str}..{end_str}: {e}")
 
-    await asyncio.gather(*[_fetch_type(c, e) for c, e in EVENT_TYPES])
+    tasks = []
+    for code, endpoint in EVENT_TYPES:
+        for s, e in _chunks(DEEP_BACKFILL_START, end):
+            tasks.append(_fetch_chunk(code, endpoint, s, e))
+    await asyncio.gather(*tasks)
     all_events.sort(key=lambda x: x.get("start", ""), reverse=True)
 
     by_type = {}

@@ -22,9 +22,9 @@ LAYER = LayerMeta(
     source="NASA Near Earth Object Web Service",
     source_url="https://api.nasa.gov/neo/rest/v1/feed",
     license="Public Domain (NASA)",
-    refresh_s=21600,  # 6h
+    refresh_s=86400,  # daily — full 38k-asteroid catalogue is heavy
     initial_delay_s=85,
-    description="Asteroids approaching Earth in the next 7 days, with hazardous flag and miss distance in lunar units.",
+    description="Live 7-day window of close approaches PLUS the full paginated NEO catalogue (up to 4000 asteroids per fetch).",
     requires_key=True,
     key_env="NASA_API_KEY",
     enabled=bool(NASA_API_KEY),
@@ -37,6 +37,46 @@ async def fetch(client: httpx.AsyncClient):
     now = datetime.now(timezone.utc)
     start = now.strftime("%Y-%m-%d")
     end = (now + timedelta(days=7)).strftime("%Y-%m-%d")
+
+    # ---- Pull the FULL NEO catalogue via paginated /browse ----
+    # This is bounded — ~38k known NEOs as of 2026, ~20 per page = ~1900 pages.
+    # We cap at 200 pages = 4000 NEOs per fetch to bound runtime.
+    catalogue = []
+    try:
+        for page in range(0, 200):
+            cr = await client.get(
+                "https://api.nasa.gov/neo/rest/v1/neo/browse",
+                params={"page": page, "size": 20, "api_key": NASA_API_KEY},
+                timeout=30,
+            )
+            if cr.status_code != 200:
+                break
+            cd = cr.json()
+            objs = cd.get("near_earth_objects") or []
+            if not objs:
+                break
+            for obj in objs:
+                cad_list = obj.get("close_approach_data") or []
+                catalogue.append({
+                    "id": obj.get("id"),
+                    "name": obj.get("name"),
+                    "designation": obj.get("designation"),
+                    "absolute_magnitude_h": obj.get("absolute_magnitude_h"),
+                    "diameter_m_min": ((obj.get("estimated_diameter") or {}).get("meters") or {}).get("estimated_diameter_min"),
+                    "diameter_m_max": ((obj.get("estimated_diameter") or {}).get("meters") or {}).get("estimated_diameter_max"),
+                    "is_potentially_hazardous": obj.get("is_potentially_hazardous_asteroid"),
+                    "is_sentry_object": obj.get("is_sentry_object"),
+                    "approach_count": len(cad_list),
+                    "first_observation": (cad_list[0].get("close_approach_date") if cad_list else None),
+                    "last_observation": (cad_list[-1].get("close_approach_date") if cad_list else None),
+                    "url": obj.get("nasa_jpl_url"),
+                })
+            page_info = cd.get("page") or {}
+            if page >= (page_info.get("total_pages") or 0) - 1:
+                break
+    except Exception as e:
+        print(f"[nasa_neows] browse exception: {e}")
+
     try:
         r = await client.get(
             "https://api.nasa.gov/neo/rest/v1/feed",
@@ -83,6 +123,8 @@ async def fetch(client: httpx.AsyncClient):
             "count": len(asteroids),
             "hazardous_count": sum(1 for a in asteroids if a["hazardous"]),
             "asteroids": asteroids,
+            "catalogue": catalogue,
+            "catalogue_count": len(catalogue),
         }
     except Exception as e:
         print(f"[nasa_neows] error: {e}")

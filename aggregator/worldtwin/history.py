@@ -288,8 +288,14 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
                 return rows
 
     # ---- Pattern: GeoJSON FeatureCollection (USGS quakes etc.) ----
-    if isinstance(payload.get("features"), list):
-        for i, feat in enumerate(payload["features"][:5000]):
+    # Walk both the live `features` array AND the deeper `historical_features`
+    # array (used by usgs_quakes.py's M5+ archive backfill).
+    feats_combined = []
+    for fkey in ("features", "historical_features"):
+        if isinstance(payload.get(fkey), list):
+            feats_combined.extend(payload[fkey])
+    if feats_combined:
+        for i, feat in enumerate(feats_combined[:60000]):
             if not isinstance(feat, dict):
                 continue
             props = feat.get("properties") or {}
