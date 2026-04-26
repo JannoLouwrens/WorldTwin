@@ -91,32 +91,38 @@
     const home = getCentroid(iso3);
     if (!home) return;
 
-    // 1) Top trade partners — both directions
-    const cr = window._cacheStore?.get('country_resources');
-    const me = cr?.countries?.[iso3];
-    const exports = (me?.top_export_partners || me?.export_partners || []).slice(0, 6);
-    const imports = (me?.top_import_partners || me?.import_partners || []).slice(0, 6);
-
-    for (const p of exports) {
-      const partnerIso = p.iso3 || p.partner_iso3 || p.partnerISO || null;
-      if (!partnerIso || partnerIso === iso3) continue;
+    // 1) Top trade partners — derived from trade_annual.flows[] (the
+    // bilateral commodity-flow matrix). country_resources.top_exports is
+    // commodity-keyed, not partner-keyed, so we aggregate flows ourselves.
+    const ta = window._cacheStore?.get('trade_annual');
+    const flows = ta?.flows || [];
+    const exportSums = new Map();   // partnerIso → { value, topCommodity }
+    const importSums = new Map();
+    for (const f of flows) {
+      if (f.from_iso3 === iso3 && f.to_iso3 && f.to_iso3 !== iso3) {
+        const cur = exportSums.get(f.to_iso3) || { value: 0, top: null, topVal: 0 };
+        cur.value += f.value_usd || 0;
+        if ((f.value_usd || 0) > cur.topVal) { cur.top = f.commodity_name || f.commodity; cur.topVal = f.value_usd; }
+        exportSums.set(f.to_iso3, cur);
+      } else if (f.to_iso3 === iso3 && f.from_iso3 && f.from_iso3 !== iso3) {
+        const cur = importSums.get(f.from_iso3) || { value: 0, top: null, topVal: 0 };
+        cur.value += f.value_usd || 0;
+        if ((f.value_usd || 0) > cur.topVal) { cur.top = f.commodity_name || f.commodity; cur.topVal = f.value_usd; }
+        importSums.set(f.from_iso3, cur);
+      }
+    }
+    const topExports = [...exportSums.entries()].sort((a, b) => b[1].value - a[1].value).slice(0, 6);
+    const topImports = [...importSums.entries()].sort((a, b) => b[1].value - a[1].value).slice(0, 6);
+    for (const [partnerIso, agg] of topExports) {
       const other = getCentroid(partnerIso);
       if (!other) continue;
-      const valueUsd = p.value_usd || p.value || p.trade_usd;
-      const explain = valueUsd
-        ? `${home.name} exports to ${other.name}: $${(valueUsd / 1e9).toFixed(2)}B (Comtrade)`
-        : `${home.name} exports to ${other.name}`;
+      const explain = `${home.name} → ${other.name}: $${(agg.value / 1e9).toFixed(2)}B${agg.top ? ` (top: ${agg.top})` : ''} · UN Comtrade`;
       drawArc(home, other, '#ffb547', 1.8, 'export', explain);
     }
-    for (const p of imports) {
-      const partnerIso = p.iso3 || p.partner_iso3 || p.partnerISO || null;
-      if (!partnerIso || partnerIso === iso3) continue;
+    for (const [partnerIso, agg] of topImports) {
       const other = getCentroid(partnerIso);
       if (!other) continue;
-      const valueUsd = p.value_usd || p.value || p.trade_usd;
-      const explain = valueUsd
-        ? `${home.name} imports from ${other.name}: $${(valueUsd / 1e9).toFixed(2)}B (Comtrade)`
-        : `${home.name} imports from ${other.name}`;
+      const explain = `${home.name} ← ${other.name}: $${(agg.value / 1e9).toFixed(2)}B${agg.top ? ` (top: ${agg.top})` : ''} · UN Comtrade`;
       drawArc(home, other, '#00d4ff', 1.4, 'import', explain);
     }
 
