@@ -602,6 +602,30 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
         if rows:
             return rows
 
+    # ---- Pattern: NASA POWER grid_records — list of {lat,lon,t,param,value} ----
+    grid_records = payload.get("grid_records")
+    if isinstance(grid_records, list) and grid_records and isinstance(grid_records[0], dict) \
+       and all(k in grid_records[0] for k in ("lat", "lon", "t", "param", "value")):
+        for rec in grid_records:
+            try:
+                t_str = str(rec["t"])
+                # YYYYMMDDHH → YYYY-MM-DDTHH:00
+                if len(t_str) == 10 and t_str.isdigit():
+                    iso_t = f"{t_str[:4]}-{t_str[4:6]}-{t_str[6:8]}T{t_str[8:10]}:00"
+                else:
+                    iso_t = t_str
+                rows.append((
+                    f"{layer_id}.{rec['param']}.{rec['lat']}_{rec['lon']}",
+                    iso_t, fetched_at,
+                    float(rec["value"]) if isinstance(rec["value"], _NUMERIC_TYPES) else None,
+                    None, None,
+                    json.dumps({"lat": rec["lat"], "lon": rec["lon"], "param": rec["param"]}),
+                ))
+            except (TypeError, ValueError, KeyError):
+                continue
+        if rows:
+            return rows
+
     # ---- Pattern: top-level Open-Meteo grid ----
     if isinstance(payload.get("grid"), list):
         for cell in payload["grid"]:
