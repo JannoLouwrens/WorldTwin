@@ -79,6 +79,44 @@
       </svg>`;
   }
 
+  // Coverage section — explicit "what we have / don't have on this country."
+  // Vision: a lab admits its own gaps. Silence becomes information.
+  function renderCoverage(coverage) {
+    const present = coverage.filter(c => c.status === 'present').length;
+    const absent  = coverage.filter(c => c.status === 'absent').length;
+    const missing = coverage.filter(c => c.status === 'missing').length;
+    const total = coverage.length;
+    const tier = present >= total * 0.7 ? 'green' : present >= total * 0.4 ? 'yellow' : 'red';
+    const headerColor = tier === 'green' ? '#5fbf7d' : tier === 'yellow' ? '#ffb547' : '#d94747';
+
+    const rows = coverage.map(c => {
+      const dot = c.status === 'present' ? '#5fbf7d'
+                : c.status === 'absent'  ? '#d94747'
+                : '#7a7a8c';
+      const statusLbl = c.status === 'present' ? 'has data'
+                      : c.status === 'absent'  ? 'silent'
+                      : 'cache offline';
+      return `
+        <div class="tw-cov-row" data-cache="${c.cache}" style="display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:baseline;padding:4px 8px;background:rgba(0,0,0,0.18);border-left:2px solid ${dot};font-family:'JetBrains Mono',monospace;font-size:10.5px;cursor:pointer">
+          <span style="width:8px;height:8px;border-radius:50%;background:${dot};margin-top:3px"></span>
+          <span style="color:#ede4d3">${c.source}</span>
+          <span style="color:${dot};font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase">${statusLbl}${c.detail ? ' · ' + c.detail : ''}</span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+          <span style="font-size:10px;color:#8c95aa;letter-spacing:0.14em;text-transform:uppercase;font-family:'JetBrains Mono',monospace">Coverage · sources reporting on this country</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:${headerColor};font-weight:700">${present}/${total} have data${absent ? ' · ' + absent + ' silent' : ''}${missing ? ' · ' + missing + ' offline' : ''}</span>
+        </div>
+        <div style="display:grid;gap:3px">${rows}</div>
+        <div style="margin-top:6px;font-family:'Fraunces',serif;font-style:italic;font-size:11px;color:rgba(255,230,195,0.55);line-height:1.4">
+          A "silent" source means the cache is loaded but reports no entry for this country — silence is information, not absence of fact.
+        </div>
+      </div>`;
+  }
+
   function build(iso3) {
     const intel = {};
     intel.iso3 = iso3;
@@ -154,7 +192,75 @@
         }
       }
     }
+
+    // Coverage — explicit "is this country in each source?" classification.
+    // Vision: a lab admits its own gaps. Silence in the dossier becomes
+    // information ("V-Dem doesn't score this country") instead of false
+    // confidence ("we have no concerns").
+    intel.coverage = buildCoverage(iso3, intel);
+
     return intel;
+  }
+
+  // Walk every cache that can be keyed by ISO3 and classify each as
+  //   present (we have data for this country)
+  //   absent  (the cache exists but has no entry / no value for this country)
+  //   missing (the cache itself isn't loaded — different from absent)
+  function buildCoverage(iso3, intel) {
+    const cs = window._cacheStore;
+    const out = [];
+    function add(source, cacheId, presentExpr, detail) {
+      const cache = cs?.get(cacheId);
+      if (!cache) {
+        out.push({ source, cache: cacheId, status: 'missing', detail: 'cache not loaded' });
+        return;
+      }
+      out.push({
+        source, cache: cacheId,
+        status: presentExpr ? 'present' : 'absent',
+        detail: presentExpr ? (detail || '') : 'no entry for ' + iso3,
+      });
+    }
+
+    // Economic
+    add('World Bank · GDP',          'world_bank',     intel.gdp != null,         intel.gdp != null ? 'GDP $' + (intel.gdp/1e9).toFixed(1) + 'B' : '');
+    add('IMF · inflation',           'imf_data',       intel.inflation != null,   intel.inflation != null ? intel.inflation.toFixed(1) + '%' : '');
+    add('IMF · debt % GDP',          'imf_data',       intel.debt != null,        intel.debt != null ? intel.debt.toFixed(0) + '%' : '');
+
+    // Politics & society
+    const vdem = cs?.get('vdem_democracy')?.countries?.[iso3];
+    const vdemHas = !!(vdem?.history && Object.keys(vdem.history).length);
+    add('V-Dem · electoral democracy', 'vdem_democracy', vdemHas, vdemHas ? Object.keys(vdem.history).length + ' years scored' : '');
+    add('Country relations · blocs',   'country_relations', !!(intel.blocs && intel.blocs.length), (intel.blocs || []).join(' · '));
+    add('Country culture',             'country_culture',   !!(intel.religion || intel.ethnicity), [intel.religionFamily, intel.ethnicityFamily].filter(Boolean).join(' / '));
+
+    // Trade
+    add('Country resources · partners', 'country_resources', !!(intel.tradePartners && intel.tradePartners.length), intel.tradePartners?.length + ' partners');
+    // Trade flows — count flows that touch this country
+    const flows = cs?.get('trade_annual')?.flows || [];
+    const flowCount = flows.filter(f => f.from_iso3 === iso3 || f.to_iso3 === iso3).length;
+    add('UN Comtrade · bilateral flows', 'trade_annual', flowCount > 0, flowCount + ' bilateral flows');
+
+    // Conflict & hazards
+    const ucdp = cs?.get('ucdp_ged')?.events || [];
+    const ucdpCount = ucdp.filter(e => (e.country_iso3 === iso3 || e.iso3 === iso3 || e.country === intel.name)).length;
+    add('UCDP-GED · conflict events',   'ucdp_ged', ucdpCount > 0, ucdpCount + ' events recorded');
+    const gdacs = cs?.get('gdacs_events')?.events || [];
+    const gdacsHits = gdacs.filter(e => (e.country || '').toLowerCase().includes((intel.name || '').toLowerCase())).length;
+    add('GDACS · active hazards',       'gdacs_events', gdacsHits > 0, gdacsHits + ' active hazards');
+    const who = cs?.get('who_don')?.outbreaks || [];
+    const whoHits = who.filter(o => o.country_iso3 === iso3).length;
+    add('WHO · disease outbreaks',      'who_don', whoHits > 0, whoHits + ' outbreaks');
+
+    // Pulse
+    add('Pulse · composite risk',       'pulse_mode', intel.composite != null, intel.composite != null ? 'score ' + intel.composite : '');
+
+    // Maddison + HYDE historical
+    add('Maddison · historical GDPpc',  'maddison_history', !!(intel.historicalGdpPc && intel.historicalGdpPc.length), (intel.historicalGdpPc?.length || 0) + ' samples');
+    const hyde = cs?.get('hyde_population')?.countries?.[iso3];
+    add('HYDE · historical population', 'hyde_population', !!(hyde?.series && hyde.series.length), (hyde?.series?.length || 0) + ' samples');
+
+    return out;
   }
 
   function render(iso3) {
@@ -283,10 +389,20 @@
           <div style="background:rgba(0,0,0,0.25);padding:6px;border-radius:6px">${sparkline(d.historicalGdpPc, 340, 60)}</div>
         </div>` : ''}
 
+        ${d.coverage?.length ? renderCoverage(d.coverage) : ''}
+
       </div>
     `;
     el.style.display = 'block';
     document.getElementById('twDossierClose').onclick = hide;
+    // Wire each Coverage row to open the Data Inspector for its cache
+    el.querySelectorAll('.tw-cov-row').forEach(row => {
+      row.addEventListener('click', () => {
+        if (window.DataInspector?.openCache) {
+          window.DataInspector.openCache(row.dataset.cache);
+        }
+      });
+    });
   }
 
   // Track currently shown country for compare-mode shift-click
