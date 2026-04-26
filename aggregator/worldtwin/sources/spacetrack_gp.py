@@ -137,6 +137,10 @@ async def fetch(client: httpx.AsyncClient):
                 "payloads": payloads[:3000],
                 "rocket_bodies": rocket_bodies[:500],
                 "debris_sample": debris[:500],
+                # Full unfiltered catalogue for the History Store
+                "payloads_full": payloads,
+                "rocket_bodies_full": rocket_bodies,
+                "debris_full": debris,
             }
         except Exception as e:
             print(f"[spacetrack_gp] error: {e}")

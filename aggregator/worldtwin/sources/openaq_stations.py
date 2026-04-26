@@ -58,8 +58,9 @@ async def fetch(client: httpx.AsyncClient):
     headers = {"X-API-Key": OPENAQ_API_KEY, "User-Agent": "WorldTwin/1.0"}
     all_stations: list[dict[str, Any]] = []
 
-    # Paginate 1000/page. Free tier = 60 req/min.
-    for page in range(1, 13):
+    # Paginate 1000/page. Free tier = 60 req/min. Walk the FULL station
+    # registry (~38 pages = 38k stations).
+    for page in range(1, 50):
         try:
             r = await client.get(
                 "https://api.openaq.org/v3/locations",

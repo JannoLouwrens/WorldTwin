@@ -215,7 +215,8 @@ async def fetch(client: httpx.AsyncClient):
     # Sort by total mentions (importance)
     unique_events.sort(key=lambda e: -(e.get("_cluster_mentions", e["mentions"])))
 
-    # Cap to top 1500 events to keep the cache file reasonable
+    # History Store gets the full unique event set; UI renders top 1500
+    unique_events_full = list(unique_events)
     unique_events = unique_events[:1500]
 
     # Build v1 points
@@ -264,12 +265,16 @@ async def fetch(client: httpx.AsyncClient):
             source_url=ev["source_url"],
         ))
 
-    # Legacy: same structure (frontend can read directly)
+    # Legacy: same structure (frontend can read directly).
+    # events_full = the full clustered set so the History Store gets every
+    # unique event, not just the top 1500.
     legacy = {
         "source": "GDELT Events 2.0",
         "window_hours": HOURS_TO_FETCH,
         "event_count": len(points_list),
         "events": points_list,
+        "events_full": unique_events_full,
+        "events_full_count": len(unique_events_full),
     }
     return points_list, legacy
 

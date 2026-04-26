@@ -55,7 +55,9 @@ async def fetch(client: httpx.AsyncClient):
         return None
     try:
         end = datetime.now(timezone.utc)
-        start = end - timedelta(hours=6)
+        # Widened from 6 hours to 30 days for the History Store. The hourly
+        # data × 30 days × ~75 BAs × 4 types = ~270k observations per fetch.
+        start = end - timedelta(days=30)
         r = await client.get(
             "https://api.eia.gov/v2/electricity/rto/region-data/data/",
             params={
@@ -64,7 +66,7 @@ async def fetch(client: httpx.AsyncClient):
                 "data[0]": "value",
                 "start": start.strftime("%Y-%m-%dT%H"),
                 "end": end.strftime("%Y-%m-%dT%H"),
-                "length": 5000,
+                "length": 100000,    # capacity for 30-day window × all BAs × types
                 "sort[0][column]": "period",
                 "sort[0][direction]": "desc",
             },

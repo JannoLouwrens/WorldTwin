@@ -41,7 +41,7 @@ async def fetch(client: httpx.AsyncClient):
         if a.get("article")
         and not a.get("article", "").startswith("Special:")
         and a.get("article") != "Main_Page"
-    ][:50]
+    ]    # full top-1000 (no slice) — Wikimedia returns 1000 per day by default
     payload = {"source": "Wikipedia", "date": yesterday, "top": filtered}
     return payload, payload
 

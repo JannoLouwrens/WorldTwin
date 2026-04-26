@@ -77,22 +77,30 @@ async def fetch(client: httpx.AsyncClient):
     flows: list[dict[str, Any]] = []
     sem = asyncio.Semaphore(3)  # Comtrade is grumpy with parallelism
 
-    # Build the task list: for each reporter, for each commodity's first HS code, fetch imports
+    # Heavy backfill: pull last 5 years × ALL HS codes per commodity once,
+    # then thereafter only the latest year. Marker file gates the heavy run.
+    from pathlib import Path
+    marker = Path(os.environ.get("CACHE_DIR", "/cache")) / ".trade_annual_backfill_done"
+    needs_backfill = not marker.exists()
+    years_to_pull = list(range(year - 4, year + 1)) if needs_backfill else [year]
+
+    # Build the task list
     tasks = []
-    for reporter in TOP_IMPORTERS:
-        if reporter not in cc.COUNTRY_COORDS:
-            continue
-        for commodity in cdb.COMMODITIES:
-            cid = commodity[0]
-            hs_list = commodity[3]
-            # Query the first HS4 for each commodity (to stay under rate limits)
-            hs = hs_list[0]
-            tasks.append(("cid", cid, reporter, hs, _fetch_one(client, reporter, hs, year, sem)))
+    for yr in years_to_pull:
+        for reporter in TOP_IMPORTERS:
+            if reporter not in cc.COUNTRY_COORDS:
+                continue
+            for commodity in cdb.COMMODITIES:
+                cid = commodity[0]
+                hs_list = commodity[3]
+                # Query EVERY HS4 per commodity (was first only)
+                for hs in hs_list:
+                    tasks.append(("cid", cid, reporter, hs, yr, _fetch_one(client, reporter, hs, yr, sem)))
 
     # Execute in chunks to avoid thundering herd
-    results = await asyncio.gather(*[t[4] for t in tasks], return_exceptions=True)
+    results = await asyncio.gather(*[t[5] for t in tasks], return_exceptions=True)
 
-    for (tag, cid, reporter, hs, _), rows in zip(tasks, results):
+    for (tag, cid, reporter, hs, task_year, _), rows in zip(tasks, results):
         if isinstance(rows, Exception) or not rows:
             continue
         to_coords = cc.coords_for(reporter)
@@ -128,8 +136,15 @@ async def fetch(client: httpx.AsyncClient):
                 "to_lon": to_lon,
                 "value_usd": float(value),
                 "qty": row.get("qty") or 0,
-                "year": year,
+                "year": task_year,
             })
+
+    # Mark backfill done so subsequent fetches only do the latest year
+    if needs_backfill and flows:
+        try:
+            marker.write_text(datetime.now(timezone.utc).isoformat())
+        except Exception:
+            pass
 
     flows.sort(key=lambda f: f["value_usd"], reverse=True)
 

@@ -66,26 +66,39 @@ LAYER = LayerMeta(
 
 async def fetch(client: httpx.AsyncClient):
     try:
-        # Get latest date first
-        r = await client.get(
-            "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query",
-            params={
-                "where": "1=1",
-                "outFields": "*",
-                "orderByFields": "date DESC",
-                "resultRecordCount": 50,
-                "f": "json",
-            },
-            timeout=60,
-        )
-        r.raise_for_status()
-        data = r.json()
-        feats = data.get("features", [])
-        if not feats:
+        # Pull the FULL daily chokepoint history — paginate ArcGIS REST.
+        # 28 chokepoints × ~365 days × N years. Cap at 100k records per fetch.
+        all_feats = []
+        offset = 0
+        page_size = 2000
+        for _ in range(50):
+            r = await client.get(
+                "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query",
+                params={
+                    "where": "1=1",
+                    "outFields": "*",
+                    "orderByFields": "date DESC",
+                    "resultRecordCount": page_size,
+                    "resultOffset": offset,
+                    "f": "json",
+                },
+                timeout=90,
+            )
+            if r.status_code != 200:
+                break
+            feats = r.json().get("features", [])
+            if not feats:
+                break
+            all_feats.extend(feats)
+            if len(feats) < page_size:
+                break
+            offset += page_size
+
+        if not all_feats:
             return None
 
-        latest_date_ms = max(f["attributes"].get("date", 0) for f in feats)
-        latest_rows = [f["attributes"] for f in feats if f["attributes"].get("date") == latest_date_ms]
+        latest_date_ms = max(f["attributes"].get("date", 0) for f in all_feats)
+        latest_rows = [f["attributes"] for f in all_feats if f["attributes"].get("date") == latest_date_ms]
 
         chokepoints: list[dict[str, Any]] = []
         for row in latest_rows:
@@ -115,12 +128,34 @@ async def fetch(client: httpx.AsyncClient):
             })
 
         chokepoints.sort(key=lambda x: x.get("capacity", 0), reverse=True)
+
+        # Full historical record for the History Store
+        history_records = []
+        for f in all_feats:
+            a = f["attributes"]
+            port = a.get("portname", "")
+            coords = CHOKEPOINT_COORDS.get(port)
+            if not coords:
+                continue
+            lat, lon = coords
+            history_records.append({
+                "name": port,
+                "lat": lat, "lon": lon,
+                "date": a.get("date"),
+                "n_total": a.get("n_total", 0),
+                "n_tanker": a.get("n_tanker", 0),
+                "n_container": a.get("n_container", 0),
+                "capacity": a.get("capacity", 0),
+            })
+
         payload = {
             "source": "IMF PortWatch",
             "latest_date_ms": latest_date_ms,
             "fetched": datetime.now(timezone.utc).isoformat(),
             "count": len(chokepoints),
             "chokepoints": chokepoints,
+            "chokepoints_full": history_records,
+            "chokepoints_full_count": len(history_records),
         }
         return payload
     except Exception as e:

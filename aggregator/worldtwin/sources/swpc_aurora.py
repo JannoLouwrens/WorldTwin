@@ -55,7 +55,7 @@ async def fetch(client: httpx.AsyncClient):
             }
     except Exception as e:
         payload["aurora_error"] = str(e)
-    # K-index
+    # K-index — keep latest snapshot AND full series (last 30 days)
     try:
         r = await client.get(
             "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
@@ -64,10 +64,10 @@ async def fetch(client: httpx.AsyncClient):
         if r.status_code == 200:
             arr = r.json()
             if len(arr) > 1:
-                latest = arr[-1]
                 header = arr[0]
-                rec = dict(zip(header, latest))
-                payload["kp_index"] = rec
+                rows = [dict(zip(header, row)) for row in arr[1:]]
+                payload["kp_index"] = rows[-1]
+                payload["kp_index_history"] = rows         # full series → History Store
     except Exception:
         pass
     # G-scale storm level
@@ -80,7 +80,7 @@ async def fetch(client: httpx.AsyncClient):
             payload["scales"] = r.json()
     except Exception:
         pass
-    # Solar wind plasma (latest sample)
+    # Solar wind plasma — latest + full 1-day history (per-minute)
     try:
         r = await client.get(
             "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
@@ -89,9 +89,10 @@ async def fetch(client: httpx.AsyncClient):
         if r.status_code == 200:
             arr = r.json()
             if len(arr) > 1:
-                latest = arr[-1]
                 header = arr[0]
-                payload["solar_wind"] = dict(zip(header, latest))
+                rows = [dict(zip(header, row)) for row in arr[1:]]
+                payload["solar_wind"] = rows[-1]
+                payload["solar_wind_history"] = rows
     except Exception:
         pass
     return payload

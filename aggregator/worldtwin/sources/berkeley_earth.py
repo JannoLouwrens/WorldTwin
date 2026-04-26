@@ -56,13 +56,13 @@ async def fetch(client: httpx.AsyncClient):
                 unc = None
                 if len(parts) > 2 and parts[2] != "NaN":
                     unc = float(parts[2])
-                if year >= 1950:
-                    annual.append({
-                        "year": year,
-                        "period": str(year),
-                        "anomaly_c": round(anomaly, 3),
-                        "uncertainty_c": round(unc, 3) if unc else None,
-                    })
+                # Save full history (Berkeley Earth annual goes back to ~1750).
+                annual.append({
+                    "year": year,
+                    "period": str(year),
+                    "anomaly_c": round(anomaly, 3),
+                    "uncertainty_c": round(unc, 3) if unc else None,
+                })
             except (ValueError, IndexError):
                 continue
 

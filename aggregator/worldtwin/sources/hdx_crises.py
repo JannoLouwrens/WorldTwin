@@ -32,7 +32,7 @@ async def fetch(client: httpx.AsyncClient):
             params={
                 "q": "crisis OR disaster OR emergency",
                 "fq": "res_format:(GeoJSON OR JSON)",
-                "rows": 50,
+                "rows": 1000,    # widened from 50 — full HDX crisis catalogue per fetch
                 "sort": "metadata_modified desc",
             },
             timeout=30,

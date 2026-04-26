@@ -54,9 +54,11 @@ async def _fetch_one(client: httpx.AsyncClient, name: str, facets: dict[str, str
             ("api_key", EIA_API_KEY),
             ("frequency", "annual"),
             ("data[0]", "value"),
-            ("start", "2022"),
-            ("end", "2024"),
-            ("length", "5000"),
+            # Full available history — EIA International goes back to 1980 for
+            # most series. Length cap at 100k means ~200 countries × 45 years
+            # easily fits per metric.
+            ("start", "1980"),
+            ("length", "100000"),
         ]
         # httpx encodes list-value params correctly when we pass tuples
         for k, v in facets.items():
@@ -81,11 +83,15 @@ async def fetch(client: httpx.AsyncClient):
         return None
     results = await asyncio.gather(*[_fetch_one(client, n, f) for n, f in QUERIES])
 
-    # Reshape: { countryIso: { metric: latest_value, metric_year: Y } }
+    # Reshape: { countryIso: { metric_latest, metric_year, metric_unit,
+    #                          metric_history: [{t,v}, ...] } }
+    # Keeps the FULL annual series per (country, metric) so the History
+    # Store decomposer can land every year as its own observation.
     by_country: dict[str, dict[str, Any]] = {}
     for metric_name, rows in results:
-        # Group rows by country, keep the latest year
-        latest: dict[str, dict[str, Any]] = {}
+        # Group all rows by country, accumulate every (year,value) pair
+        per_country: dict[str, list[dict]] = {}
+        meta_per_country: dict[str, dict] = {}
         for row in rows:
             country = row.get("countryRegionName") or row.get("country") or row.get("name", "")
             iso = row.get("countryRegionId") or ""
@@ -98,20 +104,23 @@ async def fetch(client: httpx.AsyncClient):
             except (ValueError, TypeError):
                 continue
             key = iso or country
-            cur = latest.get(key)
-            if not cur or year > cur.get("year", ""):
-                latest[key] = {
-                    "year": year,
-                    "value": fv,
-                    "unit": row.get("unit") or row.get("unitName", ""),
-                    "country": country,
-                    "iso": iso,
-                }
-        for k, v in latest.items():
-            rec = by_country.setdefault(k, {"country": v["country"], "iso": v["iso"]})
-            rec[metric_name] = v["value"]
-            rec[f"{metric_name}_year"] = v["year"]
-            rec[f"{metric_name}_unit"] = v["unit"]
+            per_country.setdefault(key, []).append({"t": year, "v": fv})
+            meta_per_country[key] = {
+                "country": country, "iso": iso,
+                "unit": row.get("unit") or row.get("unitName", ""),
+            }
+        for key, samples in per_country.items():
+            samples.sort(key=lambda s: s["t"])
+            latest = samples[-1] if samples else None
+            rec = by_country.setdefault(key, {
+                "country": meta_per_country[key]["country"],
+                "iso": meta_per_country[key]["iso"],
+            })
+            if latest:
+                rec[metric_name] = latest["v"]
+                rec[f"{metric_name}_year"] = latest["t"]
+            rec[f"{metric_name}_unit"] = meta_per_country[key]["unit"]
+            rec[f"{metric_name}_history"] = samples
 
     return {
         "source": "EIA International v2",

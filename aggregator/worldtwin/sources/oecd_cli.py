@@ -33,7 +33,7 @@ async def fetch(client: httpx.AsyncClient):
     try:
         r = await client.get(
             "https://sdmx.oecd.org/public/rest/data/OECD.SDD.STES,DSD_STES@DF_CLI,4.0/.M.LI......",
-            params={"format": "jsondata", "startPeriod": "2024-01"},
+            params={"format": "jsondata", "startPeriod": "1960-01"},   # full available CLI history
             headers={
                 "Accept": "application/vnd.sdmx.data+json; charset=utf-8; version=1.0",
                 "User-Agent": "WorldTwin/1.0",

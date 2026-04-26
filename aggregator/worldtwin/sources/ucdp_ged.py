@@ -55,11 +55,11 @@ async def fetch(client: httpx.AsyncClient):
                 text = io.TextIOWrapper(f, encoding="utf-8")
                 reader = csv.DictReader(text)
                 events: list[dict[str, Any]] = []
-                cutoff = "2023-01-01"
+                # NO date cutoff — pull the entire UCDP archive (1989 → present)
+                # into history. The lab now remembers every recorded conflict
+                # event the academy has verified. ~350k events.
                 for row in reader:
                     date_start = row.get("date_start", "")
-                    if date_start < cutoff:
-                        continue
                     try:
                         lat = float(row.get("latitude") or 0)
                         lon = float(row.get("longitude") or 0)
@@ -68,12 +68,12 @@ async def fetch(client: httpx.AsyncClient):
                         continue
                     if lat == 0 and lon == 0:
                         continue
+                    # Keep ALL clarity levels (was clarity=1 only). Clarity 2
+                    # events are slightly less certain but still verified.
                     try:
                         clarity = int(row.get("event_clarity") or 2)
                     except ValueError:
                         clarity = 2
-                    if clarity != 1:
-                        continue
                     events.append({
                         "id": row.get("id", ""),
                         "lat": lat,
@@ -89,15 +89,19 @@ async def fetch(client: httpx.AsyncClient):
                         "low": int(row.get("low") or 0),
                         "type_of_violence": int(row.get("type_of_violence") or 0),
                         "conflict_name": row.get("conflict_name", ""),
+                        "event_clarity": clarity,
                     })
                 events.sort(key=lambda x: x["date_start"], reverse=True)
-                # Cap to 3000 most recent high-fatality events for render budget
-                events_top = events[:3000]
+                # Live UI keeps the most recent 3000 high-clarity events
+                events_top = [e for e in events if e["event_clarity"] == 1][:3000]
                 return {
                     "source": f"UCDP GED ({url.split('/')[-1]})",
                     "fetched": datetime.now(timezone.utc).isoformat(),
                     "total_events": len(events),
                     "events": events_top,
+                    # Full archive for the History Store decomposer
+                    "events_full": events,
+                    "events_full_count": len(events),
                 }
         except Exception as e:
             print(f"[ucdp_ged] {url} failed: {e}")

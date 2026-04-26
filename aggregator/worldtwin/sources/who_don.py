@@ -49,7 +49,7 @@ async def fetch(client: httpx.AsyncClient):
             data = r.json()
             items = data.get("value") or data.get("items") or []
             outbreaks = []
-            for item in items[:50]:
+            for item in items:
                 title = item.get("Title") or item.get("title", "")
                 desc = item.get("ShortDescription") or item.get("description", "")
                 date = item.get("PublicationDateAndTime") or item.get("pubDate", "")
@@ -80,7 +80,7 @@ async def fetch(client: httpx.AsyncClient):
         root = ET.fromstring(r.text)
         items = root.findall(".//item")
         outbreaks = []
-        for item in items[:50]:
+        for item in items:
             title = (item.findtext("title") or "").strip()
             link = (item.findtext("link") or "").strip()
             desc = (item.findtext("description") or "").strip()

@@ -22,7 +22,9 @@ LAYER = LayerMeta(
 
 async def fetch(client: httpx.AsyncClient):
     url = "https://eonet.gsfc.nasa.gov/api/v3/events"
-    params = {"status": "open", "limit": 200}
+    # Pull all events (open + closed), no result limit, with a 10-year window.
+    # EONET's full archive lives behind days= and status=all; this captures it.
+    params = {"status": "all", "limit": 5000, "days": 365 * 10}
     # EONET can be flaky — retry with backoff
     for attempt in range(3):
         r = await client.get(url, params=params, timeout=30)

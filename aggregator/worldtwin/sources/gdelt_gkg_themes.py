@@ -175,6 +175,7 @@ async def fetch(client: httpx.AsyncClient):
                 "fetched": datetime.now(timezone.utc).isoformat(),
                 "count": len(pulses),
                 "pulses": pulses[:300],
+                "pulses_full": pulses,    # full set for History Store
             }
     except Exception as e:
         print(f"[gdelt_gkg_themes] error: {e}")

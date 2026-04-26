@@ -89,7 +89,7 @@ async def fetch(client: httpx.AsyncClient):
     try:
         r = await client.get(
             "https://api.cloudflare.com/client/v4/radar/annotations/outages",
-            params={"dateRange": "7d", "limit": 50},
+            params={"dateRange": "28d", "limit": 200},   # widened: 28 days, top 200
             timeout=30,
             headers=headers,
         )
@@ -142,7 +142,7 @@ async def fetch(client: httpx.AsyncClient):
     try:
         r = await client.get(
             "https://api.cloudflare.com/client/v4/radar/attacks/layer3/top/locations/target",
-            params={"dateRange": "1d", "limit": 10},
+            params={"dateRange": "7d", "limit": 100},    # widened: 7 days, top 100
             timeout=30,
             headers=headers,
         )

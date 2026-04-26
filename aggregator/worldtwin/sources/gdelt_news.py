@@ -28,7 +28,7 @@ async def fetch(client: httpx.AsyncClient):
             "query": "breaking news world",
             "mode": "artlist",
             "format": "json",
-            "maxrecords": 150,
+            "maxrecords": 250,    # GDELT artlist hard cap is 250 per query
             "sort": "datedesc",
         },
         timeout=30,

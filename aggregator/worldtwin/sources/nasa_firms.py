@@ -27,44 +27,54 @@ LAYER = LayerMeta(
 
 
 async def fetch(client: httpx.AsyncClient):
-    url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_KEY}/VIIRS_SNPP_NRT/world/1"
-    r = await client.get(url, timeout=60)
-    r.raise_for_status()
-    lines = r.text.strip().split("\n")
-    if len(lines) < 2:
-        return [], []
-    header = lines[0].split(",")
-    idx = {name: i for i, name in enumerate(header)}
-    step = max(1, len(lines) // 2000)
+    # Pull 10 days from VIIRS SNPP, VIIRS NOAA-20 and MODIS combined.
+    # FIRMS area endpoint format: /csv/{key}/{sensor}/world/{days}
+    sensors = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT"]
     points = []
-    legacy = []  # old format: list of dicts with short keys
-    for i in range(1, len(lines), step):
-        cols = lines[i].split(",")
-        if len(cols) < len(header):
-            continue
+    legacy = []
+    for sensor in sensors:
+        url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_KEY}/{sensor}/world/10"
         try:
-            lat = float(cols[idx.get("latitude", 0)])
-            lon = float(cols[idx.get("longitude", 1)])
-            bright = float(cols[idx.get("bright_ti4", 2)]) if idx.get("bright_ti4") is not None else 0
-            frp_str = cols[idx.get("frp", 12)] if idx.get("frp") is not None else "0"
-            frp = float(frp_str) if frp_str else 0
-            date = cols[idx.get("acq_date", 5)] if idx.get("acq_date") is not None else ""
-            time = cols[idx.get("acq_time", 6)] if idx.get("acq_time") is not None else ""
-            sat = cols[idx.get("satellite", 7)] if idx.get("satellite") is not None else ""
-            conf = cols[idx.get("confidence", 9)] if idx.get("confidence") is not None else ""
-            dn = cols[idx.get("daynight", 13)] if idx.get("daynight") is not None else ""
-        except (ValueError, IndexError):
-            continue
-        points.append(point(
-            lat=lat, lon=lon,
-            value=frp,
-            label=f"{frp:.1f} MW",
-            bright_k=bright, date=date, time=time, sat=sat, conf=conf, dn=dn,
-        ))
-        legacy.append({
-            "lat": lat, "lon": lon, "bright": bright, "frp": frp,
-            "date": date, "time": time, "sat": sat, "conf": conf, "dn": dn,
-        })
+            r = await client.get(url, timeout=120)
+            if r.status_code != 200:
+                continue
+            lines = r.text.strip().split("\n")
+            if len(lines) < 2:
+                continue
+            header = lines[0].split(",")
+            idx = {name: i for i, name in enumerate(header)}
+            # No downsample — keep every detection
+            for i in range(1, len(lines)):
+                cols = lines[i].split(",")
+                if len(cols) < len(header):
+                    continue
+                try:
+                    lat = float(cols[idx.get("latitude", 0)])
+                    lon = float(cols[idx.get("longitude", 1)])
+                    bright = float(cols[idx.get("bright_ti4", 2)]) if idx.get("bright_ti4") is not None else 0
+                    frp_str = cols[idx.get("frp", 12)] if idx.get("frp") is not None else "0"
+                    frp = float(frp_str) if frp_str else 0
+                    date = cols[idx.get("acq_date", 5)] if idx.get("acq_date") is not None else ""
+                    time = cols[idx.get("acq_time", 6)] if idx.get("acq_time") is not None else ""
+                    sat = cols[idx.get("satellite", 7)] if idx.get("satellite") is not None else ""
+                    conf = cols[idx.get("confidence", 9)] if idx.get("confidence") is not None else ""
+                    dn = cols[idx.get("daynight", 13)] if idx.get("daynight") is not None else ""
+                except (ValueError, IndexError):
+                    continue
+                points.append(point(
+                    lat=lat, lon=lon,
+                    value=frp,
+                    label=f"{frp:.1f} MW",
+                    bright_k=bright, date=date, time=time, sat=sat, conf=conf, dn=dn,
+                    sensor=sensor,
+                ))
+                legacy.append({
+                    "lat": lat, "lon": lon, "bright": bright, "frp": frp,
+                    "date": date, "time": time, "sat": sat, "conf": conf, "dn": dn,
+                    "sensor": sensor,
+                })
+        except Exception as e:
+            print(f"[nasa_firms] {sensor} error: {e}")
     return points, legacy
 
 

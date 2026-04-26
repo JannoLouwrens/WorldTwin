@@ -321,18 +321,43 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
         return rows
 
     # ---- Pattern: Generic event lists ----
-    EVENT_KEYS = ("events", "outbreaks", "battles", "disasters", "storms",
-                  "alerts", "asteroids", "headlines", "items", "stations",
-                  "ports", "chokepoints", "facilities", "plants", "samples",
-                  "cables", "themes", "concerns", "tracks", "stories",
-                  "videos", "tweets", "channels", "schedules", "matches",
-                  "outages", "trips", "ships", "flights", "satellites",
-                  "powerplants", "trades", "flows", "edges", "points")
+    # Plugins can append "_full" suffix to a list to mark it as the
+    # full-archive version that the History Store should ingest in full
+    # (without the UI's render budget). e.g. events_full, asteroids_full.
+    EVENT_KEYS = ("events", "events_full", "outbreaks", "outbreaks_full",
+                  "battles", "battles_full", "disasters", "disasters_full",
+                  "storms", "alerts", "asteroids", "asteroids_full",
+                  "catalogue",
+                  "headlines", "items", "stations", "ports", "ports_full",
+                  "chokepoints", "chokepoints_full",
+                  "facilities", "plants", "samples", "cables", "themes",
+                  "concerns", "pulses", "pulses_full", "tracks",
+                  "stories", "videos", "tweets",
+                  "channels", "schedules", "matches", "outages", "trips",
+                  "ships", "flights", "satellites", "powerplants",
+                  "payloads", "payloads_full", "rocket_bodies", "rocket_bodies_full",
+                  "debris", "debris_full", "debris_sample",
+                  "trades", "flows", "flows_full", "edges", "points", "annual",
+                  "pairs", "pairs_full",
+                  "history_records",
+                  "kp_index_history", "solar_wind_history",
+                  "ports_full", "chokepoints_full",
+                  "annual", "monthly_global_trend", "daily_trend")
+    seen_event_keys = set()
     for key in EVENT_KEYS:
         seq = payload.get(key)
         if not isinstance(seq, list) or not seq:
             continue
-        for i, evt in enumerate(seq[:5000]):
+        # Skip if a _full variant is also present and we already processed it
+        # to avoid double-counting. (e.g. if events_full exists, also seeing
+        # `events` would be redundant for the same row contents — but they
+        # have different ids in the source_id so it's still distinct.)
+        if key in seen_event_keys:
+            continue
+        seen_event_keys.add(key)
+        # No 5000 cap — let the full archive land. The decomposer is the
+        # canonical record; the UI gets bounded slices via the cache file.
+        for i, evt in enumerate(seq):
             if not isinstance(evt, dict):
                 continue
             evt_id = (evt.get("id") or evt.get("uuid") or evt.get("name")

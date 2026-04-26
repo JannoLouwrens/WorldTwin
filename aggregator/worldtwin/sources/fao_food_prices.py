@@ -43,7 +43,7 @@ async def fetch(client: httpx.AsyncClient):
                 "source": "FAO Food Price Index",
                 "fetched": datetime.now(timezone.utc).isoformat(),
                 "count": 1,
-                "raw_csv": r.text[:50000],
+                "raw_csv": r.text,    # full CSV — FAO publishes ~35 years monthly = bounded
                 "url": url,
             }
         except Exception:

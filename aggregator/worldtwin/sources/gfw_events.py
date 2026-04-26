@@ -37,28 +37,39 @@ LAYER = LayerMeta(
 )
 
 
-async def _fetch_events(client: httpx.AsyncClient, dataset: str, headers: dict, limit: int = 100):
+async def _fetch_events(client: httpx.AsyncClient, dataset: str, headers: dict, limit: int = 1000):
+    """Paginated event pull from GFW. Widened from 7 days to 90 days; limit
+    raised from 100 to 1000 per page; paginate up to 10 pages."""
     try:
         now = datetime.now(timezone.utc)
-        start = (now - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        start = (now - timedelta(days=90)).strftime("%Y-%m-%dT%H:%M:%SZ")
         end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-        r = await client.get(
-            "https://gateway.api.globalfishingwatch.org/v3/events",
-            params={
-                "datasets[0]": dataset,
-                "start-date": start,
-                "end-date": end,
-                "limit": limit,
-                "offset": 0,
-            },
-            headers=headers,
-            timeout=60,
-        )
-        if r.status_code != 200:
-            print(f"[gfw_events] {dataset} {r.status_code}: {r.text[:120]}")
-            return []
-        data = r.json()
-        return data.get("entries") or data.get("entries", []) or []
+        all_entries = []
+        for page in range(10):
+            r = await client.get(
+                "https://gateway.api.globalfishingwatch.org/v3/events",
+                params={
+                    "datasets[0]": dataset,
+                    "start-date": start,
+                    "end-date": end,
+                    "limit": limit,
+                    "offset": page * limit,
+                },
+                headers=headers,
+                timeout=120,
+            )
+            if r.status_code != 200:
+                if page == 0:
+                    print(f"[gfw_events] {dataset} {r.status_code}: {r.text[:120]}")
+                break
+            data = r.json()
+            entries = data.get("entries") or []
+            if not entries:
+                break
+            all_entries.extend(entries)
+            if len(entries) < limit:
+                break
+        return all_entries
     except Exception as e:
         print(f"[gfw_events] {dataset} error: {e}")
         return []
@@ -69,11 +80,11 @@ async def fetch(client: httpx.AsyncClient):
         return None
     headers = {"Authorization": f"Bearer {GFW_TOKEN}", "User-Agent": "WorldTwin/1.0"}
 
-    # Fetch 3 event types in parallel
+    # Fetch 3 event types in parallel — full paginated 90-day window
     gaps, encounters, ports = await asyncio.gather(
-        _fetch_events(client, "public-global-gaps-events:latest", headers, limit=100),
-        _fetch_events(client, "public-global-encounters-events:latest", headers, limit=50),
-        _fetch_events(client, "public-global-port-visits-events:latest", headers, limit=50),
+        _fetch_events(client, "public-global-gaps-events:latest", headers, limit=1000),
+        _fetch_events(client, "public-global-encounters-events:latest", headers, limit=1000),
+        _fetch_events(client, "public-global-port-visits-events:latest", headers, limit=1000),
     )
 
     def _safe_dict(v):

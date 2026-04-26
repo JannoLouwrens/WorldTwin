@@ -348,6 +348,7 @@ async def fetch(client: httpx.AsyncClient):
             "(where the event happened), not actor nationality."
         ),
         "pairs": pairs[:500],
+        "pairs_full": pairs,    # full pair set → History Store
         "countries": countries,
         "top_hostile": top_hostile,
         "top_friendly": top_friendly,

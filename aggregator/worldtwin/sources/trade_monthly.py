@@ -88,7 +88,7 @@ async def _fetch_one(client: httpx.AsyncClient, reporter: int, hs: str, period: 
                     "period": period,
                     "flowCode": "M",
                     "cmdCode": hs,
-                    "maxRecords": 20,
+                    "maxRecords": 500,    # widened from 20 — full bilateral partners
                 },
                 timeout=30,
             )
@@ -162,6 +162,7 @@ async def fetch(client: httpx.AsyncClient):
         "fetched": datetime.now(timezone.utc).isoformat(),
         "total_flows": len(flows),
         "flows": flows[:500],
+        "flows_full": flows,    # full set for History Store
     }
     return payload
 

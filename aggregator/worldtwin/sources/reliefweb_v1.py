@@ -37,11 +37,11 @@ async def fetch(client: httpx.AsyncClient):
             "https://data.humdata.org/api/3/action/package_search",
             params={
                 "q": "humanitarian crisis emergency",
-                "rows": 100,
+                "rows": 1000,        # widened from 100
                 "sort": "metadata_modified desc",
                 "fq": "groups:*",
             },
-            timeout=45,
+            timeout=90,
             headers={"User-Agent": "WorldTwin/1.0"},
         )
         if r.status_code != 200:
@@ -49,7 +49,7 @@ async def fetch(client: httpx.AsyncClient):
         body = r.json()
         results = (body.get("result") or {}).get("results") or []
         disasters = []
-        for pkg in results[:50]:
+        for pkg in results:   # full result set, no slice
             groups = pkg.get("groups") or []
             if not groups:
                 continue

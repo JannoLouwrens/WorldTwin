@@ -61,11 +61,11 @@ async def fetch(client: httpx.AsyncClient):
                         "api_key": EIA_API_KEY,
                         "frequency": "weekly",
                         "data[0]": "value",
-                        "length": 12,
+                        "length": 5000,         # widened — full available series
                         "sort[0][column]": "period",
                         "sort[0][direction]": "desc",
                     },
-                    timeout=45,
+                    timeout=120,
                 )
                 if r.status_code != 200:
                     continue
@@ -74,7 +74,8 @@ async def fetch(client: httpx.AsyncClient):
                 continue
             # Data is sorted desc — latest is first
             latest[name] = {"value": data[0].get("value"), "period": data[0].get("period", "")}
-            history[name] = [{"t": d.get("period"), "v": d.get("value")} for d in data[:12]]
+            # Full series — was capped at 12 samples; now keep everything
+            history[name] = [{"t": d.get("period"), "v": d.get("value")} for d in data]
         except Exception as e:
             print(f"[eia_petroleum] {name} error: {e}")
 

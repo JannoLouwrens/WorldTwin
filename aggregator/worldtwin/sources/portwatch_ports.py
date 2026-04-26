@@ -48,25 +48,44 @@ async def fetch(client: httpx.AsyncClient):
                 "lon": geom.get("x") or attrs.get("lon"),
             }
 
-        # Pull the latest daily port data
-        rd = await client.get(
-            "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Ports_Data/FeatureServer/0/query",
-            params={
-                "where": "1=1",
-                "outFields": "*",
-                "orderByFields": "date DESC",
-                "resultRecordCount": 2000,
-                "f": "json",
-            },
-            timeout=60,
-        )
-        rd.raise_for_status()
-        feats = rd.json().get("features", [])
-        if not feats:
-            return None
-        latest_date_ms = max(f["attributes"].get("date", 0) for f in feats)
-        latest = [f["attributes"] for f in feats if f["attributes"].get("date") == latest_date_ms]
+        # Pull the FULL daily port data — paginate. ArcGIS REST caps each
+        # response at ~2000 records; we paginate via resultOffset until empty.
+        # The full Daily_Ports_Data has ~2000 ports × ~365 days × N years
+        # of history. Cap at 100k records per fetch (~50 days for top ~2k
+        # ports) to keep one fetch bounded; subsequent fetches accumulate.
+        all_feats = []
+        offset = 0
+        page_size = 2000
+        for _ in range(50):
+            rd = await client.get(
+                "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Ports_Data/FeatureServer/0/query",
+                params={
+                    "where": "1=1",
+                    "outFields": "*",
+                    "orderByFields": "date DESC",
+                    "resultRecordCount": page_size,
+                    "resultOffset": offset,
+                    "f": "json",
+                },
+                timeout=90,
+            )
+            if rd.status_code != 200:
+                break
+            feats = rd.json().get("features", [])
+            if not feats:
+                break
+            all_feats.extend(feats)
+            if len(feats) < page_size:
+                break
+            offset += page_size
 
+        if not all_feats:
+            return None
+
+        latest_date_ms = max(f["attributes"].get("date", 0) for f in all_feats)
+        latest = [f["attributes"] for f in all_feats if f["attributes"].get("date") == latest_date_ms]
+
+        # Latest snapshot for the live UI
         ports: list[dict[str, Any]] = []
         for a in latest:
             pid = a.get("portid")
@@ -90,12 +109,35 @@ async def fetch(client: httpx.AsyncClient):
         ports.sort(key=lambda p: p.get("capacity", 0), reverse=True)
         ports = ports[:800]
 
+        # Full historical snapshot of all ports × all dates — for History Store
+        history_records = []
+        for f in all_feats:
+            a = f["attributes"]
+            pid = a.get("portid")
+            ref_p = port_ref.get(pid)
+            if not ref_p or not ref_p.get("lat"):
+                continue
+            history_records.append({
+                "portid": pid,
+                "name": ref_p["portname"],
+                "country": ref_p["country"],
+                "lat": ref_p["lat"],
+                "lon": ref_p["lon"],
+                "date": a.get("date"),  # unix ms
+                "n_total": a.get("n_total", 0),
+                "n_tanker": a.get("n_tanker", 0),
+                "n_container": a.get("n_container", 0),
+                "capacity": a.get("capacity", 0),
+            })
+
         return {
             "source": "IMF PortWatch",
             "latest_date_ms": latest_date_ms,
             "fetched": datetime.now(timezone.utc).isoformat(),
             "count": len(ports),
             "ports": ports,
+            "ports_full": history_records,           # all dates × all ports
+            "ports_full_count": len(history_records),
         }
     except Exception as e:
         print(f"[portwatch_ports] error: {e}")
