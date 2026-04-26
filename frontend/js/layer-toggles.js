@@ -85,41 +85,63 @@
   // Track which layers are currently rendered (independent of mode)
   const activeToggles = new Set();
 
+  // Display order for the categories (left → right). Hot/threat categories
+  // first because that's what reads the news asks first; sport/gaming last.
+  const CAT_ORDER = ['nature', 'weather', 'war', 'transit', 'economy',
+                      'resources', 'health', 'space', 'social',
+                      'infra', 'sports', 'gaming', 'meta'];
+
+  // Human-readable category labels for the bar
+  const CAT_LABELS = {
+    nature: 'Nature', weather: 'Weather', war: 'Conflict', transit: 'Transit',
+    economy: 'Economy', resources: 'Resources', health: 'Health',
+    space: 'Space', social: 'Society', infra: 'Infra',
+    sports: 'Sports', gaming: 'Gaming', meta: 'Meta',
+  };
+
   function buildToggleBar() {
     const host = document.getElementById('layerToggles');
     if (!host) return;
     if (!window.LAYERS) { setTimeout(buildToggleBar, 300); return; }
 
-    // Order: group by category, then alpha within group
-    const ordered = Object.keys(window.LAYERS)
-      .filter(id => LAYER_NAMES[id])  // only layers with known names
-      .sort((a, b) => {
-        const ca = LAYER_CATS[a] || 'zzz';
-        const cb = LAYER_CATS[b] || 'zzz';
-        if (ca !== cb) return ca.localeCompare(cb);
-        return (LAYER_NAMES[a] || a).localeCompare(LAYER_NAMES[b] || b);
-      });
-
-    host.innerHTML = '<span class="lt-label">LAYERS</span>';
-    let lastCat = '';
-    ordered.forEach(id => {
+    // Group all known layers by category
+    const groups = {};
+    Object.keys(window.LAYERS).filter(id => LAYER_NAMES[id]).forEach(id => {
       const cat = LAYER_CATS[id] || 'meta';
-      if (cat !== lastCat) {
-        const sep = document.createElement('span');
-        sep.className = 'lt-sep';
-        sep.textContent = '│';
-        host.appendChild(sep);
-        lastCat = cat;
-      }
-      const btn = document.createElement('button');
-      btn.className = 'lt-btn';
-      btn.dataset.layer = id;
-      btn.dataset.cat = cat;
-      btn.title = LAYER_NAMES[id] || id;
-      btn.innerHTML = `<span class="lt-ico">${LAYER_ICONS[id] || '●'}</span><span class="lt-name">${LAYER_NAMES[id] || id}</span>`;
-      btn.addEventListener('click', () => toggleLayer(id, btn));
-      host.appendChild(btn);
+      (groups[cat] = groups[cat] || []).push(id);
     });
+    // Alpha within each group
+    Object.keys(groups).forEach(cat => groups[cat].sort((a, b) =>
+      (LAYER_NAMES[a] || a).localeCompare(LAYER_NAMES[b] || b)));
+
+    host.innerHTML = '';
+    host.classList.add('lt-grouped');
+
+    // Order categories per CAT_ORDER, append any unknown at end
+    const seen = new Set();
+    const ordered = CAT_ORDER.filter(c => groups[c]).concat(
+      Object.keys(groups).filter(c => !CAT_ORDER.includes(c))
+    );
+
+    for (const cat of ordered) {
+      if (seen.has(cat) || !groups[cat]) continue;
+      seen.add(cat);
+      const group = document.createElement('div');
+      group.className = 'lt-group';
+      group.dataset.cat = cat;
+      group.innerHTML = `<span class="lt-grouplabel">${CAT_LABELS[cat] || cat}</span>`;
+      for (const id of groups[cat]) {
+        const btn = document.createElement('button');
+        btn.className = 'lt-btn';
+        btn.dataset.layer = id;
+        btn.dataset.cat = cat;
+        btn.title = LAYER_NAMES[id] || id;
+        btn.innerHTML = `<span class="lt-ico">${LAYER_ICONS[id] || '●'}</span><span class="lt-name">${LAYER_NAMES[id] || id}</span>`;
+        btn.addEventListener('click', () => toggleLayer(id, btn));
+        group.appendChild(btn);
+      }
+      host.appendChild(group);
+    }
   }
 
   async function toggleLayer(id, btn) {

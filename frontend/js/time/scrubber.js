@@ -321,7 +321,15 @@
       if (!_handle) return;
       const f = yearToFrac(year);
       _handle.style.left = (f * 100) + '%';
-      if (_yearLabel) _yearLabel.textContent = Clock.label(year) + (year === Clock.MAX_YEAR ? ' · Live' : '');
+      if (_yearLabel) {
+        // Use italicised cyan span for the "Live" suffix so the design system
+        // can style it through .tw-scrubber-year em
+        if (year === Clock.MAX_YEAR) {
+          _yearLabel.innerHTML = Clock.label(year) + ' <em>· Live</em>';
+        } else {
+          _yearLabel.textContent = Clock.label(year);
+        }
+      }
       if (_eraLabel) {
         const era = ERAS.find(([ya, yb]) => year >= ya && year <= yb);
         _eraLabel.textContent = era ? era[3] : '';

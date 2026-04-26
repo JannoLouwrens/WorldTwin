@@ -1,28 +1,73 @@
-// Mapmode Bar — populate the top-of-screen #mmbar with one button per
-// registered mapmode. Click activates. Keyboard shortcuts 1-9 + 0 + qwe.
+// Mapmode Bar — populate the top-of-screen #mmbar with mapmode buttons,
+// GROUPED into 5 logical clusters so the user sees structure not a flat row.
+//
+// Five questions a mapmode answers (from a country reader's perspective):
+//   POLITICS    — who governs, who do they belong to
+//   ECONOMY     — how big, how wealthy, how indebted
+//   PEOPLE      — how long they live, how connected
+//   THREATS     — military spend, water/food stress, composite risk
+//   ENVIRONMENT — emissions, renewable share
+//
+// Any mapmode not in a group goes into "OTHER" (forward-compat).
 (function(){
+  const GROUPS = [
+    { id: 'politics',    label: 'Politics',    ids: ['political', 'democracy', 'religion', 'ethnicity'] },
+    { id: 'economy',     label: 'Economy',     ids: ['gdp', 'gdp_pc', 'population', 'urban', 'inflation', 'debt'] },
+    { id: 'people',      label: 'People',      ids: ['life', 'internet'] },
+    { id: 'threats',     label: 'Threats',     ids: ['military', 'water_stress', 'food', 'pulse'] },
+    { id: 'environment', label: 'Environment', ids: ['co2', 'renewable'] },
+  ];
+
   function buildBar() {
     const host = document.getElementById('mmbar');
     if (!host || !window.Mapmode) return;
     const list = window.Mapmode.list();
-    if (!list.length) {
-      // mapmodes-data.js hasn't run yet; retry shortly
-      setTimeout(buildBar, 300);
-      return;
-    }
-    // Preserve the label; append buttons
-    const label = host.querySelector('.mmbar-label');
+    if (!list.length) { setTimeout(buildBar, 300); return; }
+
+    const byId = Object.fromEntries(list.map(m => [m.id, m]));
+    const placed = new Set();
     host.innerHTML = '';
-    if (label) host.appendChild(label);
-    list.forEach(mm => {
-      const btn = document.createElement('button');
-      btn.className = 'mmbar-btn';
-      btn.dataset.mm = mm.id;
-      btn.textContent = mm.name;
-      btn.title = mm.legend?.title || mm.name;
-      btn.addEventListener('click', () => window.Mapmode.activate(mm.id));
-      host.appendChild(btn);
-    });
+    host.classList.add('mmbar-grouped');
+
+    for (const g of GROUPS) {
+      const group = document.createElement('div');
+      group.className = 'mmbar-group';
+      group.dataset.group = g.id;
+      group.innerHTML = `<span class="mmbar-grouplabel">${g.label}</span>`;
+      let added = 0;
+      for (const id of g.ids) {
+        const mm = byId[id];
+        if (!mm) continue;
+        placed.add(id);
+        const btn = document.createElement('button');
+        btn.className = 'mmbar-btn';
+        btn.dataset.mm = mm.id;
+        btn.title = mm.legend?.title || mm.name;
+        btn.textContent = mm.name;
+        btn.addEventListener('click', () => window.Mapmode.activate(mm.id));
+        group.appendChild(btn);
+        added++;
+      }
+      if (added) host.appendChild(group);
+    }
+
+    // Catch any mapmode not in a group
+    const orphans = list.filter(m => !placed.has(m.id));
+    if (orphans.length) {
+      const group = document.createElement('div');
+      group.className = 'mmbar-group';
+      group.dataset.group = 'other';
+      group.innerHTML = `<span class="mmbar-grouplabel">Other</span>`;
+      for (const mm of orphans) {
+        const btn = document.createElement('button');
+        btn.className = 'mmbar-btn';
+        btn.dataset.mm = mm.id;
+        btn.textContent = mm.name;
+        btn.addEventListener('click', () => window.Mapmode.activate(mm.id));
+        group.appendChild(btn);
+      }
+      host.appendChild(group);
+    }
   }
 
   // Keyboard: 1-9 + 0 = first 10 mapmodes; q w e r t = next 5

@@ -785,7 +785,7 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
    BOTTOM-LEFT panels (diagnostics/help) also clear planet rail.
    ============================================================ */
 .narrative-strip { top: 58px !important; height: 26px !important; }
-.events-ticker   { top: 84px !important; height: 26px !important; }
+.events-ticker   { top: 92px !important; height: 22px !important; }
 /* Scrubber sits at bottom:14, ~110px tall — push everything else up by ~120px */
 .modes           { bottom: 134px !important; top: auto !important; }
 .legend-strip    { bottom: 196px !important; }
@@ -1230,13 +1230,15 @@ body[data-scrubbed-past="true"] .mmbar .mmbar-btn:not([data-time-aware="true"]) 
 ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 </style>
+<!-- Design System v2 loads AFTER inline styles so it wins same-specificity ties -->
+<link rel="stylesheet" href="css/worldtwin-design.css">
 </head>
 <body>
 
 <div id="boot">
   <div class="boot-inner">
-    <div class="boot-title">WorldTwin</div>
-    <div class="boot-sub" id="bootSub">State of the World</div>
+    <div class="boot-title">World<em>Twin</em></div>
+    <div class="boot-sub" id="bootSub">State of the World · Live</div>
     <div class="boot-spinner"></div>
     <div id="bootProgressText" style="font-size:10px;color:var(--text-lo);margin-top:10px;letter-spacing:0.1em;text-transform:uppercase">Loading layers…</div>
     <div id="bootProgressBar" style="width:200px;height:3px;background:var(--surface-2);border-radius:2px;margin:8px auto 0;overflow:hidden">
@@ -1246,6 +1248,12 @@ body[data-scrubbed-past="true"] .mmbar .mmbar-btn:not([data-time-aware="true"]) 
 </div>
 
 <!-- Mapmode Bar (EU4-style top strip) -->
+<!-- Brand corner — wordmark with italic-cyan accent on "Twin" -->
+<div class="tw-brand">
+  <span class="wordmark">World<em>Twin</em></span>
+  <span class="meta">Live · 70+ sources · 800kBC→2026</span>
+</div>
+
 <div class="mmbar" id="mmbar">
   <span class="mmbar-label">MAPMODE</span>
   <!-- Buttons populated by mapmode-bar.js -->
