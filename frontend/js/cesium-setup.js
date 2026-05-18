@@ -436,26 +436,39 @@
       if (window.Clock) {
         const applyYearToCesiumClock = (year) => {
           if (year === undefined) year = window.Clock.year;
-          // Cesium JulianDate goes wonky for BC dates and silently produces
-          // NaN, which kills dynamic atmosphere lighting (the globe goes black).
-          // Clamp the year fed to the *Cesium clock* to a positive year so the
-          // sun-position math stays sane. The visual difference of orbital
-          // precession over 4000 years is < 1 degree — nobody notices.
-          const safeYear = Math.max(1900, Math.min(year, window.Clock.MAX_YEAR));
           let jd;
-          try { jd = window.Clock.toJulianDate(safeYear); } catch (_) { return; }
-          if (!jd) return;
-          // Add wall-clock seconds so day/night still rotates over a session
-          const secondsToday = (Date.now() / 1000) % 86400;
-          Cesium.JulianDate.addSeconds(jd, secondsToday, jd);
+          if (year === window.Clock.MAX_YEAR) {
+            // LIVE: use today's actual UTC instant so the day/night
+            // terminator falls in the geographically correct place for
+            // right now (May → arctic-day axis, December → austral-day,
+            // etc.). Previously this snapped to Jan-1 of the year and
+            // added seconds-of-day, which put the sun in the wrong
+            // hemisphere for ~10 months of the year.
+            jd = Cesium.JulianDate.fromDate(new Date());
+          } else {
+            // Historical: Cesium JulianDate goes wonky for BC dates and
+            // silently NaN. Clamp to a positive year. Visual diff of
+            // orbital precession over 4000 years is < 1° — nobody notices.
+            const safeYear = Math.max(1900, Math.min(year, window.Clock.MAX_YEAR));
+            try { jd = window.Clock.toJulianDate(safeYear); } catch (_) { return; }
+            if (!jd) return;
+            // Add wall-clock seconds so day/night still rotates over a session
+            const secondsToday = (Date.now() / 1000) % 86400;
+            Cesium.JulianDate.addSeconds(jd, secondsToday, jd);
+          }
           // Sanity: bail if Cesium produced a NaN-laden date
           const iso = Cesium.JulianDate.toIso8601(jd);
           if (iso && !iso.includes('NaN')) {
             viewer.clock.currentTime = jd;
           }
+          // Real-time sun motion at Live — multiplier=1 means the
+          // terminator creeps at actual Earth-rotation speed (~15°/hr).
+          // The previous 600× multiplier was making it visibly race
+          // across continents, which looked broken. shouldAnimate must
+          // stay TRUE so the terminator updates as wall-clock progresses.
           viewer.clock.shouldAnimate = (year === window.Clock.MAX_YEAR);
           if (year === window.Clock.MAX_YEAR) {
-            viewer.clock.multiplier = 600;   // ~1 day per ~2.4 minutes
+            viewer.clock.multiplier = 1;
           }
           // Era-aware base imagery swap (uses real year, not clamped)
           if (window.swapBaseForYear) window.swapBaseForYear(year);
