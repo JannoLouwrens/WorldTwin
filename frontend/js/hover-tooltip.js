@@ -37,10 +37,37 @@
     return t;
   }
 
+  // Mapmode → list of caches that mapmode needs. When a mode is shown for
+  // the first time, kick off background fetches for any missing caches so
+  // the next hover shows real numbers instead of "—".
+  const MODE_NEEDS = {
+    gdp: ['world_bank'], gdp_pc: ['world_bank'], population: ['world_bank'],
+    inflation: ['imf_data'], debt: ['imf_data'],
+    military: ['world_bank'], internet: ['world_bank'], life: ['world_bank'],
+    urban: ['world_bank'], co2: ['world_bank'], renewable: ['world_bank'],
+    water_stress: ['country_deep_dive'], food: ['country_deep_dive'],
+    religion: ['country_culture'], ethnicity: ['country_culture'],
+    political: ['country_relations'],
+    pulse: ['pulse_mode'],
+  };
+  const _kicked = new Set();
+  function ensureNeeded(mode) {
+    const list = MODE_NEEDS[mode] || [];
+    for (const id of list) {
+      if (window._cacheStore?.has(id)) continue;
+      if (_kicked.has(id)) continue;
+      _kicked.add(id);
+      if (window.fetchCache) {
+        window.fetchCache(id).catch(() => {});
+      }
+    }
+  }
+
   // Resolve a mapmode value into a printable string for the active mapmode.
   function formatValue(detail) {
     if (!detail) return '';
     const { iso3, mode, value } = detail;
+    ensureNeeded(mode);
     // Look up the actual numeric value from cache for this mapmode
     const mapmodes = (window.Mapmode?.list?.() || []);
     const mm = mapmodes.find(m => m.id === mode);
@@ -108,8 +135,14 @@
         const v = imf?.countries?.[iso3]?.GGXWDG_NGDP?.value;
         return v == null ? '—' : v.toFixed(1) + ' % GDP';
       },
-      religion:  () => cc?.countries?.[iso3]?.religion?.family || '—',
-      ethnicity: () => cc?.countries?.[iso3]?.ethnicity?.family || '—',
+      religion:  () => {
+        const c = cc?.countries?.[iso3];
+        return c?.religion_primary || c?.religion_family || c?.religion?.family || '—';
+      },
+      ethnicity: () => {
+        const c = cc?.countries?.[iso3];
+        return c?.ethnicity_primary || c?.ethnicity_family || c?.ethnicity?.family || '—';
+      },
       political: () => {
         const r = rel?.by_country?.[iso3];
         return r ? (r.bloc_primary || (r.blocs || []).join(', ') || '—') : '—';

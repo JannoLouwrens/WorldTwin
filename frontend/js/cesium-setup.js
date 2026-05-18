@@ -59,9 +59,11 @@
     // black at zenith" — the look of NASA Earth-from-ISS photos.
     // ============================================================
     scene.skyAtmosphere.show = true;
-    scene.skyAtmosphere.hueShift = -0.05;
-    scene.skyAtmosphere.saturationShift = 0.25;
-    scene.skyAtmosphere.brightnessShift = 0.05;
+    // hueShift was -0.05 (warm); shifted to 0 (neutral) so the dark side
+    // doesn't pick up a red tint from the bloom-stage highlight bleed.
+    scene.skyAtmosphere.hueShift = 0;
+    scene.skyAtmosphere.saturationShift = 0.18;
+    scene.skyAtmosphere.brightnessShift = 0.02;
     if ('atmosphereLightIntensity' in scene.skyAtmosphere) {
       scene.skyAtmosphere.atmosphereLightIntensity = 12;
     }
@@ -105,12 +107,16 @@
 
       const bloom = scene.postProcessStages.bloom;
       if (bloom) {
+        // Dialed-down: contrast 128 + brightness -0.3 was crushing the night
+        // side into red bloom around city-light clusters. These values keep
+        // a subtle highlight glow without bleeding warm hue across the dark
+        // hemisphere.
         bloom.enabled = true;
-        bloom.uniforms.contrast = 128;
-        bloom.uniforms.brightness = -0.3;
+        bloom.uniforms.contrast = 40;
+        bloom.uniforms.brightness = -0.15;
         bloom.uniforms.glowOnly = false;
-        bloom.uniforms.delta = 1.0;
-        bloom.uniforms.sigma = 2.6;
+        bloom.uniforms.delta = 1.2;
+        bloom.uniforms.sigma = 2.0;
         bloom.uniforms.stepSize = 1.0;
       }
 

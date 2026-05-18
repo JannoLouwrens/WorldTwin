@@ -169,6 +169,42 @@
     });
   }
 
+  // Map every mode → list of caches its colorFn / tooltip needs. When a mode
+  // is activated we lazy-fetch any of these that aren't already loaded so
+  // the choropleth paints with real data instead of the grey fallback.
+  const MODE_DATA_NEEDS = {
+    religion: ['country_culture'],
+    ethnicity: ['country_culture'],
+    political: ['country_relations'],
+    democracy: ['vdem_democracy'],
+    gdp: ['world_bank'], gdp_pc: ['world_bank'],
+    population: ['world_bank'],
+    urban: ['world_bank'], internet: ['world_bank'], life: ['world_bank'],
+    co2: ['world_bank'], renewable: ['world_bank'], military: ['world_bank'],
+    inflation: ['imf_data'], debt: ['imf_data'],
+    water_stress: ['country_deep_dive'], food: ['country_deep_dive'],
+    pulse: ['pulse_mode'],
+  };
+
+  async function ensureDataForMode(id) {
+    const needs = MODE_DATA_NEEDS[id] || [];
+    let fetchedAny = false;
+    for (const name of needs) {
+      if (dataCaches[name]) continue;
+      // Try the page-wide cache first
+      const cached = window._cacheStore?.get?.(name);
+      if (cached) { dataCaches[name] = cached; fetchedAny = true; continue; }
+      // Otherwise fetch on demand
+      if (window.fetchCache) {
+        try {
+          const d = await window.fetchCache(name);
+          if (d) { dataCaches[name] = d; fetchedAny = true; }
+        } catch(_) {}
+      }
+    }
+    return fetchedAny;
+  }
+
   async function activate(id) {
     if (!polygonsLoaded) {
       currentId = id;
@@ -184,6 +220,9 @@
       return;
     }
     currentId = id;
+    // Ensure the data this mode needs is loaded BEFORE we run colorFn —
+    // without this, religion/ethnicity/economy choropleths fall back to grey.
+    await ensureDataForMode(id);
     // Compute colour per country
     const colors = {};
     for (const iso3 of Object.keys(polygonsByIso3)) {
@@ -265,19 +304,20 @@
         (r.enemies || []).forEach(e => { highlight[e] = '#ef3b3b' });
       }
     } else if (currentId === 'religion' || currentId === 'ethnicity') {
-      // Highlight all countries with the same religion/ethnicity family
+      // Highlight all countries with the same religion/ethnicity family.
+      // Cache shape is FLAT: { religion_family, ethnicity_family } — not nested.
       const cc = dataCaches.country_culture;
       const target = cc?.countries?.[iso3];
       const myFamily = currentId === 'religion'
-        ? target?.religion?.family
-        : target?.ethnicity?.family;
+        ? (target?.religion_family || target?.religion?.family)
+        : (target?.ethnicity_family || target?.ethnicity?.family);
       if (myFamily && cc?.countries) {
         for (const otherIso of Object.keys(cc.countries)) {
           if (otherIso === iso3) continue;
           const other = cc.countries[otherIso];
           const otherFamily = currentId === 'religion'
-            ? other?.religion?.family
-            : other?.ethnicity?.family;
+            ? (other?.religion_family || other?.religion?.family)
+            : (other?.ethnicity_family || other?.ethnicity?.family);
           if (otherFamily === myFamily) {
             highlight[otherIso] = (window.MAPMODE_COLORS || {})[otherIso] || '#ffffff';
           }
