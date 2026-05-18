@@ -99,8 +99,11 @@ async def fetch(client: httpx.AsyncClient):
                     "fetched": datetime.now(timezone.utc).isoformat(),
                     "total_events": len(events),
                     "events": events_top,
-                    # Full archive for the History Store decomposer
-                    "events_full": events,
+                    # Full archive for the History Store decomposer.
+                    # `_history_only_` prefix tells cache.write_legacy to send
+                    # this to history.snapshot() but STRIP it from the disk
+                    # cache (was 139 MB on disk + ~700 MB peak in Python).
+                    "_history_only_events_full": events,
                     "events_full_count": len(events),
                 }
         except Exception as e:

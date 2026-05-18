@@ -261,7 +261,16 @@
   document.addEventListener('mousemove', e => {
     _mouseX = e.clientX; _mouseY = e.clientY;
     place();
+    // Auto-hide if mouse leaves the globe canvas (over a panel instead).
+    // We don't fire mapmode_hover for non-globe areas, so the tooltip would
+    // otherwise stick at its last position — looks broken.
+    const tgt = e.target;
+    if (tgt && tgt !== document.body && tgt.tagName !== 'CANVAS') {
+      hide();
+    }
   });
+  // Also hide when mouse leaves the window entirely
+  document.addEventListener('mouseleave', () => hide());
   window.addEventListener('mapmode_hover', (e) => {
     const detail = e.detail;
     if (!detail) { hide(); return; }

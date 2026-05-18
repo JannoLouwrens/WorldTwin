@@ -542,11 +542,16 @@
     ensureCache('cow_alliances'),
   ]).then(() => {
     console.log('[mapmodes-data] all data sources cached');
-    // Auto-activate political mode after boot
-    setTimeout(() => {
-      if (window.Mapmode && !window.Mapmode.current()) {
-        window.Mapmode.activate('political');
+    // Mount country polygons (needed for hover/click) but with NO tint.
+    // The polygons stay invisible-by-default; user picks a mapmode to paint them.
+    setTimeout(async () => {
+      if (window.Mapmode && !window.Mapmode.current() && window.Mapmode.loadPolygons) {
+        await window.Mapmode.loadPolygons();
+        // Force a reset of any color state in case polygons came up tinted
+        window.MAPMODE_COLORS = {};
+        window.MAPMODE_HIGHLIGHT = {};
+        if (window.Mapmode.repaint) window.Mapmode.repaint();
       }
-    }, 3500);
+    }, 1500);
   });
 })();

@@ -813,11 +813,12 @@
       addEntity('temperature_field', {
         position: Cesium.Cartesian3.fromDegrees(pt.lon, pt.lat),
         point: {
-          pixelSize: 18,
+          pixelSize: 12,
           color: Cesium.Color.fromCssColorString(tempColor(t)).withAlpha(0.7),
           outlineColor: Cesium.Color.WHITE.withAlpha(0.3),
           outlineWidth: 1,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 8000000),
         },
         label: {
           text: t != null ? t.toFixed(0) + '°' : '—',
@@ -973,11 +974,12 @@
       addEntity('pressure_field', {
         position: Cesium.Cartesian3.fromDegrees(pt.lon, pt.lat),
         point: {
-          pixelSize: 14,
+          pixelSize: 10,
           color: Cesium.Color.fromCssColorString(pressColor(p)).withAlpha(0.6),
           outlineColor: Cesium.Color.WHITE.withAlpha(0.3),
           outlineWidth: 1,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 8000000),
         },
         label: {
           text: p != null ? p.toFixed(0) : '—',
@@ -1032,11 +1034,12 @@
       addEntity('noaa_sst', {
         position: Cesium.Cartesian3.fromDegrees(pt.lon, pt.lat),
         point: {
-          pixelSize: 16,
+          pixelSize: 11,
           color: Cesium.Color.fromCssColorString(sstColor(t)).withAlpha(0.7),
           outlineColor: Cesium.Color.fromCssColorString('#0077be').withAlpha(0.4),
           outlineWidth: 2,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 8000000),
         },
         label: {
           text: t != null ? t.toFixed(0) + '°' : '—',
@@ -1087,11 +1090,12 @@
       addEntity('humidity_field', {
         position: Cesium.Cartesian3.fromDegrees(pt.lon, pt.lat),
         point: {
-          pixelSize: 14,
+          pixelSize: 10,
           color: Cesium.Color.fromCssColorString(humColor(h)).withAlpha(0.6),
           outlineColor: Cesium.Color.WHITE.withAlpha(0.3),
           outlineWidth: 1,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 8000000),
         },
         label: {
           text: h != null ? h + '%' : '',

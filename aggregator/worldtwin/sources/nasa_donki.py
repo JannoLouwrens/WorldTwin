@@ -1,15 +1,25 @@
-"""NASA DONKI — Space Weather Events (90-day lookback).
-Previous version used 30 days which often produced 0 events during quiet sun.
-Widened to 90 days so the cache always has recent-ish events.
+"""NASA DONKI — Space Weather Events (full 2010→present archive on first run).
+
+On first run (no marker file) we pull the full DONKI archive back to 2010
+in 6-month chunks — 7 event types × ~30 chunks = ~210 requests, takes
+~30 minutes. The events land in the History Store via decompose; the
+marker file `/cache/.donki_backfill_done` records that we did it.
+
+Subsequent fetches (every 24h) only pull the last ~30 days so we hit ~7
+API calls instead of ~210 per refresh — way under the 1000/hr NASA quota
+and easy on the network. The History Store keeps the deep history because
+INSERT OR IGNORE on (source_id, observed_at, fetched_at) is idempotent.
 """
 import asyncio
 import os
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 import httpx
 from ..models import LayerMeta
 from ..registry import register
 
 NASA_API_KEY = os.environ.get("NASA_API_KEY", "")
+MARKER = Path(os.environ.get("CACHE_DIR", "/cache")) / ".donki_backfill_done"
 
 LAYER = LayerMeta(
     id="nasa_donki",
@@ -42,10 +52,14 @@ async def fetch(client: httpx.AsyncClient):
     if not NASA_API_KEY:
         return None
     end = datetime.now(timezone.utc)
-    # Pull the FULL DONKI archive back to 2010 in 6-month chunks. Each chunk
-    # is a separate API call; sem limits concurrency. The 7 event types ×
-    # ~30 chunks = ~210 requests per fetch, well within the 1000/hr limit.
-    DEEP_BACKFILL_START = datetime(2010, 1, 1, tzinfo=timezone.utc)
+    # First run: deep backfill 2010 → present. Subsequent runs: last 30 days.
+    if MARKER.exists():
+        start_dt = end - timedelta(days=30)
+        mode = "incremental"
+    else:
+        start_dt = datetime(2010, 1, 1, tzinfo=timezone.utc)
+        mode = "deep_backfill"
+    print(f"[nasa_donki] {mode}: {start_dt.date()} → {end.date()}")
 
     def _chunks(start_dt, end_dt, days=180):
         c = start_dt
@@ -114,7 +128,7 @@ async def fetch(client: httpx.AsyncClient):
 
     tasks = []
     for code, endpoint in EVENT_TYPES:
-        for s, e in _chunks(DEEP_BACKFILL_START, end):
+        for s, e in _chunks(start_dt, end):
             tasks.append(_fetch_chunk(code, endpoint, s, e))
     await asyncio.gather(*tasks)
     all_events.sort(key=lambda x: x.get("start", ""), reverse=True)
@@ -123,11 +137,22 @@ async def fetch(client: httpx.AsyncClient):
     for ev in all_events:
         by_type.setdefault(ev["type"], []).append(ev)
 
+    # Mark deep backfill done so future runs only do incremental.
+    if mode == "deep_backfill":
+        try:
+            MARKER.parent.mkdir(parents=True, exist_ok=True)
+            MARKER.write_text(datetime.now(timezone.utc).isoformat())
+            print(f"[nasa_donki] backfill complete; {MARKER} written")
+        except Exception as e:
+            print(f"[nasa_donki] failed to write marker: {e}")
+
     return {
         "source": "NASA DONKI",
         "fetched": datetime.now(timezone.utc).isoformat(),
         "count": len(all_events),
-        "lookback_days": 90,
+        "mode": mode,
+        "window_start": start_dt.date().isoformat(),
+        "window_end": end.date().isoformat(),
         "by_type": {k: len(v) for k, v in by_type.items()},
         "events": all_events[:200],
     }

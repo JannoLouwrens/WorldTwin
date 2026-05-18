@@ -36,7 +36,8 @@
       if (highlight) return hexToCesiumColor(highlight, 0.88);
       const c = window.MAPMODE_COLORS[iso3];
       if (c) return hexToCesiumColor(c, 0.72);
-      return hexToCesiumColor(NO_DATA, NO_DATA_ALPHA);
+      // No mapmode + no highlight → fully transparent (clean Earth visible)
+      return Cesium.Color.TRANSPARENT;
     }, false));
   }
 
@@ -52,7 +53,9 @@
       if ((window.MAPMODE_HIGHLIGHT || {})[iso3]) {
         return Cesium.Color.WHITE.withAlpha(0.9);
       }
-      return Cesium.Color.WHITE.withAlpha(0.15);
+      // Default outline: very faint hairline. Brightens only when a mapmode is active.
+      const hasMode = Object.keys(window.MAPMODE_COLORS || {}).length > 0;
+      return Cesium.Color.WHITE.withAlpha(hasMode ? 0.18 : 0.06);
     }, false);
   }
 

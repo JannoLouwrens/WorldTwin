@@ -137,6 +137,13 @@
       mountStrata();
       if (++n > 8) clearInterval(t);
     }, 700);
+
+    // Belt-and-braces: watch for late-mounted .tw-scrubber and inject strata
+    const mo = new MutationObserver(() => {
+      const sc = document.querySelector('.tw-scrubber');
+      if (sc && !sc.querySelector('.tw-strat-eras')) mountStrata();
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') {

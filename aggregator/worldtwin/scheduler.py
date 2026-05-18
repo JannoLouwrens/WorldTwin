@@ -35,9 +35,12 @@ async def _run_one(reg: registry.RegisteredLayer, client: httpx.AsyncClient) -> 
         expires_at = (now + timedelta(seconds=meta.refresh_s)).isoformat()
         env = Envelope.build(meta, v1_data, fetched_at, expires_at)
         env_dict = env.to_dict()
-        cache.write_envelope(meta.id, env_dict)
-        # Always write legacy file (same path the current frontend reads)
-        cache.write_legacy(meta.id, legacy_data)
+        # Run cache + history writes off the event loop. history.snapshot()
+        # holds the SQLite GIL for tens of milliseconds per call; with 90
+        # workers that is enough to starve uvicorn's accept loop and make
+        # every API request time out under Caddy's 30s reverse-proxy budget.
+        await asyncio.to_thread(cache.write_envelope, meta.id, env_dict)
+        await asyncio.to_thread(cache.write_legacy, meta.id, legacy_data)
         elapsed = time.time() - t0
         cache.mark_ok(meta.id, env.count, elapsed)
     except Exception as e:

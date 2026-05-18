@@ -103,8 +103,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - BRAVE_API_KEY=REDACTED_BRAVE_KEY
-      - GEMINI_API_KEY=REDACTED_GEMINI_KEY
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     networks:
       - frontend
       - backend

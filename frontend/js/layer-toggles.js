@@ -7,38 +7,9 @@
 // Uses config.json categories for grouping and coloring.
 (function(){
 
-  // Layer icon mapping — short emoji-style labels for the toggle buttons
-  const LAYER_ICONS = {
-    // Nature
-    quakes: '⚡', fires: '🔥', volcanoes: '🌋', usgs_volcano_hans: '⛰️',
-    nhc_cyclones: '🌀', disasters: '☣️', gdacs_events: '⚠️', dartmouth_floods: '💧',
-    // Weather
-    temperature_field: '🌡️', pressure_field: '📊', humidity_field: '💧', noaa_sst: '🌊', rainviewer: '🌧️',
-    air_quality: '💨', wind_sample: '🌬️', noaa_co2: '🌫️',
-    historical_borders: '🏛️', historical_disasters: '🌍', paleo_temperature: '🌡️',
-    // Transit
-    flights: '✈️', ships: '🚢',
-    // Space
-    iss: '🛸', satellites: '📡', spacetrack_gp: '🛰️', swpc_aurora: '🌌',
-    nasa_donki: '☀️', nasa_neows: '☄️',
-    // War
-    ucdp_ged: '⚔️', ucdp: '🎓', conflict_events: '💥', wikidata_battles: '🗡️',
-    conflicts: '📰', crises: '🆘', reliefweb: '🏥',
-    // Economy
-    trade_annual: '📦', portwatch_chokepoints: '⚓', portwatch_ports: '🏗️',
-    // Resources
-    climatetrace_assets: '🏭', wri_power_plants: '⚡', eia_930_grid: '🔌', entsoe_grid: '⚡', energy_viz: '🔋',
-    // Social
-    gdelt_gkg_themes: '📢', news: '📰', youtube: '▶️', radio: '📻', webcams: '📷',
-    // Health
-    who_don: '🦠', openaq_stations: '🫁',
-    // Infra
-    cables: '🔗', cloudflare_radar: '🌐',
-    // Sports/Gaming
-    sports: '⚽', gaming: '🎮',
-    // Meta
-    pulse_mode: '💓',
-  };
+  // No more emojis. Each layer button shows just a 6px category dot
+  // (styled in CSS via [data-cat]) plus the clean text label.
+  const LAYER_ICONS = {};
 
   // Short human-readable names
   const LAYER_NAMES = {
@@ -136,7 +107,7 @@
         btn.dataset.layer = id;
         btn.dataset.cat = cat;
         btn.title = LAYER_NAMES[id] || id;
-        btn.innerHTML = `<span class="lt-ico">${LAYER_ICONS[id] || '●'}</span><span class="lt-name">${LAYER_NAMES[id] || id}</span>`;
+        btn.innerHTML = `<span class="lt-ico"></span><span class="lt-name">${LAYER_NAMES[id] || id}</span>`;
         btn.addEventListener('click', () => toggleLayer(id, btn));
         group.appendChild(btn);
       }
@@ -144,18 +115,48 @@
     }
   }
 
+  function _countAll() {
+    const v = window.viewer; if (!v) return { ent: 0, img: 0 };
+    let n = v.entities.values.length;
+    for (let i = 0; i < v.dataSources.length; i++) n += v.dataSources.get(i).entities.values.length;
+    return { ent: n, img: v.imageryLayers.length };
+  }
+
+  function _toast(msg) {
+    let t = document.getElementById('lt-toast');
+    if (!t) {
+      t = document.createElement('div'); t.id = 'lt-toast';
+      t.style.cssText = 'position:fixed;left:50%;bottom:200px;transform:translateX(-50%);background:rgba(15,17,21,0.92);color:#e6edf6;border:1px solid rgba(255,255,255,0.12);backdrop-filter:blur(12px) saturate(140%);padding:10px 16px;border-radius:8px;font:500 12px/1.4 Satoshi,system-ui;letter-spacing:0.02em;z-index:9999;opacity:0;transition:opacity 200ms ease;pointer-events:none;max-width:420px;text-align:center';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = '1';
+    clearTimeout(_toast._tm);
+    _toast._tm = setTimeout(() => { t.style.opacity = '0'; }, 2400);
+  }
+
   async function toggleLayer(id, btn) {
     if (!window.LAYERS[id]) return;
     if (activeToggles.has(id)) {
-      // Turn off
       activeToggles.delete(id);
       window.LAYERS[id].clear();
       btn.classList.remove('lt-active');
+      btn.classList.remove('lt-empty');
     } else {
-      // Turn on
       activeToggles.add(id);
       btn.classList.add('lt-active');
+      btn.classList.remove('lt-empty');
+      const before = _countAll();
       try { await window.LAYERS[id].render(); } catch (e) { console.warn(id, 'toggle render failed', e); }
+      // Tiny grace period — some renderers add entities post-await
+      await new Promise(r => setTimeout(r, 600));
+      const after = _countAll();
+      const added = (after.ent - before.ent) + (after.img - before.img);
+      if (added <= 0) {
+        btn.classList.add('lt-empty');
+        const label = LAYER_NAMES[id] || id;
+        _toast(`${label}: no data right now (source quiet or quota hit)`);
+      }
     }
   }
 

@@ -33,10 +33,10 @@ from fastapi.responses import JSONResponse, FileResponse, Response
 CACHE_DIR = Path(os.environ.get("CACHE_DIR", "/cache"))
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-WINDY_KEY = os.environ.get("WINDY_KEY", "REDACTED_WINDY_KEY")
-FIRMS_KEY = os.environ.get("FIRMS_KEY", "REDACTED_FIRMS_KEY")
-WEATHER_KEY = os.environ.get("WEATHER_KEY", "REDACTED_WEATHERAPI_KEY")
-OWM_KEY = os.environ.get("OWM_KEY", "REDACTED_OWM_KEY")
+WINDY_KEY = os.environ.get("WINDY_KEY", "")
+FIRMS_KEY = os.environ.get("FIRMS_KEY", "")
+WEATHER_KEY = os.environ.get("WEATHER_KEY", "")
+OWM_KEY = os.environ.get("OWM_KEY", "")
 
 # Global stats
 stats: dict[str, dict[str, Any]] = {}

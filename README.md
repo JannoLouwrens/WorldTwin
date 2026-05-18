@@ -1,5 +1,9 @@
 # WorldTwin
 
+🌍 **Live demo:** **http://129.151.191.74/worldtwin/**
+
+> ⚠️ **Active development.** Things break. Some data sources rate-limit on the free tier (you'll see "no data right now" toasts when that happens). The deployment runs on a single Oracle Cloud ARM free-tier box — expect occasional restarts and slow cold boots. Bugs and rough edges are expected. The full timeline (800,000 BC → 2026), 15 mapmodes, and 65 layer toggles all work; the polish is ongoing.
+
 **Real-time 3D global intelligence platform.**
 
 75 data sources. 261 country profiles. 15 analytical mapmodes. Cross-source risk analysis. Live on a CesiumJS globe.

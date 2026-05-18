@@ -389,12 +389,19 @@
           <div style="background:rgba(0,0,0,0.25);padding:6px;border-radius:6px">${sparkline(d.historicalGdpPc, 340, 60)}</div>
         </div>` : ''}
 
+        <div id="twDossierDeepHistory" data-iso3="${d.iso3}" style="margin-bottom:10px">
+          <!-- Deep history sparklines (Maddison + V-Dem) — fetched from /api/history when this panel renders. -->
+        </div>
+
         ${d.coverage?.length ? renderCoverage(d.coverage) : ''}
 
       </div>
     `;
     el.style.display = 'block';
     document.getElementById('twDossierClose').onclick = hide;
+    // Async fetch deep historical series from the History Store and render
+    // them inline. Decouples the panel render from the slow read.
+    loadDeepHistory(d.iso3);
     // Wire each Coverage row to open the Data Inspector for its cache
     el.querySelectorAll('.tw-cov-row').forEach(row => {
       row.addEventListener('click', () => {
@@ -403,6 +410,79 @@
         }
       });
     });
+  }
+
+  // ============================================================
+  // Deep history — pull richer time series from the History Store
+  // (5M+ obs going back to 50 BC for some series). Renders Maddison
+  // GDPpc + V-Dem democracy + Clio life expectancy as sparklines.
+  // ============================================================
+  async function loadDeepHistory(iso3) {
+    const slot = document.getElementById('twDossierDeepHistory');
+    if (!slot || slot.dataset.iso3 !== iso3) return; // stale call after panel changed
+    slot.innerHTML = `<div style="font-size:9.5px;color:#6b7790;font-style:italic;padding:4px 0">Loading deep history…</div>`;
+    const probes = [
+      { id: 'maddison_history',  source: `maddison_history.${iso3}`,  label: 'GDP per capita',          unit: '$',     fmt: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(0) },
+      { id: 'vdem_democracy',    source: `vdem_democracy.${iso3}`,    label: 'V-Dem electoral democracy', unit: '0–1',   fmt: v => v.toFixed(2) },
+      { id: 'clio_life_expectancy', source: `clio_life_expectancy.${iso3}`, label: 'Life expectancy at birth', unit: 'yrs', fmt: v => v.toFixed(1) },
+    ];
+    const results = await Promise.all(probes.map(async p => {
+      try {
+        const r = await fetch(`/api/history/series/${encodeURIComponent(p.source)}?limit=400`);
+        if (!r.ok) return { p, rows: [], err: `HTTP ${r.status}` };
+        const j = await r.json();
+        const rows = (j.rows || []).filter(x => typeof x.value_num === 'number')
+                                    .sort((a,b) => (a.observed_at < b.observed_at ? -1 : 1));
+        return { p, rows };
+      } catch (e) {
+        return { p, rows: [], err: String(e) };
+      }
+    }));
+    if (slot.dataset.iso3 !== iso3) return;  // user moved on while we were fetching
+    const html = results.map(({ p, rows, err }) => {
+      if (!rows.length) return '';  // skip silently — country might just not be in this dataset
+      const ys = rows.map(r => r.value_num);
+      const last = ys[ys.length - 1];
+      const first = ys[0];
+      const yMin = Math.min(...ys), yMax = Math.max(...ys);
+      const firstYr = String(rows[0].observed_at).slice(0,4);
+      const lastYr  = String(rows[rows.length-1].observed_at).slice(0,4);
+      const delta = last - first;
+      const pctChange = first !== 0 ? (delta / Math.abs(first)) * 100 : null;
+      // Build SVG path
+      const W = 340, H = 60, PAD = 4;
+      const yRange = yMax - yMin || 1;
+      const path = rows.map((r, i) => {
+        const x = PAD + (W - 2*PAD) * (i / (rows.length - 1 || 1));
+        const y = H - PAD - (H - 2*PAD) * ((r.value_num - yMin) / yRange);
+        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ');
+      const sign = delta >= 0 ? '▲' : '▼';
+      const color = delta >= 0 ? '#22c55e' : '#ef4444';
+      return `
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+            <span style="font-size:10px;color:#8c95aa;letter-spacing:0.14em;text-transform:uppercase">${p.label} · ${firstYr}→${lastYr}</span>
+            <span style="font-size:10px;color:#b8c1d1;font-feature-settings:'tnum' 1">
+              ${p.fmt(last)}${p.unit === '$' ? '' : ' '+p.unit}
+              ${pctChange !== null ? `<span style="color:${color};margin-left:6px">${sign} ${Math.abs(pctChange).toFixed(0)}%</span>` : ''}
+            </span>
+          </div>
+          <div style="background:rgba(0,0,0,0.25);padding:6px;border-radius:6px">
+            <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:60px;display:block">
+              <path d="${path}" fill="none" stroke="rgba(110,231,255,0.95)" stroke-width="1.4" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div style="font-size:9px;color:#6b7790;text-align:right;margin-top:2px">
+            <a href="/api/history/series/${encodeURIComponent(p.source)}?limit=2000" target="_blank" style="color:#6b7790;text-decoration:none">${rows.length} obs · raw JSON ↗</a>
+          </div>
+        </div>`;
+    }).join('');
+    if (html) {
+      slot.innerHTML = `<div style="font-size:10px;color:#8c95aa;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px">Deep history · /api/history</div>${html}`;
+    } else {
+      slot.innerHTML = `<div style="font-size:9.5px;color:#6b7790;font-style:italic;padding:4px 0">No deep history found in History Store for ${iso3}</div>`;
+    }
   }
 
   // Track currently shown country for compare-mode shift-click
@@ -479,6 +559,10 @@
           <div>${a.exports.slice(0, 5).map(e => `<div style="color:#b8c1d1;padding:2px 0">${e.commodity_name || e.name || e}</div>`).join('') || '<div style="color:#6b7790">—</div>'}</div>
           <div>${b.exports.slice(0, 5).map(e => `<div style="color:#b8c1d1;padding:2px 0">${e.commodity_name || e.name || e}</div>`).join('') || '<div style="color:#6b7790">—</div>'}</div>
         </div>
+
+        <div id="twDossierCompareDeep" data-iso-a="${a.iso3}" data-iso-b="${b.iso3}" style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">
+          <!-- Overlaid deep-history sparklines for both countries — fetched async. -->
+        </div>
       </div>
     `;
     el.style.display = 'block';
@@ -486,6 +570,96 @@
       hide();
       el.style.width = '380px';   // restore single-country width
     };
+    loadCompareDeepHistory(a.iso3, b.iso3, a.name, b.name);
+  }
+
+  // Overlaid deep-history sparklines for two countries.
+  // Vision: see divergence directly. Britain pulled away from China in
+  // 1700; the US pulled away from Britain in 1900; etc. Pictures > tables.
+  async function loadCompareDeepHistory(isoA, isoB, nameA, nameB) {
+    const slot = document.getElementById('twDossierCompareDeep');
+    if (!slot || slot.dataset.isoA !== isoA || slot.dataset.isoB !== isoB) return;
+    slot.innerHTML = `<div style="font-size:9.5px;color:#6b7790;font-style:italic;padding:4px 0">Loading deep history for both…</div>`;
+
+    const probes = [
+      { source_prefix: 'maddison_history',     label: 'GDP per capita (Maddison)',  unit: '$',     fmt: v => v >= 1000 ? '$' + (v/1000).toFixed(1)+'k' : '$' + v.toFixed(0) },
+      { source_prefix: 'vdem_democracy',       label: 'V-Dem electoral democracy',  unit: '0–1',   fmt: v => v.toFixed(2) },
+      { source_prefix: 'clio_life_expectancy', label: 'Life expectancy at birth',   unit: 'yrs',   fmt: v => v.toFixed(1) + ' yr' },
+    ];
+
+    async function fetchSeries(sid) {
+      try {
+        const r = await fetch(`/api/history/series/${encodeURIComponent(sid)}?limit=400`);
+        if (!r.ok) return [];
+        const j = await r.json();
+        return (j.rows || []).filter(x => typeof x.value_num === 'number')
+                              .sort((a,b) => (a.observed_at < b.observed_at ? -1 : 1))
+                              .map(x => ({ year: parseInt(String(x.observed_at).slice(0,4)), v: x.value_num }))
+                              .filter(x => Number.isFinite(x.year));
+      } catch { return []; }
+    }
+
+    const results = await Promise.all(probes.map(async p => {
+      const [seriesA, seriesB] = await Promise.all([
+        fetchSeries(`${p.source_prefix}.${isoA}`),
+        fetchSeries(`${p.source_prefix}.${isoB}`),
+      ]);
+      return { p, seriesA, seriesB };
+    }));
+
+    if (slot.dataset.isoA !== isoA || slot.dataset.isoB !== isoB) return;
+
+    const html = results.map(({ p, seriesA, seriesB }) => {
+      if (!seriesA.length && !seriesB.length) return '';
+      // Common time/value range
+      const all = [...seriesA, ...seriesB];
+      const yMin = Math.min(...all.map(d => d.v));
+      const yMax = Math.max(...all.map(d => d.v));
+      const xMin = Math.min(...all.map(d => d.year));
+      const xMax = Math.max(...all.map(d => d.year));
+      const W = 660, H = 90, PAD_L = 30, PAD_R = 8, PAD_T = 8, PAD_B = 14;
+      const xRange = (xMax - xMin) || 1;
+      const yRange = (yMax - yMin) || 1;
+      const proj = pts => pts.map((d, i) => {
+        const x = PAD_L + (W - PAD_L - PAD_R) * ((d.year - xMin) / xRange);
+        const y = H - PAD_B - (H - PAD_T - PAD_B) * ((d.v - yMin) / yRange);
+        return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ');
+
+      const lastA = seriesA.length ? seriesA[seriesA.length - 1].v : null;
+      const lastB = seriesB.length ? seriesB[seriesB.length - 1].v : null;
+      const ratio = (typeof lastA === 'number' && typeof lastB === 'number' && lastB !== 0)
+        ? (lastA / lastB) : null;
+
+      return `
+        <div style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+            <span style="font-size:10px;color:#8c95aa;letter-spacing:0.14em;text-transform:uppercase">${p.label}</span>
+            <span style="font-size:10px;color:#b8c1d1">
+              <span style="color:#cfe6ff">${nameA}: ${lastA != null ? p.fmt(lastA) : '—'}</span>
+              <span style="color:#6b7790;margin:0 6px">·</span>
+              <span style="color:#ffb86b">${nameB}: ${lastB != null ? p.fmt(lastB) : '—'}</span>
+              ${ratio != null ? `<span style="color:#6b7790;margin-left:6px">ratio ${ratio.toFixed(2)}×</span>` : ''}
+            </span>
+          </div>
+          <div style="background:rgba(0,0,0,0.3);padding:4px;border-radius:6px">
+            <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:90px;display:block">
+              <text x="2" y="${PAD_T + 8}" fill="#6b7790" font-size="9" font-family="monospace">${p.fmt(yMax)}</text>
+              <text x="2" y="${H - PAD_B + 4}" fill="#6b7790" font-size="9" font-family="monospace">${p.fmt(yMin)}</text>
+              <text x="${PAD_L}" y="${H - 2}" fill="#6b7790" font-size="9" font-family="monospace">${xMin}</text>
+              <text x="${W - 32}" y="${H - 2}" fill="#6b7790" font-size="9" font-family="monospace">${xMax}</text>
+              ${seriesA.length >= 2 ? `<path d="${proj(seriesA)}" fill="none" stroke="rgba(110,231,255,0.95)" stroke-width="1.5" stroke-linejoin="round"/>` : ''}
+              ${seriesB.length >= 2 ? `<path d="${proj(seriesB)}" fill="none" stroke="rgba(255,184,107,0.95)" stroke-width="1.5" stroke-linejoin="round"/>` : ''}
+            </svg>
+          </div>
+        </div>`;
+    }).join('');
+
+    if (html) {
+      slot.innerHTML = `<div style="font-size:10px;color:#8c95aa;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px">Deep history overlay · /api/history</div>${html}`;
+    } else {
+      slot.innerHTML = `<div style="font-size:9.5px;color:#6b7790;font-style:italic;padding:4px 0">Neither country has deep history series in store</div>`;
+    }
   }
 
   document.addEventListener('keydown', e => {

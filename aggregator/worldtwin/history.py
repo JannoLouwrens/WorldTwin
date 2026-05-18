@@ -41,6 +41,13 @@ _local = threading.local()
 _init_lock = threading.Lock()
 _init_done = False
 
+# Snapshot counter — every Nth snapshot we run a TRUNCATE checkpoint
+# to prevent the WAL from growing unbounded (it once reached 10.9 GB
+# because long-lived reader connections kept pinning the log).
+_snapshot_count = 0
+_snapshot_count_lock = threading.Lock()
+_CHECKPOINT_EVERY = 50
+
 
 # ============================================================
 # Connection + schema
@@ -74,7 +81,13 @@ CREATE INDEX IF NOT EXISTS idx_snap_layer_time ON snapshots(layer_id, fetched_at
 
 
 def _conn() -> sqlite3.Connection:
-    """Per-thread connection. Creates the db on first use."""
+    """Per-thread WRITER connection. Creates the db on first use.
+
+    Use this only for writers (snapshot/decompose). Readers should call
+    `_read_conn()` and close the connection when done — long-lived reader
+    connections hold a WAL snapshot that prevents auto-checkpoint from
+    reclaiming the log, so the WAL grows unbounded under sustained writes.
+    """
     global _init_done
     c = getattr(_local, "conn", None)
     if c is not None:
@@ -85,7 +98,16 @@ def _conn() -> sqlite3.Connection:
     c.execute("PRAGMA journal_mode=WAL")
     c.execute("PRAGMA synchronous=NORMAL")
     c.execute("PRAGMA temp_store=MEMORY")
-    c.execute("PRAGMA mmap_size=268435456")     # 256 MB
+    c.execute("PRAGMA mmap_size=268435456")    # 256 MB — was 1 GB but pushed container over the 2G limit
+    # Re-enable autocheckpoint at 5000 pages (~20 MB). The previous attempt
+    # to disable autocheckpoint and let a background coroutine handle it
+    # didn't work: a wal_checkpoint(PASSIVE) call from within a busy
+    # asyncio process blocks indefinitely because of in-process write-lock
+    # contention with the 90 plugin workers. Standalone subprocess works
+    # but is overkill. 5000 pages is large enough that not every plugin
+    # crosses it on every fetch, but small enough to keep the WAL bounded.
+    c.execute("PRAGMA wal_autocheckpoint=5000")
+    c.execute("PRAGMA busy_timeout=60000")
     with _init_lock:
         if not _init_done:
             for stmt in SCHEMA.strip().split(";"):
@@ -94,6 +116,26 @@ def _conn() -> sqlite3.Connection:
                     c.execute(s)
             _init_done = True
     _local.conn = c
+    return c
+
+
+def _read_conn() -> sqlite3.Connection:
+    """Fresh STRICTLY READ-ONLY connection, intended to be closed after use.
+
+    Opens via URI `?mode=ro` so the connection cannot acquire any write or
+    reserved lock. In WAL mode, multiple read-only connections can run
+    concurrently with one writer without blocking. Without `mode=ro`,
+    SQLite opens read-write and readers race for shared locks against the
+    90 plugin writers, getting `database is locked` errors.
+    """
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    uri = f"file:{HISTORY_DB}?mode=ro"
+    c = sqlite3.connect(uri, isolation_level=None, timeout=30.0, uri=True)
+    c.row_factory = sqlite3.Row
+    c.execute("PRAGMA busy_timeout=60000")
+    c.execute("PRAGMA temp_store=MEMORY")
+    c.execute("PRAGMA mmap_size=1073741824")
+    # No journal_mode here — that's set globally by the writer connection.
     return c
 
 
@@ -954,7 +996,8 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
     # Plugins can append "_full" suffix to a list to mark it as the
     # full-archive version that the History Store should ingest in full
     # (without the UI's render budget). e.g. events_full, asteroids_full.
-    EVENT_KEYS = ("events", "events_full", "outbreaks", "outbreaks_full",
+    EVENT_KEYS = ("events", "events_full", "_history_only_events_full",
+                  "outbreaks", "outbreaks_full",
                   "battles", "battles_full", "disasters", "disasters_full",
                   "storms", "alerts", "asteroids", "asteroids_full",
                   "catalogue",
@@ -1038,12 +1081,23 @@ def snapshot(layer_id: str, payload: Any) -> dict:
     Always saves the raw snapshot. Tries to decompose into observation rows.
     Returns a dict {snapshot_added, observation_rows, errors}. Never raises;
     a failed history write must not block the live cache write.
+
+    Opens a fresh connection and closes it at the end of the call. The
+    previous per-thread cached connection design pinned a WAL snapshot
+    indefinitely under the asyncio thread pool, defeating auto-checkpoint.
     """
     result = {"snapshot_added": False, "observation_rows": 0, "errors": []}
+    c = None
     try:
         fetched_at = (payload.get("fetched") if isinstance(payload, dict) else None) \
                      or datetime.now(timezone.utc).isoformat()
-        c = _conn()
+        # Use the cached writer conn just to ensure schema exists, then drop
+        # to a fresh ephemeral connection for the actual writes.
+        _conn()
+        c = sqlite3.connect(str(HISTORY_DB), isolation_level=None, timeout=60.0)
+        c.execute("PRAGMA busy_timeout=60000")
+        c.execute("PRAGMA synchronous=NORMAL")
+        c.execute("PRAGMA wal_autocheckpoint=5000")  # autocheckpoint inside writer
 
         # 1. Decompose to observation rows
         rows = _decompose(layer_id, payload, fetched_at)
@@ -1076,94 +1130,152 @@ def snapshot(layer_id: str, payload: Any) -> dict:
 
     except Exception as e:
         result["errors"].append(f"top-level: {e}")
+    finally:
+        if c is not None:
+            try: c.close()
+            except Exception: pass
+
+    # Checkpointing is now the sole responsibility of the background
+    # _wal_checkpoint_loop in server.py. Per-snapshot checkpoint attempts
+    # were racing against it and generating spurious busy=1 returns.
     return result
 
 
 def query_series(source_id: str, since: str | None = None,
-                 until: str | None = None, limit: int = 5000) -> list[dict]:
+                 until: str | None = None, limit: int = 5000,
+                 dedupe: bool = True) -> list[dict]:
     """Return time-series rows for one source_id, ordered by observed_at desc.
 
     Each row: {observed_at, value_num, value_text, fetched_at, meta}.
+    Uses an ephemeral read connection so it doesn't pin the WAL.
+
+    `dedupe=True` (default) returns at most ONE row per observed_at — the
+    one with the most recent fetched_at. Without dedupe, sources that
+    re-fetch the same historical row (Maddison, V-Dem, FRED) return many
+    duplicate (observed_at, value) pairs and sparkline rendering breaks.
+
+    Implementation note: dedupe is done in Python after the index-walked
+    SELECT, not via GROUP BY. The straight ORDER BY uses idx_obs_source_observed
+    in 0.05s; GROUP BY observed_at adds a 50× slowdown because MAX(fetched_at)
+    forces a full per-group scan even when the index is sorted right.
     """
-    c = _conn()
-    sql = "SELECT observed_at, fetched_at, value_num, value_text, meta_json " \
-          "FROM observations WHERE source_id = ?"
-    args: list[Any] = [source_id]
-    if since:
-        sql += " AND observed_at >= ?"; args.append(since)
-    if until:
-        sql += " AND observed_at <= ?"; args.append(until)
-    sql += " ORDER BY observed_at DESC, fetched_at DESC LIMIT ?"
-    args.append(limit)
-    out = []
-    for r in c.execute(sql, args):
-        out.append({
-            "observed_at": r["observed_at"],
-            "fetched_at": r["fetched_at"],
-            "value_num": r["value_num"],
-            "value_text": r["value_text"],
-            "meta": json.loads(r["meta_json"]) if r["meta_json"] else None,
-        })
-    return out
+    c = _read_conn()
+    try:
+        sql = ("SELECT observed_at, fetched_at, value_num, value_text, meta_json "
+               "FROM observations WHERE source_id = ?")
+        args: list[Any] = [source_id]
+        if since:
+            sql += " AND observed_at >= ?"; args.append(since)
+        if until:
+            sql += " AND observed_at <= ?"; args.append(until)
+        sql += " ORDER BY observed_at DESC, fetched_at DESC"
+        if not dedupe:
+            sql += " LIMIT ?"
+            args.append(limit)
+        out = []
+        seen = set()
+        for r in c.execute(sql, args):
+            obs = r["observed_at"]
+            if dedupe:
+                if obs in seen:
+                    continue
+                seen.add(obs)
+            out.append({
+                "observed_at": obs,
+                "fetched_at": r["fetched_at"],
+                "value_num": r["value_num"],
+                "value_text": r["value_text"],
+                "meta": json.loads(r["meta_json"]) if r["meta_json"] else None,
+            })
+            if dedupe and len(out) >= limit:
+                break
+        return out
+    finally:
+        c.close()
 
 
 def read_snapshot(layer_id: str, at: str | None = None) -> dict | None:
-    """Return the closest snapshot at-or-before `at` (default: latest)."""
-    c = _conn()
-    if at:
-        row = c.execute(
-            "SELECT fetched_at, payload, payload_kb, rows_added FROM snapshots "
-            "WHERE layer_id = ? AND fetched_at <= ? ORDER BY fetched_at DESC LIMIT 1",
-            (layer_id, at),
-        ).fetchone()
-    else:
-        row = c.execute(
-            "SELECT fetched_at, payload, payload_kb, rows_added FROM snapshots "
-            "WHERE layer_id = ? ORDER BY fetched_at DESC LIMIT 1",
-            (layer_id,),
-        ).fetchone()
-    if not row:
-        return None
-    return {
-        "layer_id": layer_id,
-        "fetched_at": row["fetched_at"],
-        "payload_kb": row["payload_kb"],
-        "rows_added": row["rows_added"],
-        "payload": json.loads(zlib.decompress(row["payload"]).decode("utf-8")),
-    }
+    """Return the closest snapshot at-or-before `at` (default: latest).
+    Uses an ephemeral read connection so it doesn't pin the WAL."""
+    c = _read_conn()
+    try:
+        if at:
+            row = c.execute(
+                "SELECT fetched_at, payload, payload_kb, rows_added FROM snapshots "
+                "WHERE layer_id = ? AND fetched_at <= ? ORDER BY fetched_at DESC LIMIT 1",
+                (layer_id, at),
+            ).fetchone()
+        else:
+            row = c.execute(
+                "SELECT fetched_at, payload, payload_kb, rows_added FROM snapshots "
+                "WHERE layer_id = ? ORDER BY fetched_at DESC LIMIT 1",
+                (layer_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "layer_id": layer_id,
+            "fetched_at": row["fetched_at"],
+            "payload_kb": row["payload_kb"],
+            "rows_added": row["rows_added"],
+            "payload": json.loads(zlib.decompress(row["payload"]).decode("utf-8")),
+        }
+    finally:
+        c.close()
 
 
 def coverage() -> dict:
     """Return a top-level summary: total observations, total snapshots,
-    per-layer counts, observed_at range."""
-    c = _conn()
-    obs_total = c.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
-    snap_total = c.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
-    by_layer = []
-    rows = c.execute(
-        "SELECT SUBSTR(source_id, 1, INSTR(source_id, '.') - 1) AS layer, "
-        "       COUNT(*) AS n, MIN(observed_at) AS lo, MAX(observed_at) AS hi "
-        "FROM observations "
-        "WHERE INSTR(source_id, '.') > 0 "
-        "GROUP BY layer ORDER BY n DESC"
-    ).fetchall()
-    for r in rows:
-        by_layer.append({"layer": r["layer"], "rows": r["n"],
-                         "observed_min": r["lo"], "observed_max": r["hi"]})
-    snap_by_layer = c.execute(
-        "SELECT layer_id, COUNT(*) AS n, SUM(payload_kb) AS kb "
-        "FROM snapshots GROUP BY layer_id ORDER BY n DESC"
-    ).fetchall()
-    snaps = [{"layer": r["layer_id"], "snapshots": r["n"],
-              "total_kb": round(r["kb"] or 0, 1)} for r in snap_by_layer]
-    return {
-        "observations_total": obs_total,
-        "snapshots_total": snap_total,
-        "by_layer_observations": by_layer,
-        "by_layer_snapshots": snaps,
-        "db_path": str(HISTORY_DB),
-        "as_of": datetime.now(timezone.utc).isoformat(),
-    }
+    per-layer counts, observed_at range.
+
+    Avoids `GROUP BY SUBSTR(source_id, ...)` which forces a full table scan
+    on a 1.6M+ row table — that GROUP BY can't use the source_id index
+    because it's keyed on a derived expression. Instead group by source_id
+    (uses idx_obs_source_only) and roll up to layer in Python.
+
+    Uses an ephemeral read connection so it doesn't pin the WAL.
+    """
+    c = _read_conn()
+    try:
+        obs_total = c.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
+        snap_total = c.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+
+        # Group by source_id (index-backed), then aggregate by layer prefix in Python.
+        by_layer_acc: dict[str, dict] = {}
+        rows = c.execute(
+            "SELECT source_id, COUNT(*) AS n, MIN(observed_at) AS lo, MAX(observed_at) AS hi "
+            "FROM observations GROUP BY source_id"
+        ).fetchall()
+        for r in rows:
+            sid = r["source_id"] or ""
+            if "." not in sid:
+                continue
+            layer = sid.split(".", 1)[0]
+            acc = by_layer_acc.setdefault(layer, {"layer": layer, "rows": 0, "observed_min": None, "observed_max": None})
+            acc["rows"] += r["n"]
+            lo, hi = r["lo"], r["hi"]
+            if lo and (acc["observed_min"] is None or lo < acc["observed_min"]):
+                acc["observed_min"] = lo
+            if hi and (acc["observed_max"] is None or hi > acc["observed_max"]):
+                acc["observed_max"] = hi
+        by_layer = sorted(by_layer_acc.values(), key=lambda x: -x["rows"])
+
+        snap_by_layer = c.execute(
+            "SELECT layer_id, COUNT(*) AS n, SUM(payload_kb) AS kb "
+            "FROM snapshots GROUP BY layer_id ORDER BY n DESC"
+        ).fetchall()
+        snaps = [{"layer": r["layer_id"], "snapshots": r["n"],
+                  "total_kb": round(r["kb"] or 0, 1)} for r in snap_by_layer]
+        return {
+            "observations_total": obs_total,
+            "snapshots_total": snap_total,
+            "by_layer_observations": by_layer,
+            "by_layer_snapshots": snaps,
+            "db_path": str(HISTORY_DB),
+            "as_of": datetime.now(timezone.utc).isoformat(),
+        }
+    finally:
+        c.close()
 
 
 def redecompose_all(only_layer: str | None = None) -> dict:

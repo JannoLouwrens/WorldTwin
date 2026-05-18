@@ -70,29 +70,29 @@ RULES: dict[str, tuple[float | None, float | None, str]] = {
 }
 
 
-# --- Logging — accumulate violations so we can summarise per-fetch
-_violations: list[dict] = []
-
-
+# --- Logging — global accumulator removed (was leaking ~10 MB per few
+# minutes because only ai_narrative.py called reset() between fetches and
+# the other 89 plugins kept appending forever). Per-fetch warnings are
+# captured in the local `warnings` list inside `auto_sweep` and surfaced
+# via the cache's `_sanity_warnings` field, which is what the Inspector
+# actually reads.
 def _record(field: str, value: Any, reason: str) -> None:
-    _violations.append({"field": field, "value": value, "reason": reason})
     print(f"[sanity] REJECTED {field}={value!r}: {reason}")
 
 
 def reset() -> None:
-    _violations.clear()
+    """Kept as a no-op for back-compat — ai_narrative.py calls this."""
+    pass
 
 
 def violations() -> list[dict]:
-    return list(_violations)
+    """Always empty now — kept for back-compat. Real per-fetch warnings
+    travel in the cache's `_sanity_warnings` field."""
+    return []
 
 
 def summarise() -> str:
-    if not _violations:
-        return "[sanity] all values plausible"
-    return f"[sanity] {len(_violations)} rejections: " + ", ".join(
-        f"{v['field']}={v['value']!r}" for v in _violations[:10]
-    )
+    return "[sanity] (per-fetch only — see cache._sanity_warnings)"
 
 
 def check(field: str, value: Any) -> Any:

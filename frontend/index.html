@@ -137,7 +137,7 @@ button { font-family: inherit; color: inherit; background: none; border: 0; curs
   display: flex; align-items: center; justify-content: center;
   transition: opacity 800ms ease;
 }
-#boot.hidden { opacity: 0; pointer-events: none; }
+#boot.hidden { opacity: 0; pointer-events: none; visibility: hidden; transition: opacity 600ms ease, visibility 0s 600ms; }
 #boot .boot-inner {
   text-align: center;
   color: var(--text-md);
@@ -1231,7 +1231,7 @@ body[data-scrubbed-past="true"] .mmbar .mmbar-btn:not([data-time-aware="true"]) 
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 </style>
 <!-- Design System v2 loads AFTER inline styles so it wins same-specificity ties -->
-<link rel="stylesheet" href="css/worldtwin-design.css">
+<link rel="stylesheet" href="css/worldtwin-design.css?v=20260504b">
 </head>
 <body>
 
@@ -1383,10 +1383,10 @@ body[data-scrubbed-past="true"] .mmbar .mmbar-btn:not([data-time-aware="true"]) 
 <script src="js/pickcard.js"></script>
 <script src="js/cesium-setup.js"></script>
 <script src="js/wind-canvas.js"></script>
-<script src="js/preloader.js"></script>
+<script src="js/preloader.js?v=20260518b"></script>
 <script src="js/planets.js"></script>
 <script src="js/layers.js"></script>
-<script src="js/layers2.js"></script>
+<script src="js/layers2.js?v=20260518c"></script>
 <script src="js/historical-borders.js"></script>
 <script src="js/historical-events.js"></script>
 <script src="js/historical-wars.js"></script>
@@ -1406,17 +1406,18 @@ body[data-scrubbed-past="true"] .mmbar .mmbar-btn:not([data-time-aware="true"]) 
 <script src="js/energy-viz.js"></script>
 <script src="js/mapmode-card.js"></script>
 <script src="js/layer-browser.js"></script>
-<script src="js/layer-toggles.js"></script>
+<script src="js/layer-toggles.js?v=20260504a"></script>
 <script src="js/pollution-inset.js"></script>
-<script src="js/admiralty.js"></script>
+<script src="js/admiralty.js?v=20260504b"></script>
 <script src="js/concept-map.js"></script>
 <script src="js/data-inspector.js"></script>
+<script src="js/inspector-toggle.js"></script>
 <script src="js/council.js"></script>
 <script src="js/diff-strip.js"></script>
 <script src="js/causal-lines.js"></script>
 <script src="js/raw-mode.js"></script>
 <script src="js/modes.js"></script>
 <script src="js/ui.js"></script>
-<script src="js/app.js"></script>
+<script src="js/app.js?v=20260518worldtwin"></script>
 </body>
 </html>

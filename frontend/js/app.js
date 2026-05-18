@@ -3,7 +3,7 @@
 // Order of operations on page load:
 //   1. DOMContentLoaded fires
 //   2. Inject SVG icons, wire mode buttons and help key
-//   3. Fetch /weather/config.json (single source of truth) into window.CONFIG
+//   3. Fetch /worldtwin/config.json (single source of truth) into window.CONFIG
 //   4. Preloader.preload() — parallel fetch every cache file in CONFIG
 //   5. Planets.switchToBody('earth') — builds the viewer through the canonical path
 //      (planets.js in turn calls window.buildEarthViewer, which is defined in
@@ -12,6 +12,17 @@
 //   6. Attach click/hover handlers (now that the viewer exists).
 //   7. Hide boot splash.
 (function(){
+
+  // Safety net: even if anything below throws, the splash hides after
+  // 25 s so the user is never stranded staring at "Loading layers…".
+  const BOOT_HARD_DEADLINE_MS = 25000;
+  setTimeout(() => {
+    const bootEl = document.getElementById('boot');
+    if (bootEl && !bootEl.classList.contains('hidden')) {
+      console.warn('[boot] hard deadline reached — forcing splash hide');
+      bootEl.classList.add('hidden');
+    }
+  }, BOOT_HARD_DEADLINE_MS);
 
   async function boot() {
     // Inject SVG icons
@@ -68,7 +79,7 @@
 
     // Step 1: load config.json — single source of truth
     try {
-      const cr = await fetch('/weather/config.json');
+      const cr = await fetch('/worldtwin/config.json');
       if (cr.ok) {
         window.CONFIG = await cr.json();
         console.log(`[boot] config.json loaded · ${window.CONFIG.layers.length} layers in catalog`);
@@ -96,6 +107,12 @@
         'vdem_democracy', 'brecke_wars', 'clio_life_expectancy',
         'cow_alliances',
         'historical_borders', 'historical_disasters',
+        // Heavy + not needed for first paint. Lazy-loaded when their layer
+        // toggle / mapmode is activated. Total saved: ~9 MB / ~7 s cold boot.
+        'climatetrace_assets',  // 4.2 MB
+        'disasters',            // 2.6 MB
+        'ucdp_ged',             // 1.1 MB
+        'wri_power_plants',     // 1.2 MB
         // Note: maddison_history + hyde_population stay in preload because
         // gdp_pc and population mapmodes (always-shown defaults) read them
         // even at Live for the unified-mapmode UX. ~1.5MB combined.

@@ -35,22 +35,97 @@ API_VERSION = "1.0.0"
 BOOT_TIME = datetime.now(timezone.utc)
 
 
+async def _mem_diagnostic_loop():
+    """Background coroutine — every 5 minutes, force a `gc.collect()` and
+    log RSS. The original tracemalloc version (kept in git history)
+    identified that ucdp_ged's 139 MB JSON cache loads into ~700 MB peak
+    Python heap; the long-term leak (sanity.py global accumulator) is
+    fixed. Periodic gc reduces fragmentation between fetches."""
+    import asyncio, gc, resource
+    print("[mem] periodic gc loop started", flush=True)
+    while True:
+        try:
+            await asyncio.sleep(300)
+        except asyncio.CancelledError:
+            raise
+        try:
+            collected = gc.collect()
+            rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            print(f"[mem] gc.collect freed {collected} objects; max_rss={rss_kb/1024:.0f}MB", flush=True)
+        except Exception as e:
+            print(f"[mem] gc loop error: {e}", flush=True)
+
+
+async def _wal_checkpoint_loop():
+    """Background coroutine — periodically attempt TRUNCATE checkpoint.
+
+    NOTE on what works and what doesn't:
+    - Writer connections set `wal_autocheckpoint=5000` which DOES reclaim
+      WAL pages every ~20 MB. The WAL doesn't grow without bound — pages
+      get reused, which is what matters for correctness and performance.
+    - But TRUNCATE (which actually shrinks the FILE on disk) cannot run
+      reliably under our write load: 90 plugin workers nearly always have
+      a writer in flight, and the TRUNCATE call needs the write lock.
+      It hangs indefinitely whether called via asyncio.to_thread, a
+      dedicated thread executor, OR a subprocess.
+    - Operational fix when WAL grows large: stop the aggregator briefly
+      and run `python -c "import sqlite3; c=sqlite3.connect('/history/history.sqlite'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)')"`
+      from a stopped-state. See docs/architecture/HISTORY_STORE.md for the
+      maintenance script.
+
+    This loop is left in place but does NOTHING — kept as a hook for
+    future improvement (e.g., write-traffic-aware quiet-window detection).
+    """
+    import asyncio
+    print("[wal] loop started — checkpoint via writers' autocheckpoint=5000; TRUNCATE is a manual op", flush=True)
+    while True:
+        try:
+            await asyncio.sleep(3600)  # Hourly heartbeat
+        except asyncio.CancelledError:
+            raise
+        print("[wal] heartbeat (autocheckpoint runs inside writers)", flush=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Bump the asyncio default executor — we have 90 plugins, every fetch
+    # tail (cache.write_envelope + cache.write_legacy + history.snapshot)
+    # runs through asyncio.to_thread. The default 32-thread pool fills up
+    # and starves API requests behind it.
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    asyncio.get_running_loop().set_default_executor(
+        ThreadPoolExecutor(max_workers=128, thread_name_prefix="wt")
+    )
     # Import all sources so they self-register
     registry.autodiscover()
     layers = registry.all_layers()
-    print(f"[server] registered {len(layers)} layers")
-    # Shared HTTP client
+    print(f"[server] registered {len(layers)} layers; thread-pool=128")
+
+    # Background WAL checkpoint loop — keeps history.sqlite-wal bounded.
+    app.state.wal_task = asyncio.create_task(_wal_checkpoint_loop())
+    # Memory diagnostic — prints top allocators every 60s. Remove once leak
+    # is identified.
+    app.state.mem_task = asyncio.create_task(_mem_diagnostic_loop())
+    # Shared HTTP client. Connection limits prevent unbounded growth of
+    # the pool when many plugins fire simultaneously against many distinct
+    # hosts (we hit ~80 unique upstream domains across 90 plugins).
     app.state.client = httpx.AsyncClient(
         timeout=30,
         follow_redirects=True,
         headers={"User-Agent": f"WorldTwin-Aggregator/{__version__}"},
+        limits=httpx.Limits(
+            max_connections=50,
+            max_keepalive_connections=10,
+            keepalive_expiry=30.0,
+        ),
     )
     app.state.tasks = scheduler.start_all(app.state.client)
     try:
         yield
     finally:
+        app.state.wal_task.cancel()
+        app.state.mem_task.cancel()
         for t in app.state.tasks:
             t.cancel()
         await app.state.client.aclose()
@@ -460,6 +535,179 @@ async def admin_docs() -> HTMLResponse:
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+# ---------------------------------------------------------------------------
+# /api/history/* — read-only access to the History Store
+#
+# Vision: trace every claim back to the instrument that measured it.
+# These endpoints let the frontend Inspector show the full time-series
+# of any cited value and "view at any past date" via snapshot replay.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/history/series/{source_id}")
+async def history_series(
+    source_id: str,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 5000,
+    dedupe: bool = True,
+) -> dict[str, Any]:
+    """Time-series rows for one source_id, ordered by observed_at desc.
+    Use this to render a sparkline of any cited value through history.
+
+    `dedupe=true` (default) collapses re-fetches of the same observed_at
+    to a single row (the latest). Pass `dedupe=false` to see every fetch."""
+    if ".." in source_id or "/" in source_id:
+        raise HTTPException(400, "Invalid source_id")
+    try:
+        import asyncio
+        from . import history
+        rows = await asyncio.to_thread(
+            history.query_series, source_id, since, until, limit, dedupe
+        )
+        return {
+            "source_id": source_id,
+            "count": len(rows),
+            "since": since,
+            "until": until,
+            "dedupe": dedupe,
+            "rows": rows,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"History query failed: {type(e).__name__}: {e}")
+
+
+def _read_snapshot_bytes(layer_id: str, at: str | None) -> tuple[bytes | None, str | None, float | None, int | None]:
+    """Return the gzipped payload bytes plus metadata, OR (None,)*4 if not found.
+    Skips json.loads/dump round-trip — the payload is already valid JSON inside
+    the zlib blob. Streaming the bytes directly cuts a 5.5 MB FRED snapshot
+    from 60s+ to <1s by avoiding two FastAPI serialisations.
+
+    Uses ephemeral read connection so it doesn't pin the WAL."""
+    import zlib
+    from . import history
+    c = history._read_conn()
+    try:
+        if at:
+            row = c.execute(
+                "SELECT fetched_at, payload, payload_kb, rows_added FROM snapshots "
+                "WHERE layer_id = ? AND fetched_at <= ? ORDER BY fetched_at DESC LIMIT 1",
+                (layer_id, at),
+            ).fetchone()
+        else:
+            row = c.execute(
+                "SELECT fetched_at, payload, payload_kb, rows_added FROM snapshots "
+                "WHERE layer_id = ? ORDER BY fetched_at DESC LIMIT 1",
+                (layer_id,),
+            ).fetchone()
+        if not row:
+            return (None, None, None, None)
+        raw = zlib.decompress(row["payload"])
+        return (raw, row["fetched_at"], row["payload_kb"], row["rows_added"])
+    finally:
+        c.close()
+
+
+@app.get("/api/history/snapshot/{layer_id}")
+async def history_snapshot(layer_id: str, at: str | None = None):
+    """Closest snapshot at-or-before the `at` timestamp (default: latest).
+    Use this to time-travel the dashboard — show the full payload as it
+    existed at any historical moment."""
+    if ".." in layer_id or "/" in layer_id:
+        raise HTTPException(400, "Invalid layer_id")
+    try:
+        import asyncio, json
+        raw, fetched_at, payload_kb, rows_added = await asyncio.to_thread(
+            _read_snapshot_bytes, layer_id, at
+        )
+        if raw is None:
+            raise HTTPException(404, f"No snapshot found for {layer_id} at-or-before {at}")
+        # Stream raw bytes — avoid json.loads + Pydantic re-serialisation that
+        # was timing out on 5 MB FRED snapshots. The `raw` bytes are already
+        # valid JSON inside the zlib blob; splice them into our envelope.
+        meta = {
+            "layer_id": layer_id,
+            "fetched_at": fetched_at,
+            "payload_kb": payload_kb,
+            "rows_added": rows_added,
+        }
+        head = json.dumps(meta)
+        assert head.endswith("}")
+        body = head[:-1].encode("utf-8") + b',"payload":' + raw + b"}"
+        return Response(content=body, media_type="application/json")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Snapshot read failed: {type(e).__name__}: {e}")
+
+
+def _list_sources_sync(prefix: str | None, limit: int) -> list[dict]:
+    """Range-scan when a prefix is supplied — `LIKE 'fred.%'` is 158s on
+    5M rows because SQLite scans the whole index. `>= 'fred.' AND < 'fred.~'`
+    converts to an O(matches) seek and runs in <1s. Sort in Python instead
+    of in SQL because ORDER BY n DESC requires a temp B-tree.
+
+    Uses ephemeral read connection so it doesn't pin the WAL."""
+    from . import history
+    c = history._read_conn()
+    try:
+        args: list[Any] = []
+        if prefix:
+            # '~' (0x7E) is the highest printable ASCII char, so any source_id
+            # starting with `prefix` sorts strictly less than `prefix + '~'`.
+            sql = (
+                "SELECT source_id, COUNT(*) AS n, MIN(observed_at) AS lo, MAX(observed_at) AS hi "
+                "FROM observations "
+                "WHERE source_id >= ? AND source_id < ? "
+                "GROUP BY source_id"
+            )
+            args.extend([prefix, prefix + "~"])
+        else:
+            sql = (
+                "SELECT source_id, COUNT(*) AS n, MIN(observed_at) AS lo, MAX(observed_at) AS hi "
+                "FROM observations "
+                "GROUP BY source_id"
+            )
+        rows = c.execute(sql, args).fetchall()
+        rows.sort(key=lambda r: -r["n"])
+        out = []
+        for row in rows[:limit]:
+            out.append({
+                "source_id": row["source_id"],
+                "count": row["n"],
+                "observed_min": row["lo"],
+                "observed_max": row["hi"],
+            })
+        return out
+    finally:
+        c.close()
+
+
+@app.get("/api/history/sources")
+async def history_sources(prefix: str | None = None, limit: int = 500) -> dict[str, Any]:
+    """List distinct source_ids in the store, with row count + observed_at range.
+    Optional prefix filter (e.g. ?prefix=fred. shows all FRED series).
+
+    Runs in a thread because the GROUP BY scan over 1.6M+ rows can take
+    seconds on contended SQLite — would block the entire asyncio event loop."""
+    try:
+        import asyncio
+        out = await asyncio.to_thread(_list_sources_sync, prefix, limit)
+        return {"prefix": prefix, "count": len(out), "sources": out}
+    except Exception as e:
+        raise HTTPException(500, f"Sources query failed: {type(e).__name__}: {e}")
+
+
+@app.get("/api/history/coverage")
+async def history_coverage() -> dict[str, Any]:
+    """Top-level summary of the History Store: total counts, per-layer counts."""
+    try:
+        import asyncio
+        from . import history
+        return await asyncio.to_thread(history.coverage)
+    except Exception as e:
+        raise HTTPException(500, f"Coverage query failed: {type(e).__name__}: {e}")
 
 
 # ---------------------------------------------------------------------------

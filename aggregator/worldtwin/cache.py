@@ -61,13 +61,26 @@ def write_legacy(layer_id: str, legacy_data: Any) -> None:
     so impossible values (BTC -113%, ship_count 999999, magnitude 12) get
     nulled with a `_sanity_warnings` field attached. The Inspector surfaces
     those warnings to the user.
+
+    Convention: keys starting with `_history_only_` are sent to history.snapshot()
+    for decomposition into observations but STRIPPED from the disk cache so
+    the legacy .json file stays small. Used by ucdp_ged (events_full ~350k
+    rows = 139 MB) and similar bulk plugins.
     """
     try:
         from . import sanity
         legacy_data = sanity.sweep_and_tag(legacy_data)
     except Exception as e:
         print(f"[cache] sanity sweep failed for {layer_id}: {e}")
-    _atomic_write(CACHE_DIR / f"{layer_id}.json", legacy_data)
+
+    # Build a smaller payload for the on-disk cache (strip _history_only_ keys).
+    # The full payload still goes to history.snapshot below.
+    if isinstance(legacy_data, dict):
+        cache_payload = {k: v for k, v in legacy_data.items()
+                         if not k.startswith("_history_only_")}
+    else:
+        cache_payload = legacy_data
+    _atomic_write(CACHE_DIR / f"{layer_id}.json", cache_payload)
 
     # History store — append every fetch to /data/history/history.sqlite
     # so the lab REMEMBERS. Never block the live cache write on a history

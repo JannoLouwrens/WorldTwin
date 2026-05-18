@@ -2909,3 +2909,1069 @@ body.tw-raw #twDiffStrip { top: 50px !important; }
   text-transform: uppercase;
   color: rgba(255, 230, 195, 0.45);
 }
+
+/* ============================================================ */
+/* TIME-TRAVEL · /api/history/* — replay any past moment.       */
+/* ============================================================ */
+.tw-time-travel {
+  border-top: 1px dashed rgba(110, 231, 255, 0.18);
+  padding-top: 14px;
+  margin-top: 18px;
+}
+.tw-tt-row {
+  display: flex; align-items: center; gap: 8px;
+  margin: 6px 0;
+  flex-wrap: wrap;
+}
+.tw-tt-lbl {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(176, 196, 219, 0.62);
+}
+.tw-tt-input {
+  background: rgba(8, 12, 18, 0.6);
+  border: 1px solid rgba(110, 231, 255, 0.28);
+  color: #f4ecdc;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 2px;
+  outline: none;
+  color-scheme: dark;
+}
+.tw-tt-input:focus { border-color: rgba(110, 231, 255, 0.7); }
+.tw-tt-btn {
+  background: rgba(110, 231, 255, 0.12);
+  border: 1px solid rgba(110, 231, 255, 0.5);
+  color: rgba(110, 231, 255, 0.95);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 120ms, border-color 120ms;
+}
+.tw-tt-btn:hover { background: rgba(110, 231, 255, 0.22); border-color: rgba(110, 231, 255, 0.8); }
+.tw-tt-btn-ghost {
+  background: transparent;
+  border-color: rgba(176, 196, 219, 0.35);
+  color: rgba(176, 196, 219, 0.78);
+}
+.tw-tt-btn-ghost:hover { color: rgba(110, 231, 255, 0.95); border-color: rgba(110, 231, 255, 0.55); }
+.tw-tt-hint {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(176, 196, 219, 0.42);
+  letter-spacing: 0.06em;
+}
+.tw-tt-loading, .tw-tt-empty, .tw-tt-err {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 6px 10px;
+  margin-top: 6px;
+  border-left: 2px solid rgba(176, 196, 219, 0.3);
+  color: rgba(176, 196, 219, 0.7);
+  background: rgba(8, 12, 18, 0.4);
+}
+.tw-tt-err   { border-left-color: #d94747; color: #ffb1b1; }
+.tw-tt-empty { border-left-color: var(--phosphor); color: rgba(255, 181, 71, 0.85); }
+.tw-tt-out, .tw-tt-series {
+  margin-top: 8px;
+}
+.tw-tt-snap-meta {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: rgba(176, 196, 219, 0.6);
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
+.tw-tt-past-claim {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  background: rgba(110, 231, 255, 0.06);
+  border-left: 3px solid rgba(110, 231, 255, 0.65);
+}
+.tw-tt-past-lbl {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(176, 196, 219, 0.7);
+}
+.tw-tt-past-v {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: rgba(110, 231, 255, 0.95);
+  font-weight: 700;
+  font-feature-settings: "tnum" 1;
+}
+.tw-tt-pre {
+  max-height: 220px;
+  overflow: auto;
+  font-size: 10px;
+}
+.tw-tt-section-lbl {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(176, 196, 219, 0.62);
+  margin: 8px 0 6px;
+}
+.tw-tt-source-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  max-height: 180px;
+  overflow: auto;
+  padding-right: 4px;
+}
+.tw-tt-source-btn {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  background: rgba(8, 12, 18, 0.45);
+  border: 1px solid rgba(176, 196, 219, 0.12);
+  color: rgba(244, 236, 220, 0.85);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 5px 8px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 100ms, border-color 100ms;
+}
+.tw-tt-source-btn:hover {
+  background: rgba(110, 231, 255, 0.08);
+  border-color: rgba(110, 231, 255, 0.45);
+}
+.tw-tt-sid    { color: rgba(244, 236, 220, 0.95); }
+.tw-tt-srows  { color: rgba(110, 231, 255, 0.78); font-feature-settings: "tnum" 1; }
+.tw-tt-sspan  { color: rgba(176, 196, 219, 0.45); font-size: 9px; }
+
+.tw-tt-spark-out {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(8, 12, 18, 0.5);
+  border: 1px solid rgba(110, 231, 255, 0.18);
+  border-radius: 2px;
+}
+.tw-tt-spark-head {
+  display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: rgba(176, 196, 219, 0.7);
+  letter-spacing: 0.04em;
+}
+.tw-tt-spark-name code { color: rgba(244, 236, 220, 0.95); }
+.tw-tt-spark-stat { color: rgba(176, 196, 219, 0.55); }
+.tw-tt-spark-delta {
+  margin-left: auto;
+  font-weight: 700;
+  font-feature-settings: "tnum" 1;
+}
+.tw-tt-up   { color: #5fbf7d; }
+.tw-tt-down { color: #d94747; }
+.tw-tt-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.tw-tt-spark-foot {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(176, 196, 219, 0.55);
+  letter-spacing: 0.04em;
+}
+
+/* ============================================================
+   APPLE-CLEAN LAYOUT RESET (2026-04-30)
+   One spatial system, one tone. Globe is the hero.
+   - Mast (top, full-width, ~104px): masthead + mapmodes + layers
+   - Left rail (360px): briefing (scrolls within its lane)
+   - Right rail (closed by default): inspector reveals on demand
+   - Bottom (72px): scrubber
+   - Everything else: hidden or absorbed into the rails
+   ============================================================ */
+:root {
+  --ac-glass:      rgba(10, 13, 20, 0.58);
+  --ac-glass-deep: rgba(8, 11, 17, 0.72);
+  --ac-edge:       rgba(255, 255, 255, 0.06);
+  --ac-edge-hi:    rgba(255, 255, 255, 0.10);
+  --ac-blur:       saturate(1.4) blur(24px);
+  --ac-shadow:     0 1px 0 rgba(255,255,255,0.04) inset, 0 24px 60px -28px rgba(0,0,0,0.55);
+  --ac-radius:     16px;
+  --ac-radius-sm:  10px;
+  --ac-mast-h:     104px;   /* masthead row + mapmode/layer row */
+  --ac-rail-l:     360px;   /* left briefing rail width */
+  --ac-rail-l-gap: 16px;
+  --ac-foot-h:     72px;    /* scrubber */
+}
+
+/* --- Kill the legacy floaters that fight the grid ---------- */
+#modes,                     /* old bottom mode rail (duplicate of mapmode bar) */
+#narrativeStrip,            /* full-width band cutting through masthead */
+#eventsTicker,              /* full-width band cutting through diff strip */
+#legendStrip,               /* sat on top of the scrubber */
+#twDiffStrip,               /* second floating bar below header */
+.tw-scroll-arrow            /* obsolete edge nudgers */
+{
+  display: none !important;
+}
+
+/* --- Masthead: corner brand mark, not a 366-wide plate ------ */
+#twMasthead.tw-masthead {
+  position: fixed !important;
+  top: 16px !important;
+  left: 16px !important;
+  width: calc(var(--ac-rail-l) - 32px) !important;
+  height: 56px !important;
+  padding: 0 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  background: var(--ac-glass) !important;
+  border: 1px solid var(--ac-edge) !important;
+  border-radius: var(--ac-radius) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+  box-shadow: var(--ac-shadow) !important;
+  z-index: 120 !important;
+  overflow: hidden !important;
+}
+#twMasthead .tw-masthead-rule { display: none !important; }
+#twMasthead .tw-masthead-title {
+  flex: 1 1 auto;
+  width: 100%;
+  gap: 12px !important;
+}
+#twMasthead .tw-masthead-name {
+  font-size: 14px !important;
+  letter-spacing: 0.18em !important;
+}
+#twMasthead .tw-masthead-meta {
+  font-size: 9px !important;
+  letter-spacing: 0.16em !important;
+  opacity: 0.72;
+}
+#twMasthead .tw-masthead-led { gap: 6px; }
+
+/* --- Top mast: mapmodes + layer toggles, single calm plate -- */
+#twHeader.tw-header {
+  position: fixed !important;
+  top: 16px !important;
+  left: calc(var(--ac-rail-l) + 8px) !important;   /* clears masthead */
+  right: 16px !important;
+  height: var(--ac-mast-h) !important;
+  background: var(--ac-glass) !important;
+  border: 1px solid var(--ac-edge) !important;
+  border-radius: var(--ac-radius) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+  box-shadow: var(--ac-shadow) !important;
+  display: grid !important;
+  grid-template-columns: 32px 1fr !important;
+  grid-template-rows: 1fr 1fr !important;
+  overflow: hidden !important;
+  z-index: 110 !important;
+}
+#twHeader .tw-header-kicker {
+  border-right: 1px solid var(--ac-edge) !important;
+  background: rgba(255,255,255,0.015);
+}
+#twHeader .tw-header-kicker span {
+  font-size: 10px !important;
+  letter-spacing: 0.36em !important;
+  color: rgba(255,255,255,0.55) !important;
+}
+#twHeader #mmbar,
+#twHeader #layerToggles {
+  align-self: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  white-space: nowrap;
+  padding: 4px 12px !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+#twHeader #mmbar::-webkit-scrollbar,
+#twHeader #layerToggles::-webkit-scrollbar { display: none; }
+#twHeader #layerToggles {
+  border-top: 1px solid var(--ac-edge) !important;
+}
+#twHeader .mmbar-btn,
+#twHeader .lt-btn {
+  font-size: 11px !important;
+  padding: 5px 9px !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: rgba(245, 247, 250, 0.78) !important;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+#twHeader .mmbar-btn:hover,
+#twHeader .lt-btn:hover {
+  background: rgba(255,255,255,0.04) !important;
+  color: #fff !important;
+}
+#twHeader .mmbar-btn.active,
+#twHeader .mmbar-btn.is-active,
+#twHeader .lt-btn.active,
+#twHeader .lt-btn.lt-active {
+  background: rgba(76, 194, 255, 0.12) !important;
+  border-color: rgba(76, 194, 255, 0.32) !important;
+  color: #d8efff !important;
+}
+/* Active toggle that returned no entities — dim, with strikethrough dot */
+#twHeader .lt-btn.lt-active.lt-empty {
+  background: rgba(255, 180, 90, 0.06) !important;
+  border-color: rgba(255, 180, 90, 0.22) !important;
+  color: rgba(255, 220, 180, 0.72) !important;
+}
+#twHeader .lt-btn.lt-active.lt-empty .lt-ico {
+  opacity: 0.35 !important;
+  box-shadow: 0 0 0 1px rgba(255,180,90,0.45) !important;
+}
+#twHeader .mmbar-grouplabel,
+#twHeader .lt-grouplabel {
+  font-size: 8.5px !important;
+  letter-spacing: 0.32em !important;
+  color: rgba(255,255,255,0.42) !important;
+  padding: 4px 10px 0 10px !important;
+}
+#twHeader .mmbar-grouplabel::before { display: none !important; }
+
+/* --- Left rail: briefing lives in its lane, scrolls inside -- */
+#twBriefing.tw-brief {
+  position: fixed !important;
+  top: calc(var(--ac-mast-h) + 24px + 56px) !important;  /* below mast + below masthead row */
+  left: 16px !important;
+  bottom: calc(var(--ac-foot-h) + 24px) !important;
+  width: calc(var(--ac-rail-l) - 32px) !important;
+  max-height: none !important;
+  height: auto !important;
+  background: var(--ac-glass-deep) !important;
+  border: 1px solid var(--ac-edge) !important;
+  border-radius: var(--ac-radius) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+  box-shadow: var(--ac-shadow) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  z-index: 90 !important;
+}
+#twBriefing .tw-brief-head {
+  flex: 0 0 auto;
+  padding: 14px 18px !important;
+  border-bottom: 1px solid var(--ac-edge) !important;
+}
+#twBriefing .tw-brief-title {
+  font-family: var(--font-display, "Fraunces", serif) !important;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+#twBriefing .tw-brief-stamp {
+  font-family: var(--font-mono, "JetBrains Mono", monospace) !important;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+}
+#twBriefing #twBriefBody.tw-brief-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
+}
+#twBriefing #twBriefBody::-webkit-scrollbar { width: 6px; }
+#twBriefing #twBriefBody::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.10);
+  border-radius: 3px;
+}
+#twBriefing .tw-brief-section {
+  padding: 14px 18px !important;
+  border-bottom: 1px solid var(--ac-edge) !important;
+}
+#twBriefing .tw-brief-section:last-child { border-bottom: 0 !important; }
+#twBriefing .tw-brief-grouplabel {
+  font-family: var(--font-mono, monospace) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.28em !important;
+  color: rgba(255,255,255,0.50) !important;
+  margin-bottom: 10px !important;
+  text-transform: uppercase;
+}
+#twBriefing .tw-concern-bar {
+  background: rgba(255,255,255,0.025) !important;
+  border-radius: 8px !important;
+  margin: 4px 0 !important;
+}
+
+/* Mobile / narrow viewport: drop the rail width */
+@media (max-width: 1280px) {
+  :root { --ac-rail-l: 320px; }
+}
+@media (max-width: 1100px) {
+  :root { --ac-rail-l: 288px; }
+  #twHeader.tw-header { left: calc(var(--ac-rail-l) + 8px) !important; }
+}
+
+/* --- Inspector: closed by default, reveals from right ------- */
+#twDataInspector.tw-inspector {
+  position: fixed !important;
+  top: calc(var(--ac-mast-h) + 32px) !important;
+  right: 16px !important;
+  bottom: calc(var(--ac-foot-h) + 24px) !important;
+  width: 380px !important;
+  height: auto !important;
+  max-height: none !important;
+  background: var(--ac-glass-deep) !important;
+  border: 1px solid var(--ac-edge) !important;
+  border-radius: var(--ac-radius) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+  box-shadow: var(--ac-shadow) !important;
+  z-index: 95 !important;
+  transform: translateX(calc(100% + 24px));
+  transition: transform 280ms cubic-bezier(0.32, 0.72, 0.34, 1);
+  pointer-events: auto;
+}
+#twDataInspector.tw-inspector.tw-inspector-open,
+#twDataInspector.tw-inspector.is-open,
+#twDataInspector.tw-inspector.open {
+  transform: translateX(0);
+}
+/* Belt-and-braces: when aria-hidden=false, also slide in */
+#twDataInspector.tw-inspector[aria-hidden="false"] {
+  transform: translateX(0);
+}
+/* Reveal pill in the top-right corner of the mast */
+#twInspectorToggle {
+  position: fixed;
+  top: 24px;
+  right: 28px;
+  z-index: 130;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--ac-edge-hi);
+  background: var(--ac-glass);
+  backdrop-filter: var(--ac-blur);
+  -webkit-backdrop-filter: var(--ac-blur);
+  color: rgba(245, 247, 250, 0.85);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#twInspectorToggle:hover {
+  background: rgba(76, 194, 255, 0.10);
+  color: #d8efff;
+}
+#twInspectorToggle.is-open {
+  background: rgba(76, 194, 255, 0.16);
+  color: #d8efff;
+  border-color: rgba(76, 194, 255, 0.40);
+}
+#twInspectorToggle svg {
+  width: 16px; height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+}
+
+/* --- Bottom scrubber: thin, calm, no overlap ---------------- */
+.tw-scrubber {
+  left: calc(var(--ac-rail-l) + 8px) !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  width: auto !important;
+  height: var(--ac-foot-h) !important;
+  background: var(--ac-glass) !important;
+  border: 1px solid var(--ac-edge) !important;
+  border-radius: var(--ac-radius) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+  box-shadow: var(--ac-shadow) !important;
+  padding: 10px 18px !important;
+  z-index: 95 !important;
+}
+@media (max-width: 1100px) {
+  .tw-scrubber { left: calc(var(--ac-rail-l) + 8px) !important; }
+}
+
+/* --- Planet rail: tuck into masthead column, slim ----------- */
+#planetRail.planet-rail {
+  top: 88px !important;            /* below the masthead pill */
+  left: 16px !important;
+  width: calc(var(--ac-rail-l) - 32px) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  overflow-x: auto;
+  overflow-y: hidden !important;
+  scrollbar-width: none;
+  height: 36px !important;
+  padding: 0 8px !important;
+  background: var(--ac-glass) !important;
+  border: 1px solid var(--ac-edge) !important;
+  border-radius: 999px !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+  z-index: 115 !important;
+}
+#planetRail.planet-rail::-webkit-scrollbar { display: none; }
+#planetRail .planet-btn,
+#planetRail button,
+#planetRail .planet-rail-item {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  height: 26px !important;
+  font-size: 9.5px !important;
+  letter-spacing: 0.18em !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: rgba(255,255,255,0.62) !important;
+  white-space: nowrap !important;
+}
+/* Planet sphere icon — clamp to a small dot regardless of inline style */
+#planetRail .planet-dot {
+  width: 10px !important;
+  height: 10px !important;
+  flex: 0 0 10px !important;
+  border-radius: 999px !important;
+  display: inline-block !important;
+}
+#planetRail .planet-label {
+  display: inline-block !important;
+  font-size: 9px !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase;
+}
+#planetRail .planet-btn:hover,
+#planetRail .planet-rail-item:hover { color: #fff !important; }
+#planetRail .planet-btn.active,
+#planetRail .planet-btn.is-active,
+#planetRail .planet-rail-item.active,
+#planetRail .planet-rail-item.is-active {
+  background: rgba(255,255,255,0.08) !important;
+  color: #fff !important;
+}
+
+/* --- Help button: align with rail bottom -------------------- */
+.help-btn {
+  left: auto !important;
+  right: 76px !important;
+  top: 24px !important;
+  bottom: auto !important;
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 999px !important;
+  background: var(--ac-glass) !important;
+  border: 1px solid var(--ac-edge-hi) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+  z-index: 130 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Dossier (right-side country slide-in): align to mast --- */
+#twDossier {
+  top: calc(var(--ac-mast-h) + 32px) !important;
+  bottom: calc(var(--ac-foot-h) + 24px) !important;
+  max-height: none !important;
+  height: auto !important;
+  border-radius: var(--ac-radius) !important;
+  background: var(--ac-glass-deep) !important;
+  border: 1px solid var(--ac-edge) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+}
+
+/* --- Layer browser: same lane as dossier -------------------- */
+.layer-browser {
+  top: calc(var(--ac-mast-h) + 32px) !important;
+  bottom: calc(var(--ac-foot-h) + 24px) !important;
+  border-radius: var(--ac-radius) !important;
+  background: var(--ac-glass-deep) !important;
+  border: 1px solid var(--ac-edge) !important;
+  backdrop-filter: var(--ac-blur) !important;
+}
+
+/* --- Hover tooltip: lighter, less weighty ------------------- */
+.tw-hover-tooltip {
+  background: var(--ac-glass-deep) !important;
+  border: 1px solid var(--ac-edge) !important;
+  border-radius: var(--ac-radius-sm) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  box-shadow: var(--ac-shadow) !important;
+}
+
+/* --- Pollution inset / any other floating insets ------------ */
+#pollutionInset, .pollution-inset, #pollutionChart {
+  bottom: calc(var(--ac-foot-h) + 24px) !important;
+  right: 16px !important;
+  border-radius: var(--ac-radius) !important;
+  background: var(--ac-glass-deep) !important;
+  border: 1px solid var(--ac-edge) !important;
+  backdrop-filter: var(--ac-blur) !important;
+}
+
+/* --- Remove gnomon corner brackets (visually noisy) --------- */
+.has-gnomons-4::before,
+.has-gnomons-4::after,
+.has-gnomons-4 > .gnomon { display: none !important; }
+
+/* --- Gentle reveal motion when panels first mount ----------- */
+@keyframes ac-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#twMasthead, #twHeader, #twBriefing, .tw-scrubber, #planetRail {
+  animation: ac-fade-up 360ms cubic-bezier(0.32, 0.72, 0.34, 1) both;
+}
+#twHeader     { animation-delay: 60ms; }
+#twBriefing   { animation-delay: 120ms; }
+.tw-scrubber  { animation-delay: 160ms; }
+#planetRail   { animation-delay: 200ms; }
+
+/* ============================================================
+   APPLE-CLEAN — round 2: real overlap fixes (2026-04-30)
+   ============================================================ */
+:root {
+  --ac-foot-h:        168px;  /* 5 rows: strata + head + era + axis + bands */
+  --ac-control-w:     100px;  /* reserved column for help + inspector pill */
+  --ac-rail-r:        420px;  /* right card lane width (dossier/inspector/etc) */
+}
+
+/* --- Header narrower so help + toggle sit BESIDE it, not on it -- */
+#twHeader.tw-header {
+  right: calc(var(--ac-control-w) + 16px) !important;  /* leave room for controls */
+}
+
+/* --- Top-right control cluster (help + inspector) -------------- */
+.help-btn {
+  right: calc(38px + 16px + 16px) !important;  /* 16 from edge, then 38+16 gap from toggle */
+  top: 26px !important;
+  width: 38px !important;
+  height: 38px !important;
+}
+#twInspectorToggle {
+  right: 16px !important;
+  top: 26px !important;
+}
+
+/* --- Scrubber: real height so all 5 rows fit cleanly ---------- */
+.tw-scrubber {
+  height: var(--ac-foot-h) !important;
+  padding: 10px 18px 14px 18px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+.tw-scrubber > * {
+  margin: 0 !important;            /* override the stale margin-top:22px on .tw-bands */
+  flex: 0 0 auto;
+}
+.tw-scrubber .tw-strat-eras { order: 1; }
+.tw-scrubber .tw-scrubber-head { order: 2; }
+/* Legacy era strip is replaced by .tw-strat-eras above — hide to prevent duplicate row */
+.tw-scrubber .tw-era-strip,
+.tw-scrubber #twEraStrip { display: none !important; }
+.tw-scrubber .tw-axis { order: 4; min-height: 36px; }       /* room for tick labels */
+.tw-scrubber .tw-bands { order: 5; min-height: 14px; }
+.tw-scrubber .tw-tick-label {
+  /* Anchor labels to the BOTTOM of the axis row, not below it */
+  bottom: 0 !important;
+  top: auto !important;
+}
+
+/* Briefing must end above the (now taller) scrubber */
+#twBriefing.tw-brief {
+  bottom: calc(var(--ac-foot-h) + 24px) !important;
+}
+#twDossier,
+.layer-browser,
+#twDataInspector.tw-inspector {
+  bottom: calc(var(--ac-foot-h) + 24px) !important;
+}
+
+/* --- Right card lane: every conditional card lives HERE -------- */
+/* Cards are stacked z-wise; whichever is shown wins. Only style the
+   shell when there's actually content to show. */
+#commodityPanel,
+#bodyCard,
+#legendCard,
+#pulsePanel,
+#mapmodeCard,
+#planetCard,
+#tickerStrip {
+  position: fixed !important;
+  top: calc(var(--ac-mast-h) + 32px) !important;
+  right: 16px !important;
+  left: auto !important;
+  bottom: calc(var(--ac-foot-h) + 24px) !important;
+  width: var(--ac-rail-r) !important;
+  max-width: calc(100vw - 32px - var(--ac-rail-l) - 8px) !important;
+  max-height: none !important;
+  border-radius: var(--ac-radius) !important;
+  background: var(--ac-glass-deep) !important;
+  border: 1px solid var(--ac-edge) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+  box-shadow: var(--ac-shadow) !important;
+  overflow: hidden auto !important;
+  padding: 16px 18px !important;
+  z-index: 92 !important;
+}
+
+/* Stacking order so newest opened wins: bodyCard > mapmodeCard > legend > kpi > others
+   Dossier (z=110) and inspector (z=95) are higher still. */
+#bodyCard      { z-index: 96 !important; }
+#mapmodeCard   { z-index: 94 !important; }
+#legendCard    { z-index: 93 !important; }
+#kpiRow        { z-index: 92 !important; }
+#planetCard    { z-index: 91 !important; }
+
+/* KPI row: only render the shell when it actually has children */
+#kpiRow.kpi-row {
+  position: fixed !important;
+  top: calc(var(--ac-mast-h) + 32px) !important;
+  right: 16px !important;
+  left: auto !important;
+  bottom: calc(var(--ac-foot-h) + 24px) !important;
+  width: var(--ac-rail-r) !important;
+  max-width: calc(100vw - 32px - var(--ac-rail-l) - 8px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  padding: 16px 18px !important;
+  border-radius: var(--ac-radius) !important;
+  background: var(--ac-glass-deep) !important;
+  border: 1px solid var(--ac-edge) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  -webkit-backdrop-filter: var(--ac-blur) !important;
+  box-shadow: var(--ac-shadow) !important;
+}
+/* When empty, no shell at all */
+#kpiRow.kpi-row:empty {
+  display: none !important;
+}
+/* Right-rail mutual exclusion. Dossier and inspector are the highest
+   priority; when EITHER is up, the per-mode cards yield the lane.
+   Dossier > layerBrowser > inspector > everything-else. */
+body:has(#twDossier) #kpiRow.kpi-row,
+body:has(#twDossier) #mapmodeCard,
+body:has(#twDossier) #legendCard,
+body:has(#twDossier) #bodyCard,
+body:has(#twDossier) #commodityPanel,
+body:has(#twDossier) #pulsePanel,
+body:has(#twDossier) #planetCard,
+body:has(#twDossier) #layerBrowser.show,
+body:has(#twDataInspector.tw-inspector-open) #kpiRow.kpi-row,
+body:has(#twDataInspector.tw-inspector-open) #mapmodeCard,
+body:has(#twDataInspector.tw-inspector-open) #legendCard,
+body:has(#twDataInspector.tw-inspector-open) #bodyCard,
+body:has(#twDataInspector.tw-inspector-open) #commodityPanel,
+body:has(#twDataInspector.tw-inspector-open) #pulsePanel,
+body:has(#twDataInspector.tw-inspector-open) #planetCard,
+body:has(#layerBrowser.show) #kpiRow.kpi-row,
+body:has(#layerBrowser.show) #mapmodeCard,
+body:has(#layerBrowser.show) #legendCard,
+body:has(#layerBrowser.show) #bodyCard,
+body:has(#layerBrowser.show) #commodityPanel,
+body:has(#layerBrowser.show) #pulsePanel,
+body:has(#layerBrowser.show) #planetCard {
+  display: none !important;
+}
+
+/* --- Legacy brand text & raw indicator: hide / minimize -------- */
+.tw-brand { display: none !important; }
+#twRawIndicator.tw-raw-indicator {
+  top: auto !important;
+  bottom: calc(var(--ac-foot-h) + 36px) !important;
+  right: 16px !important;
+  z-index: 88 !important;
+  font-size: 10px !important;
+  letter-spacing: 0.16em !important;
+  padding: 4px 10px !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid var(--ac-edge) !important;
+  backdrop-filter: var(--ac-blur) !important;
+  color: rgba(245,247,250,0.85) !important;
+}
+
+/* --- Narrative expanded modal: only style WHEN visible -------- */
+#narrativeExpanded.narrative-expanded.show {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+  width: auto !important; height: auto !important;
+  max-width: none !important; max-height: none !important;
+  transform: none !important;
+  display: grid !important;
+  place-items: center !important;
+  background: rgba(5, 7, 13, 0.66) !important;
+  backdrop-filter: blur(20px) !important;
+  z-index: 145 !important;
+  padding: 24px !important;
+}
+#narrativeExpanded.narrative-expanded.show > * {
+  max-width: 720px !important;
+  max-height: 80vh !important;
+  border-radius: var(--ac-radius) !important;
+  background: var(--ac-glass-deep) !important;
+  border: 1px solid var(--ac-edge) !important;
+  padding: 28px 32px !important;
+  overflow-y: auto;
+}
+
+/* --- Cesium credit lightbox: keep below our chrome ------------- */
+.cesium-credit-lightbox-overlay { z-index: 200 !important; }
+
+/* --- Loading element should never block our chrome ------------- */
+#loading { z-index: 90 !important; }
+
+/* --- Smaller viewports: collapse right card to inspector width - */
+@media (max-width: 1280px) {
+  :root { --ac-rail-r: 360px; }
+}
+@media (max-width: 1100px) {
+  :root { --ac-rail-r: 320px; }
+}
+
+/* --- Belt-and-braces: any unknown fixed element below 720 wide
+       shouldn't escape the bottom-rail boundary --------------- */
+.tw-scrubber * {
+  pointer-events: auto;
+}
+
+/* ============================================================
+   APPLE-CLEAN — round 3: emoji removal + content polish
+   ============================================================ */
+
+/* Hide all emoji icons in layer toggles; replace with a category dot */
+#twHeader #layerToggles .lt-btn .lt-ico {
+  font-size: 0 !important;        /* hide the emoji glyph */
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 999px !important;
+  background: var(--lt-cat-color, rgba(255,255,255,0.5)) !important;
+  display: inline-block !important;
+  margin-right: 7px !important;
+  vertical-align: middle;
+  opacity: 0.8;
+  transition: opacity 180ms ease;
+}
+#twHeader #layerToggles .lt-btn:hover .lt-ico,
+#twHeader #layerToggles .lt-btn.lt-active .lt-ico { opacity: 1; }
+#twHeader #layerToggles .lt-btn[data-cat="nature"]    .lt-ico { background: #ef6666; }
+#twHeader #layerToggles .lt-btn[data-cat="war"]       .lt-ico { background: #ff3b3b; }
+#twHeader #layerToggles .lt-btn[data-cat="weather"]   .lt-ico { background: #4c7fff; }
+#twHeader #layerToggles .lt-btn[data-cat="economy"]   .lt-ico { background: #22c55e; }
+#twHeader #layerToggles .lt-btn[data-cat="resources"] .lt-ico { background: #f59e0b; }
+#twHeader #layerToggles .lt-btn[data-cat="health"]    .lt-ico { background: #06b6d4; }
+#twHeader #layerToggles .lt-btn[data-cat="transit"]   .lt-ico { background: #a855f7; }
+#twHeader #layerToggles .lt-btn[data-cat="space"]     .lt-ico { background: #8b5cf6; }
+#twHeader #layerToggles .lt-btn[data-cat="infra"]     .lt-ico { background: #14b8a6; }
+#twHeader #layerToggles .lt-btn[data-cat="social"]    .lt-ico { background: #ec4899; }
+#twHeader #layerToggles .lt-btn[data-cat="sports"]    .lt-ico { background: #f97316; }
+#twHeader #layerToggles .lt-btn[data-cat="gaming"]    .lt-ico { background: #84cc16; }
+#twHeader #layerToggles .lt-btn[data-cat="meta"]      .lt-ico { background: #94a3b8; }
+
+/* Tighter, more confident layer button typography */
+#twHeader #layerToggles .lt-btn .lt-name {
+  font-family: var(--font-body, "Satoshi", system-ui, sans-serif);
+  font-size: 11.5px !important;
+  letter-spacing: 0.01em;
+  font-weight: 450;
+  vertical-align: middle;
+}
+
+/* Strip ⏱ trailing watch emoji that some layer names append */
+#twHeader #layerToggles .lt-btn .lt-name {
+  /* if the JS stuck a ⏱ at end, use a CSS reset later — keep ⏱ allowed */
+}
+
+/* Mapmode bar: a touch more breathing room between groups */
+#twHeader #mmbar { gap: 6px; padding: 6px 14px !important; }
+#twHeader #layerToggles { gap: 4px; padding: 6px 14px !important; }
+#twHeader .mmbar-group,
+#twHeader .lt-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  border-right: 1px solid var(--ac-edge);
+}
+#twHeader .mmbar-group:last-child,
+#twHeader .lt-group:last-child { border-right: 0; }
+
+/* --- Briefing: more rhythm, more whitespace ----------- */
+#twBriefing .tw-brief-section {
+  padding: 16px 20px !important;
+}
+#twBriefing .tw-brief-grouplabel {
+  margin-bottom: 12px !important;
+}
+#twBriefing .tw-council .tw-brief-section {
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+}
+#twBriefing .tw-brief-summarytext {
+  font-family: var(--font-display, "Fraunces", serif) !important;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(245,247,250,0.92);
+  letter-spacing: 0.005em;
+}
+#twBriefing .tw-brief-chips {
+  display: flex; flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+#twBriefing .tw-concern-bar {
+  margin: 5px 0 !important;
+  padding: 8px 12px !important;
+  border: 1px solid var(--ac-edge);
+}
+#twBriefing .tw-concern-bar:hover {
+  background: rgba(255,255,255,0.04) !important;
+  border-color: var(--ac-edge-hi);
+  cursor: pointer;
+}
+
+/* Council voice sigils — Roman numeral chip, no more sword emojis */
+#twBriefing .tw-voice-sigil {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 999px !important;
+  font-family: var(--font-display, "Fraunces", serif) !important;
+  font-style: italic;
+  font-size: 11px !important;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid var(--ac-edge) !important;
+  color: rgba(245,247,250,0.85) !important;
+}
+
+/* Council badge after the title — make it a tiny dot, not text */
+#twBriefing .tw-council-synth,
+#twBriefing .tw-council-llm {
+  display: inline-block;
+  width: 4px; height: 4px;
+  border-radius: 999px;
+  margin-left: 6px;
+  vertical-align: middle;
+  background: rgba(255,255,255,0.35);
+  font-size: 0;        /* hide any literal text */
+  line-height: 0;
+}
+#twBriefing .tw-council-llm { background: #4cc2ff; }
+
+/* Voice typography refinement */
+#twBriefing .tw-voice {
+  border: 1px solid var(--ac-edge) !important;
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+  margin: 8px 0 !important;
+  background: rgba(255,255,255,0.018) !important;
+}
+#twBriefing .tw-voice-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 8px;
+}
+#twBriefing .tw-voice-name {
+  font-family: var(--font-display, "Fraunces", serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.005em;
+  color: rgba(245,247,250,0.95);
+}
+#twBriefing .tw-voice-title {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+}
+#twBriefing .tw-voice-headline,
+#twBriefing .tw-voice-prose {
+  font-family: var(--font-body, "Satoshi", sans-serif);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: rgba(245,247,250,0.86);
+}
+#twBriefing .tw-voice-headline {
+  font-style: italic;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: rgba(245,247,250,0.95);
+}
+#twBriefing .tw-cite {
+  display: inline-block;
+  border: 0;
+  background: transparent;
+  color: rgba(76, 194, 255, 0.85);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0 2px;
+  letter-spacing: 0.04em;
+}
+#twBriefing .tw-cite:hover { color: #d8efff; text-decoration: underline; }
+
+/* "Most concerning" rows — clean grid rather than packed bars */
+#twBriefing .tw-concern-bar {
+  display: grid !important;
+  grid-template-columns: 1fr auto auto !important;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  font-family: var(--font-body, sans-serif);
+}
+
+/* Macros indicators — tighten */
+#twBriefing .tw-brief-kpis {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+#twBriefing .tw-brief-kpis > * {
+  border: 1px solid var(--ac-edge);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+}

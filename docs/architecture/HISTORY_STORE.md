@@ -248,5 +248,43 @@ deletes only the older duplicates, never the most-recent-for-the-window.
   Diff "compare to" selector) come in subsequent sessions once the store has
   accumulated material to show.
 
+## Operational note: WAL maintenance (2026-04-27)
+
+SQLite WAL bloats under our write load. **Inside the running aggregator,
+`PRAGMA wal_checkpoint(TRUNCATE)` cannot be run reliably** — neither via
+`asyncio.to_thread`, a dedicated `ThreadPoolExecutor`, nor a `subprocess`
+spawned from the event loop. The TRUNCATE call needs the SQLite write
+lock, and 90 plugin workers nearly always have a writer in flight.
+
+What works:
+- `PRAGMA wal_autocheckpoint=5000` (set on every writer connection)
+  reclaims WAL pages every ~20 MB. Pages get reused; the WAL FILE doesn't
+  shrink, but it stops growing without bound. WAL stabilizes at ~5 GB
+  steady state.
+- Reads remain fast (FRED series 80-200 ms, snapshot 100-300 ms) under
+  4-5 GB WAL because we open a fresh ephemeral connection per request.
+
+To shrink the WAL file (when it exceeds ~10 GB or before backing up):
+```bash
+ssh opc@129.151.191.74 "cd /home/opc/worldtwin && docker compose stop aggregator && \
+  docker run --rm -v /data/history:/history python:3.12-slim python -c '
+import sqlite3, time
+c = sqlite3.connect(\"/history/history.sqlite\", timeout=600, isolation_level=None)
+c.execute(\"PRAGMA busy_timeout=600000\")
+t0 = time.time()
+r = c.execute(\"PRAGMA wal_checkpoint(TRUNCATE)\").fetchone()
+print(f\"busy={r[0]} log={r[1]} ckpt={r[2]} in {time.time()-t0:.1f}s\")
+c.close()
+' && docker compose start aggregator"
+```
+
+Stopping the aggregator removes write contention; the standalone container
+gets the lock instantly and TRUNCATE completes in 1-5 minutes. This was
+confirmed working on 2026-04-27 (10.9 GB → 0 KB in 213 s).
+
+Disk budget: `/data` is a 100 GB block volume mounted from Oracle Cloud
+free tier. With main DB at 3.5 GB and WAL at 5 GB steady, we can run for
+months between manual TRUNCATEs.
+
 The History Store is **substrate**, not feature. Once it's been running for a
 week, every other lab capability becomes more powerful.
