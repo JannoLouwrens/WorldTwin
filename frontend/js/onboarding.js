@@ -24,12 +24,24 @@
         font: 13px Inter, sans-serif;
         box-shadow: 0 32px 80px rgba(0,0,0,0.6);
       ">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px">
           <div>
-            <div style="font-size:20px;font-weight:700;letter-spacing:0.02em">WorldTwin</div>
-            <div style="font-size:11px;color:#b8c1d1;letter-spacing:0.18em;text-transform:uppercase;margin-top:2px">Live Earth · 84 data layers · 800,000 BC → today</div>
+            <div style="font-size:11px;color:#4cc2ff;letter-spacing:0.22em;text-transform:uppercase;margin-bottom:6px">Welcome to</div>
+            <div style="font-size:26px;font-weight:700;letter-spacing:0.01em;line-height:1.1">WorldTwin</div>
+            <div style="font-size:11px;color:#b8c1d1;letter-spacing:0.18em;text-transform:uppercase;margin-top:6px">Live Earth · 84 data layers · 800,000 BC → today</div>
           </div>
-          <button id="twOnboardClose" style="background:none;border:0;color:#b8c1d1;font-size:24px;cursor:pointer">×</button>
+          <button id="twOnboardClose" style="background:none;border:0;color:#b8c1d1;font-size:24px;cursor:pointer;line-height:1">×</button>
+        </div>
+
+        <p style="color:#d6dce8;font-size:13px;line-height:1.6;margin:0 0 10px 0">
+          A news source built from <b>actual data</b> — not headlines. WorldTwin streams live readings from 75+ open data sources (NASA, USGS, World Bank, IMF, UCDP, NOAA, GDACS and more) onto a 3D Earth, so you can <i>see</i> what's happening — earthquakes, fires, conflicts, trade flows, weather, energy, markets — instead of reading what someone says is happening.
+        </p>
+
+        <div style="margin:0 0 8px 0;padding:10px 14px;background:rgba(255,184,77,0.08);border:1px solid rgba(255,184,77,0.28);border-radius:10px;display:flex;gap:10px;align-items:flex-start">
+          <span style="color:#ffb84d;font-weight:700;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;white-space:nowrap;padding-top:1px">Early dev</span>
+          <span style="color:#c8d0e0;font-size:12px;line-height:1.55">
+            This is a one-person project in active development. Things break, some sources rate-limit (you'll see "no data right now" toasts), cold boot takes ~10 s. Feedback welcome — code is at <a href="https://github.com/JannoLouwrens/WorldTwin" target="_blank" style="color:#4cc2ff;text-decoration:none">github.com/JannoLouwrens/WorldTwin</a>.
+          </span>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px 0">
@@ -86,11 +98,11 @@
     if (!el) return;
     el.style.opacity = '0';
     setTimeout(() => { el.style.display = 'none'; }, 350);
-    try { localStorage.setItem('tw_onboarded', '1'); } catch (_) {}
+    try { localStorage.setItem('tw_onboarded_v2', '1'); } catch (_) {}
   }
   function maybeShowOnFirstVisit() {
     try {
-      if (localStorage.getItem('tw_onboarded') === '1') return;
+      if (localStorage.getItem('tw_onboarded_v2') === '1') return;
     } catch (_) {}
     setTimeout(show, 1200);
   }
