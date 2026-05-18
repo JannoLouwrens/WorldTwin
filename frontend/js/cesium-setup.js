@@ -98,9 +98,12 @@
     // POST-PROCESSING — HDR + MSAA + bloom + custom vignette
     // ============================================================
     try {
-      // HDR + tonemapping — re-enabled with carefully tuned downstream
-      // imagery brightness/gamma so it doesn't blow out.
-      scene.highDynamicRange = true;
+      // HDR DISABLED — the tonemap curve was crushing the Black Marble night
+      // overlay's warm city-lights into a flat red dominant across the entire
+      // dark hemisphere. Bloom alone was reduced previously but the underlying
+      // red came from HDR. Without HDR the night side renders as natural dark
+      // ocean + sparse warm city dots — what the user expects.
+      scene.highDynamicRange = false;
       // MSAA 4x — free anti-aliasing on modern GPUs (Cesium 1.108+)
       if ('msaaSamples' in scene) scene.msaaSamples = 4;
       viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2);
@@ -214,8 +217,10 @@
         })
       );
       nightLayer.dayAlpha = 0.0;
-      nightLayer.nightAlpha = 0.95;
-      nightLayer.brightness = 1.15;
+      // Toned-down: 0.95 was overpowering the dark ocean into a warm haze;
+      // 0.5 reads as "subtle city sparkle" rather than "burned-in tint".
+      nightLayer.nightAlpha = 0.5;
+      nightLayer.brightness = 1.0;
       window._nightLayer = nightLayer;
     } catch (e) { console.warn('[setup] black marble failed:', e); }
 
