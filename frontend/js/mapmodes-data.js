@@ -529,26 +529,19 @@
     'atom'
   );
 
-  // Preload all caches the mapmodes need, then default-activate 'political'
+  // Minimal warm-up: ONLY what first hover/click needs. Everything else
+  // (world_bank 22MB, the historical set, owid, deep_dive...) lazy-loads
+  // via Mapmode.activate()'s ensureDataForMode and hover-tooltip's
+  // MODE_NEEDS when a mapmode is actually selected. The old 15-cache
+  // eager list fired at script PARSE, defeated the preloader SKIP list,
+  // and raced the boot preloader for bandwidth.
   Promise.all([
-    ensureCache('world_bank'),
-    ensureCache('imf_data'),
-    ensureCache('country_deep_dive'),
-    ensureCache('owid_energy'),
-    ensureCache('pulse_mode'),
-    ensureCache('country_relations'),
     ensureCache('country_polygons'),
+    ensureCache('country_relations'),
     ensureCache('country_culture'),
-    ensureCache('maddison_history'),
-    ensureCache('hyde_population'),
-    ensureCache('paleo_temperature'),
-    // Historical (Phase 7 will lazy-load these — for now eager so dev iteration works)
-    ensureCache('vdem_democracy'),
-    ensureCache('brecke_wars'),
-    ensureCache('clio_life_expectancy'),
-    ensureCache('cow_alliances'),
+    ensureCache('pulse_mode'),
   ]).then(() => {
-    console.log('[mapmodes-data] all data sources cached');
+    console.log('[mapmodes-data] core data sources cached');
     // Mount country polygons (needed for hover/click) but with NO tint.
     // The polygons stay invisible-by-default; user picks a mapmode to paint them.
     setTimeout(async () => {

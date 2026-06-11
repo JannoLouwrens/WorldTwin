@@ -79,7 +79,9 @@
 
     // Step 1: load config.json — single source of truth
     try {
-      const cr = await fetch('/worldtwin/config.json');
+      // Cache-buster: a stale browser-cached config kept fetching layers
+      // that no longer exist (dartmouth_floods 404 on every boot).
+      const cr = await fetch('/worldtwin/config.json?v=' + (window.WT_BUILD || '20260611'));
       if (cr.ok) {
         window.CONFIG = await cr.json();
         console.log(`[boot] config.json loaded · ${window.CONFIG.layers.length} layers in catalog`);

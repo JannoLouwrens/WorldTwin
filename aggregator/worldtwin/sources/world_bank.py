@@ -189,20 +189,36 @@ async def _fetch_indicator(client: httpx.AsyncClient, code: str, sem: asyncio.Se
             return code, []
 
 
+# World Bank AGGREGATE pseudo-countries — they have 3-letter codes too, so
+# the length check alone let regions/income groups leak in as "countries"
+# and paint on choropleths (e.g. AFE "Africa Eastern" colored like a state).
+WB_AGGREGATES = {
+    "WLD", "EUU", "ARB", "EAS", "EAP", "ECS", "ECA", "LCN", "LAC", "MEA",
+    "MNA", "NAC", "SAS", "SSF", "SSA", "AFE", "AFW", "HIC", "LIC", "LMC",
+    "UMC", "MIC", "LMY", "IBD", "IBT", "IDA", "IDB", "IDX", "OED", "PRE",
+    "PST", "EAR", "LTE", "TEA", "TEC", "TLA", "TMN", "TSA", "TSS", "FCS",
+    "HPC", "LDC", "OSS", "PSS", "SST", "CEB", "EMU", "CSS",
+}
+
+
 async def fetch(client: httpx.AsyncClient):
     sem = asyncio.Semaphore(3)         # WB throttles aggressive parallelism
-    results = await asyncio.gather(*[_fetch_indicator(client, c, sem) for c, _ in INDICATORS])
     by_country: dict[str, dict[str, Any]] = {}
     labels = {c: l for c, l in INDICATORS}
 
-    for code, rows in results:
+    # Fold each indicator's ~25k-row result into by_country AS IT ARRIVES
+    # and let the rows list go — gather() used to hold all 102 result sets
+    # (~2M row dicts) in RAM simultaneously.
+    tasks = [_fetch_indicator(client, c, sem) for c, _ in INDICATORS]
+    for fut in asyncio.as_completed(tasks):
+        code, rows = await fut
         # Build per-country full series, then pick latest non-null
         per_country_history: dict[str, dict[str, float]] = {}
         for row in rows:
             country_obj = row.get("country") or {}
             iso3 = row.get("countryiso3code") or country_obj.get("id", "")
-            if not iso3 or len(iso3) != 3:
-                continue                 # skip aggregates (region codes are 2-3 chars but not country ISO3)
+            if not iso3 or len(iso3) != 3 or iso3 in WB_AGGREGATES:
+                continue                 # skip aggregates and malformed codes
             value = row.get("value")
             year = row.get("date", "")
             if value is None or not year:

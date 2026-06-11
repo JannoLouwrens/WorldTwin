@@ -1439,6 +1439,23 @@ def compact() -> dict:
     # >5y: bucket by month
     _compact("0000-01-01T00:00:00", cut_5y, "SUBSTR(fetched_at, 1, 7)", "monthly_compact")
 
+    # Observations: ephemeral per-entity sources (one source_id per
+    # aircraft/ship/video/webcam) have no long-term analytical value and
+    # were the unbounded-growth tail — millions of rows within weeks.
+    # Prune those older than 30 days. Economic/conflict/climate series
+    # are NEVER touched.
+    EPHEMERAL_PREFIXES = ("flights.", "ships.", "webcams.", "youtube.",
+                          "radio.", "gaming.", "trends.", "news.", "iss.")
+    obs_deleted = 0
+    for prefix in EPHEMERAL_PREFIXES:
+        cur = c.execute(
+            "DELETE FROM observations WHERE source_id >= ? AND source_id < ? "
+            "AND fetched_at < ?",
+            (prefix, prefix + "~", cut_30d),
+        )
+        obs_deleted += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+    deleted["ephemeral_obs"] = obs_deleted
+
     # VACUUM only when something was actually deleted — it takes the write
     # lock and rewrites the file, so don't pay that nightly for a no-op.
     if any(v > 0 for v in deleted.values()):

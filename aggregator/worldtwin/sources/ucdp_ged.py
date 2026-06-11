@@ -55,6 +55,9 @@ async def fetch(client: httpx.AsyncClient):
                 text = io.TextIOWrapper(f, encoding="utf-8")
                 reader = csv.DictReader(text)
                 events: list[dict[str, Any]] = []
+                # (memory) the zip bytes (~30 MB) are freed right after this
+                # with-block via the explicit close below — before the
+                # sort + serialize peak.
                 # NO date cutoff — pull the entire UCDP archive (1989 → present)
                 # into history. The lab now remembers every recorded conflict
                 # event the academy has verified. ~350k events.
@@ -91,6 +94,8 @@ async def fetch(client: httpx.AsyncClient):
                         "conflict_name": row.get("conflict_name", ""),
                         "event_clarity": clarity,
                     })
+                zf.close()
+                del r
                 events.sort(key=lambda x: x["date_start"], reverse=True)
                 # Live UI keeps the most recent 3000 high-clarity events
                 events_top = [e for e in events if e["event_clarity"] == 1][:3000]
