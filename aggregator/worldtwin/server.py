@@ -86,6 +86,36 @@ async def _wal_checkpoint_loop():
         print("[wal] heartbeat (autocheckpoint runs inside writers)", flush=True)
 
 
+async def _history_compact_loop():
+    """Nightly retention enforcement for the history store.
+
+    history.compact() existed since May but was NEVER scheduled — that,
+    plus the restart storm re-snapshotting all 90 layers ~100x/day,
+    filled the 100 GB /data volume in six weeks (54 GB db + 45 GB WAL,
+    purged 2026-06-11). This loop is the missing piece: run compact()
+    daily, and if the DB threatens the disk again, emergency-prune.
+    """
+    import asyncio
+    from . import history
+    SIZE_LIMIT = 30 * 1024**3  # 30 GB hard ceiling — disk is 100 GB
+    print("[compact] nightly history retention loop started", flush=True)
+    await asyncio.sleep(1800)  # first pass 30 min after boot
+    while True:
+        try:
+            deleted = await asyncio.to_thread(history.compact)
+            size_gb = history.db_total_bytes() / 1024**3
+            print(f"[compact] retention pass done {deleted} — db {size_gb:.2f} GB", flush=True)
+            if history.db_total_bytes() > SIZE_LIMIT:
+                print("[compact] CRITICAL: db over 30 GB — emergency prune", flush=True)
+                res = await asyncio.to_thread(history.emergency_prune)
+                print(f"[compact] emergency prune: {res}", flush=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"[compact] error: {e}", flush=True)
+        await asyncio.sleep(86400)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Bump the asyncio default executor — we have 90 plugins, every fetch
@@ -107,6 +137,8 @@ async def lifespan(app: FastAPI):
     # Memory diagnostic — prints top allocators every 60s. Remove once leak
     # is identified.
     app.state.mem_task = asyncio.create_task(_mem_diagnostic_loop())
+    # Nightly history retention — the missing scheduler for history.compact()
+    app.state.compact_task = asyncio.create_task(_history_compact_loop())
     # Shared HTTP client. Connection limits prevent unbounded growth of
     # the pool when many plugins fire simultaneously against many distinct
     # hosts (we hit ~80 unique upstream domains across 90 plugins).

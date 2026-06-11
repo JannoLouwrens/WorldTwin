@@ -19,6 +19,7 @@ Public API:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -69,11 +70,12 @@ CREATE INDEX IF NOT EXISTS idx_obs_observed        ON observations(observed_at D
 CREATE INDEX IF NOT EXISTS idx_obs_fetched         ON observations(fetched_at DESC);
 
 CREATE TABLE IF NOT EXISTS snapshots (
-  layer_id    TEXT NOT NULL,
-  fetched_at  TEXT NOT NULL,
-  payload_kb  REAL,
-  payload     BLOB NOT NULL,
-  rows_added  INTEGER,
+  layer_id     TEXT NOT NULL,
+  fetched_at   TEXT NOT NULL,
+  payload_kb   REAL,
+  payload      BLOB NOT NULL,
+  rows_added   INTEGER,
+  content_hash TEXT,
   PRIMARY KEY (layer_id, fetched_at)
 );
 CREATE INDEX IF NOT EXISTS idx_snap_layer_time ON snapshots(layer_id, fetched_at DESC);
@@ -114,6 +116,11 @@ def _conn() -> sqlite3.Connection:
                 s = stmt.strip()
                 if s:
                     c.execute(s)
+            # Migration for DBs created before content-hash dedup existed.
+            try:
+                c.execute("ALTER TABLE snapshots ADD COLUMN content_hash TEXT")
+            except sqlite3.OperationalError:
+                pass  # column already there
             _init_done = True
     _local.conn = c
     return c
@@ -1113,18 +1120,39 @@ def snapshot(layer_id: str, payload: Any) -> dict:
             except sqlite3.Error as e:
                 result["errors"].append(f"observations write: {e}")
 
-        # 2. Snapshot the full payload (compressed)
+        # 2. Snapshot the full payload (compressed) — with content-hash dedup.
+        # Container restarts re-fetch every layer; the payload is usually
+        # IDENTICAL except its volatile "fetched" timestamp. Before dedup,
+        # the mem-watchdog restart storm (~100/day) wrote ~100 duplicate
+        # multi-MB snapshots per layer per day and filled a 100 GB disk in
+        # six weeks. Hash the payload minus volatile keys; skip the write
+        # when nothing actually changed.
         try:
-            payload_str = json.dumps(payload, ensure_ascii=False, default=str)
-            payload_kb = round(len(payload_str.encode()) / 1024.0, 1)
-            blob = zlib.compress(payload_str.encode("utf-8"), level=6)
-            c.execute(
-                "INSERT OR IGNORE INTO snapshots "
-                "(layer_id, fetched_at, payload_kb, payload, rows_added) "
-                "VALUES (?,?,?,?,?)",
-                (layer_id, fetched_at, payload_kb, blob, len(rows)),
-            )
-            result["snapshot_added"] = True
+            if isinstance(payload, dict):
+                stable = {k: v for k, v in payload.items()
+                          if k not in ("fetched", "fetched_at", "expires_at")}
+            else:
+                stable = payload
+            stable_str = json.dumps(stable, ensure_ascii=False, default=str, sort_keys=True)
+            content_hash = hashlib.sha1(stable_str.encode("utf-8")).hexdigest()
+            prev = c.execute(
+                "SELECT content_hash FROM snapshots WHERE layer_id=? "
+                "ORDER BY fetched_at DESC LIMIT 1",
+                (layer_id,),
+            ).fetchone()
+            if prev is not None and prev[0] == content_hash:
+                result["snapshot_added"] = False  # unchanged — dedup skip
+            else:
+                payload_str = json.dumps(payload, ensure_ascii=False, default=str)
+                payload_kb = round(len(payload_str.encode()) / 1024.0, 1)
+                blob = zlib.compress(payload_str.encode("utf-8"), level=6)
+                c.execute(
+                    "INSERT OR IGNORE INTO snapshots "
+                    "(layer_id, fetched_at, payload_kb, payload, rows_added, content_hash) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (layer_id, fetched_at, payload_kb, blob, len(rows), content_hash),
+                )
+                result["snapshot_added"] = True
         except sqlite3.Error as e:
             result["errors"].append(f"snapshot write: {e}")
 
@@ -1326,21 +1354,46 @@ def redecompose_all(only_layer: str | None = None) -> dict:
     return stats
 
 
+def db_total_bytes() -> int:
+    """Size on disk of the history DB + WAL + SHM."""
+    total = 0
+    for suffix in ("", "-wal", "-shm"):
+        try:
+            total += os.path.getsize(str(HISTORY_DB) + suffix)
+        except OSError:
+            pass
+    return total
+
+
+def emergency_prune() -> dict:
+    """Last-resort guard when the DB threatens to fill the disk again:
+    keep only the last 7 days of snapshots (observations untouched)."""
+    c = _conn()
+    cut = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    before = c.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+    c.execute("DELETE FROM snapshots WHERE fetched_at < ?", (cut,))
+    after = c.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+    c.execute("VACUUM")
+    return {"snapshots_deleted": before - after, "kept": after}
+
+
 def compact() -> dict:
     """Apply the retention policy:
-       <30d: keep all snapshots
+       <7d:    keep all snapshots (content-hash dedup already limits these)
+       7d-30d: one per layer per 6 hours
        30d-1y: one per day
-       1y-5y: one per week
-       >5y:  one per month
+       1y-5y:  one per week
+       >5y:    one per month
     Observations are NEVER deleted."""
     c = _conn()
     now = datetime.now(timezone.utc)
     # bucket boundaries
+    cut_7d  = (now - timedelta(days=7)).isoformat()
     cut_30d = (now - timedelta(days=30)).isoformat()
     cut_1y  = (now - timedelta(days=365)).isoformat()
     cut_5y  = (now - timedelta(days=365 * 5)).isoformat()
 
-    deleted = {"daily_compact": 0, "weekly_compact": 0, "monthly_compact": 0}
+    deleted = {"sixhour_compact": 0, "daily_compact": 0, "weekly_compact": 0, "monthly_compact": 0}
 
     def _compact(window_lo: str, window_hi: str, bucket_expr: str, label: str):
         # For each (layer, bucket) keep the LATEST snapshot, delete the rest
@@ -1360,6 +1413,10 @@ def compact() -> dict:
                           (window_lo, window_hi)).fetchone()[0]
         deleted[label] = before - after
 
+    # 7d-30d: bucket by 6-hour window (chars 1-11 = 'YYYY-MM-DDT', hour/6 → 0..3)
+    _compact(cut_30d, cut_7d,
+             "SUBSTR(fetched_at, 1, 11) || (CAST(SUBSTR(fetched_at, 12, 2) AS INTEGER) / 6)",
+             "sixhour_compact")
     # 30d-1y: bucket by day
     _compact(cut_1y,  cut_30d, "SUBSTR(fetched_at, 1, 10)",  "daily_compact")
     # 1y-5y: bucket by ISO week (year-week)
@@ -1367,5 +1424,8 @@ def compact() -> dict:
     # >5y: bucket by month
     _compact("0000-01-01T00:00:00", cut_5y, "SUBSTR(fetched_at, 1, 7)", "monthly_compact")
 
-    c.execute("VACUUM")
+    # VACUUM only when something was actually deleted — it takes the write
+    # lock and rewrites the file, so don't pay that nightly for a no-op.
+    if any(v > 0 for v in deleted.values()):
+        c.execute("VACUUM")
     return deleted
