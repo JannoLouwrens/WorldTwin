@@ -49,6 +49,8 @@
     religion: ['country_culture'], ethnicity: ['country_culture'],
     political: ['country_relations'],
     pulse: ['pulse_mode'],
+    democracy: ['vdem_democracy'],
+    pollution: ['world_bank'],
   };
   const _kicked = new Set();
   function ensureNeeded(mode) {
@@ -96,7 +98,8 @@
       gdp_pc:      () => '$' + fmtBig((wb?.countries?.[iso3]?.['NY.GDP.PCAP.CD'] || {}).value),
       population:  () => fmtBig((wb?.countries?.[iso3]?.['SP.POP.TOTL'] || {}).value),
       inflation:   () => {
-        const v = imf?.countries?.[iso3]?.PCPIPCH?.value;
+        let v = imf?.countries?.[iso3]?.PCPIPCH?.value;
+        if (v == null) v = (wb?.countries?.[iso3]?.['FP.CPI.TOTL.ZG'] || {}).value;
         return v == null ? '—' : v.toFixed(1) + ' %';
       },
       military:    () => {
@@ -112,8 +115,29 @@
         return v == null ? '—' : 'IPC phase ' + v;
       },
       co2: () => {
-        const v = (wb?.countries?.[iso3]?.['EN.ATM.CO2E.PC'] || {}).value;
+        // EN.ATM.CO2E.PC was retired by the World Bank — the live cache
+        // carries the AR5 GHG successor indicator instead.
+        const v = (wb?.countries?.[iso3]?.['EN.GHG.CO2.PC.CE.AR5']
+                   || wb?.countries?.[iso3]?.['EN.ATM.CO2E.PC'] || {}).value;
         return v == null ? '—' : v.toFixed(2) + ' t/yr';
+      },
+      pollution: () => {
+        const v = (wb?.countries?.[iso3]?.['EN.GHG.CO2.PC.CE.AR5']
+                   || wb?.countries?.[iso3]?.['EN.ATM.CO2E.PC'] || {}).value;
+        return v == null ? '—' : v.toFixed(2) + ' t CO2/yr';
+      },
+      democracy: () => {
+        const vd = window._cacheStore?.get('vdem_democracy');
+        const hist = vd?.countries?.[iso3]?.history;
+        if (!hist) return '—';
+        const yr = (window.Clock && window.Clock.year) || new Date().getFullYear();
+        let best = null;
+        for (const y of Object.keys(hist)) {
+          const yi = parseInt(y, 10);
+          if (yi <= yr && (best == null || yi > best)) best = yi;
+        }
+        const v = best != null ? hist[best] : null;
+        return v == null ? '—' : Number(v).toFixed(2);
       },
       renewable: () => {
         const v = (wb?.countries?.[iso3]?.['EG.ELC.RNEW.ZS'] || {}).value;

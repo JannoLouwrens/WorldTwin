@@ -32,44 +32,48 @@ LON_STEP = 24
 
 
 async def fetch(client: httpx.AsyncClient):
-    sem = asyncio.Semaphore(6)
-    points = []
-    for lat in range(LAT_MIN, LAT_MAX + 1, LAT_STEP):
-        for lon in range(LON_MIN, LON_MAX + 1, LON_STEP):
-            points.append((lat, lon))
-
-    async def _one(lat, lon):
-        async with sem:
-            try:
-                r = await client.get(
-                    "https://api.open-meteo.com/v1/forecast",
-                    params={
-                        "latitude": lat,
-                        "longitude": lon,
-                        "current": "temperature_2m,apparent_temperature,relative_humidity_2m,surface_pressure,cloud_cover,weather_code",
-                        "timezone": "UTC",
-                    },
-                    timeout=20,
-                )
-                if r.status_code != 200:
-                    return None
-                d = r.json().get("current", {})
-                return {
-                    "lat": lat,
-                    "lon": lon,
-                    "temp_c": d.get("temperature_2m"),
-                    "feels_c": d.get("apparent_temperature"),
-                    "humidity": d.get("relative_humidity_2m"),
-                    "pressure_hpa": d.get("surface_pressure"),
-                    "cloud_pct": d.get("cloud_cover"),
-                    "wmo_code": d.get("weather_code"),
-                    "time": d.get("time"),
-                }
-            except Exception:
-                return None
-
-    results = await asyncio.gather(*[_one(lat, lon) for lat, lon in points])
-    grid = [r for r in results if r and r.get("temp_c") is not None]
+    # BATCHED: one multi-location request instead of 135 (quota fix).
+    points = [(lat, lon)
+              for lat in range(LAT_MIN, LAT_MAX + 1, LAT_STEP)
+              for lon in range(LON_MIN, LON_MAX + 1, LON_STEP)]
+    try:
+        r = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": ",".join(str(p[0]) for p in points),
+                "longitude": ",".join(str(p[1]) for p in points),
+                "current": "temperature_2m,apparent_temperature,relative_humidity_2m,surface_pressure,cloud_cover,weather_code",
+                "timezone": "UTC",
+            },
+            timeout=60,
+        )
+        if r.status_code != 200:
+            print(f"[temperature_field] HTTP {r.status_code} — keeping previous cache")
+            return None
+        body = r.json()
+    except Exception as e:
+        print(f"[temperature_field] error: {e}")
+        return None
+    rows = body if isinstance(body, list) else [body]
+    grid = []
+    for (lat, lon), row in zip(points, rows):
+        d = (row or {}).get("current", {})
+        if d.get("temperature_2m") is None:
+            continue
+        grid.append({
+            "lat": lat,
+            "lon": lon,
+            "temp_c": d.get("temperature_2m"),
+            "feels_c": d.get("apparent_temperature"),
+            "humidity": d.get("relative_humidity_2m"),
+            "pressure_hpa": d.get("surface_pressure"),
+            "cloud_pct": d.get("cloud_cover"),
+            "wmo_code": d.get("weather_code"),
+            "time": d.get("time"),
+        })
+    if len(grid) < len(points) * 0.3:
+        print(f"[temperature_field] only {len(grid)}/{len(points)} points — keeping previous cache")
+        return None
 
     return {
         "source": "Open-Meteo",

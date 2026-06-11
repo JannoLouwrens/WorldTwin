@@ -157,7 +157,11 @@ class Envelope:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        # NOT dataclasses.asdict(): that recursively deep-copies the entire
+        # payload graph (~hundreds of MB for bulk layers like ucdp_ged) on
+        # every fetch. Shallow copy shares the data reference — downstream
+        # only serializes it, never mutates it.
+        return dict(self.__dict__)
 
 
 # ---------------------------------------------------------------------------

@@ -21,11 +21,15 @@
   }
 
   // ========== TRADE FLOWS — animated curved arcs, top N by value ==========
-  function renderTradeFlows(opts) {
+  async function renderTradeFlows(opts) {
     opts = opts || {};
     const limit = opts.limit || 80;
     clearArr(_tradeEntities);
-    const data = window._cacheStore?.get('trade_annual');
+    // fetchCache is store-first; the bare _cacheStore read left the layer
+    // blank whenever the boot preloader's budget skipped trade_annual.
+    const data = window.fetchCache
+      ? await window.fetchCache('trade_annual')
+      : window._cacheStore?.get('trade_annual');
     if (!data?.flows) return;
     const flows = data.flows
       .filter(f => Number.isFinite(f.from_lat) && Number.isFinite(f.from_lon)
@@ -87,10 +91,12 @@
   function clearTradeFlows() { clearArr(_tradeEntities); }
 
   // ========== CABLES — thin ground polylines, dim default, brighter when zoomed ==========
-  function renderCables(opts) {
+  async function renderCables(opts) {
     opts = opts || {};
     clearArr(_cableEntities);
-    const data = window._cacheStore?.get('cables');
+    const data = window.fetchCache
+      ? await window.fetchCache('cables')
+      : window._cacheStore?.get('cables');
     if (!data?.features) return;
     let count = 0;
     for (const feat of data.features) {
@@ -189,11 +195,18 @@
     }
   });
 
-  // Register layer toggles for trade + cables
+  // Register layer toggles for trade + cables — but DON'T overwrite an
+  // existing renderer: layers.js registers commodity-filter-aware versions
+  // of these ids, and this module silently clobbering them killed the
+  // Resources-mode commodity filter.
   function waitAndRegister() {
     if (!window.LAYERS) { setTimeout(waitAndRegister, 100); return; }
-    window.LAYERS.trade_annual = { render: () => renderTradeFlows({ limit: 80 }), clear: clearTradeFlows };
-    window.LAYERS.cables       = { render: () => renderCables(),                   clear: clearCables };
+    if (!window.LAYERS.trade_annual) {
+      window.LAYERS.trade_annual = { render: () => renderTradeFlows({ limit: 80 }), clear: clearTradeFlows };
+    }
+    if (!window.LAYERS.cables) {
+      window.LAYERS.cables = { render: () => renderCables(), clear: clearCables };
+    }
   }
   waitAndRegister();
 })();

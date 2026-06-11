@@ -147,12 +147,12 @@
     intel.debt = imfRow?.GGXWDG_NGDP?.value;
     intel.growth = imfRow?.NGDP_RPCH?.value;
 
-    // Culture
+    // Culture — live cache is FLAT (religion_primary etc.), nested kept as fallback
     const cc = window._cacheStore?.get('country_culture')?.countries?.[iso3];
-    intel.religion = cc?.religion?.label;
-    intel.religionFamily = cc?.religion?.family;
-    intel.ethnicity = cc?.ethnicity?.label;
-    intel.ethnicityFamily = cc?.ethnicity?.family;
+    intel.religion = cc?.religion_primary || cc?.religion?.label;
+    intel.religionFamily = cc?.religion_family || cc?.religion?.family;
+    intel.ethnicity = cc?.ethnicity_primary || cc?.ethnicity?.label;
+    intel.ethnicityFamily = cc?.ethnicity_family || cc?.ethnicity?.family;
 
     // Relations
     const rel = window._cacheStore?.get('country_relations')?.by_country?.[iso3];
@@ -397,7 +397,7 @@
 
       </div>
     `;
-    el.style.display = 'block';
+    el.style.display = 'block'; el.classList.add('tw-open');
     document.getElementById('twDossierClose').onclick = hide;
     // Async fetch deep historical series from the History Store and render
     // them inline. Decouples the panel render from the slow read.
@@ -497,7 +497,7 @@
     render(iso3);
   }
   function hide() {
-    if (_el) _el.style.display = 'none';
+    if (_el) { _el.style.display = 'none'; _el.classList.remove('tw-open'); }
     _currentIso3 = null;
   }
 
@@ -565,7 +565,7 @@
         </div>
       </div>
     `;
-    el.style.display = 'block';
+    el.style.display = 'block'; el.classList.add('tw-open');
     document.getElementById('twDossierClose').onclick = () => {
       hide();
       el.style.width = '380px';   // restore single-country width

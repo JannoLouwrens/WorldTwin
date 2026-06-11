@@ -89,8 +89,15 @@
       });
       polygonsLoaded = true;
       console.log('[mapmode] loaded', Object.keys(polygonEntities).length, 'country entities');
-      // Activate current mapmode if already set
-      if (currentId) activate(currentId);
+      // Re-activate ONLY a genuinely pending activation (one that arrived
+      // before polygons finished). Re-firing whenever currentId was truthy
+      // made a stale mapmode paint itself minutes after boot — the phantom
+      // "Politics choropleth appeared on its own" bug.
+      if (_pendingActivate) {
+        const id = _pendingActivate;
+        _pendingActivate = null;
+        activate(id);
+      }
     } catch (e) {
       console.warn('[mapmode] loadPolygons error', e);
     }
@@ -181,7 +188,8 @@
     population: ['world_bank'],
     urban: ['world_bank'], internet: ['world_bank'], life: ['world_bank'],
     co2: ['world_bank'], renewable: ['world_bank'], military: ['world_bank'],
-    inflation: ['imf_data'], debt: ['imf_data'],
+    inflation: ['imf_data', 'world_bank'],   // WB FP.CPI.TOTL.ZG is the fallback
+    debt: ['world_bank', 'imf_data'],        // debt colorFn reads world_bank
     water_stress: ['country_deep_dive'], food: ['country_deep_dive'],
     pulse: ['pulse_mode'],
   };
@@ -205,14 +213,18 @@
     return fetchedAny;
   }
 
+  let _pendingActivate = null;
+
   async function activate(id) {
     if (!polygonsLoaded) {
       currentId = id;
+      _pendingActivate = id;
       await loadPolygons();
       if (!polygonsLoaded) {
         // Will be picked up after polygons finish loading
         return;
       }
+      _pendingActivate = null;
     }
     const mode = MAPMODES[id];
     if (!mode) {
@@ -338,9 +350,24 @@
     window.MAPMODE_HIGHLIGHT = {};
   }
 
+  // True deselect: clear colors + highlight + scrubber registration without
+  // activating another mode (used by the Layer Browser active-row re-click).
+  function deactivate() {
+    if (currentId && window.Scrubber) {
+      window.Scrubber.unregisterLayer('mapmode:' + currentId);
+    }
+    currentId = null;
+    _pendingActivate = null;
+    window.MAPMODE_COLORS = {};
+    window.MAPMODE_HIGHLIGHT = {};
+    document.querySelectorAll('.mmbar-btn').forEach(b => b.classList.remove('active'));
+    if (window.setLegendStrip) window.setLegendStrip(null);
+  }
+
   window.Mapmode = {
     register,
     activate,
+    deactivate,
     repaint,
     list: () => Object.values(MAPMODES),
     current: () => currentId,

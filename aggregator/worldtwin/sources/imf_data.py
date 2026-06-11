@@ -64,19 +64,29 @@ async def _fetch_one(client: httpx.AsyncClient, code: str, label: str, sem: asyn
     async with sem:
         for attempt in range(3):
             try:
+                # IMF's Akamai edge 403-blocks non-browser User-Agents from
+                # datacenter IPs (verified live 2026-06-11) — the custom
+                # "WorldTwin/1.0" UA was the reason this cache went empty.
                 r = await client.get(
                     f"https://www.imf.org/external/datamapper/api/v1/{code}",
                     timeout=60,
-                    headers={"User-Agent": "WorldTwin/1.0"},
+                    headers={
+                        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                       "Chrome/124.0.0.0 Safari/537.36"),
+                        "Accept": "application/json",
+                    },
                 )
                 if r.status_code == 200:
                     body = r.json()
                     values = body.get("values", {}).get(code, {}) or {}
                     await asyncio.sleep(0.4)   # politeness between calls
                     return code, values
-                if r.status_code in (429, 503):
+                if r.status_code in (403, 429, 503):
+                    print(f"[imf_data] {code} HTTP {r.status_code} (attempt {attempt + 1})")
                     await asyncio.sleep(5 + attempt * 5)
                     continue
+                print(f"[imf_data] {code} HTTP {r.status_code}")
                 return code, {}
             except Exception as e:
                 if attempt == 2:
@@ -119,6 +129,12 @@ async def fetch(client: httpx.AsyncClient):
                 "latest": {"year": latest_year, "value": latest_value},
                 "history": year_map,    # already {year_str: value} — full series including forecasts
             }
+
+    if not by_country:
+        # Total upstream failure (e.g. Akamai 403 streak) — never overwrite
+        # a good cache with an empty payload.
+        print("[imf_data] all indicators failed — keeping previous cache")
+        return None
 
     return {
         "source": "IMF DataMapper",

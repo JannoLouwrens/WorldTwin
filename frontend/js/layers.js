@@ -21,12 +21,32 @@
     window._layerEntities[id] = [];
   }
 
+  // Canonical cache fetch: store-first (preloader fills window._cacheStore),
+  // in-flight dedupe, write-through. This file loads AFTER preloader.js and
+  // its window.fetchCache export used to overwrite the store-aware one with
+  // a plain network fetch — world_bank.json (22 MB) was downloaded TWICE on
+  // every boot. The preloader's 2-min background refresh keeps fast layers
+  // current in the store.
+  const _inflight = {};
   async function fetchCache(id) {
-    try {
-      const r = await fetch('/api/cache/' + id + '.json?_=' + Date.now());
-      if (!r.ok) return null;
-      return await r.json();
-    } catch (e) { console.warn('fetch', id, 'failed', e); return null; }
+    const store = window._cacheStore;
+    if (store && store.has(id)) return store.get(id);
+    if (_inflight[id]) return _inflight[id];
+    _inflight[id] = (async () => {
+      try {
+        const r = await fetch('/api/cache/' + id + '.json');
+        if (!r.ok) return null;
+        const d = await r.json();
+        if (store) store.set(id, d);
+        return d;
+      } catch (e) {
+        console.warn('fetch', id, 'failed', e);
+        return null;
+      } finally {
+        delete _inflight[id];
+      }
+    })();
+    return _inflight[id];
   }
 
   // ==================================================
@@ -503,30 +523,11 @@
   // ==================================================
   async function renderSatellites() {
     clearLayer('satellites');
-    const d = await fetchCache('satellites');
-    if (!d || !Array.isArray(d)) return;
-    // No SGP4 yet — just render last-known orbit dots at approximate altitudes per group
-    const groupAlt = { stations: 410, visual: 500, 'gps-ops': 20200, geo: 35786, starlink: 550 };
-    d.slice(0, 300).forEach(s => {
-      // TLEs don't have lat/lon — render a ring around pole-esque at group altitude as a placeholder
-      // (real SGP4 propagation is Phase 6)
-      const rand = Math.random();
-      const lat = (rand - 0.5) * 120;
-      const lon = (Math.random() - 0.5) * 360;
-      const altKm = groupAlt[s._group] || 500;
-      let hex = '#ffffff';
-      if (s._group === 'starlink') hex = '#c7d2fe';
-      else if (s._group === 'gps-ops') hex = '#fde047';
-      else if (s._group === 'geo') hex = '#a76bff';
-      addEntity('satellites', {
-        position: Cesium.Cartesian3.fromDegrees(lon, lat, altKm * 1000),
-        point: {
-          pixelSize: 2.5,
-          color: DS.c(hex, 0.7),
-        },
-        name: s.OBJECT_NAME || 'Satellite',
-      });
-    });
+    // DISABLED: the previous implementation plotted Math.random() positions
+    // — fake data presented as live satellites, which is the one thing a
+    // "news source of actual data" can never do. Re-enable when real SGP4
+    // propagation (satellite.js) or the Space-Track positions land.
+    console.warn('[satellites] renderer disabled — no real position data yet (TLEs need SGP4)');
   }
 
   // ==================================================

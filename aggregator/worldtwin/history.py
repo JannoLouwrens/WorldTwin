@@ -1106,53 +1106,67 @@ def snapshot(layer_id: str, payload: Any) -> dict:
         c.execute("PRAGMA synchronous=NORMAL")
         c.execute("PRAGMA wal_autocheckpoint=5000")  # autocheckpoint inside writer
 
-        # 1. Decompose to observation rows
-        rows = _decompose(layer_id, payload, fetched_at)
-        if rows:
-            try:
-                c.executemany(
-                    "INSERT OR IGNORE INTO observations "
-                    "(source_id, observed_at, fetched_at, value_num, value_text, value_json, meta_json) "
-                    "VALUES (?,?,?,?,?,?,?)",
-                    rows,
-                )
-                result["observation_rows"] = len(rows)
-            except sqlite3.Error as e:
-                result["errors"].append(f"observations write: {e}")
-
-        # 2. Snapshot the full payload (compressed) — with content-hash dedup.
+        # 1. Content-hash dedup FIRST — before any expensive work.
         # Container restarts re-fetch every layer; the payload is usually
-        # IDENTICAL except its volatile "fetched" timestamp. Before dedup,
-        # the mem-watchdog restart storm (~100/day) wrote ~100 duplicate
-        # multi-MB snapshots per layer per day and filled a 100 GB disk in
-        # six weeks. Hash the payload minus volatile keys; skip the write
-        # when nothing actually changed.
+        # IDENTICAL except its volatile "fetched" timestamp. Hash the
+        # payload minus volatile keys; when nothing changed, skip BOTH the
+        # decompose (350k tuple allocations for ucdp_ged) and the snapshot
+        # write. Memory note: this is the ONLY full serialization — the
+        # same bytes are reused for the stored blob, and the volatile keys
+        # are not stored in it (fetched_at lives in its own column).
+        stable_bytes = b"null"
+        content_hash = ""
         try:
             if isinstance(payload, dict):
                 stable = {k: v for k, v in payload.items()
                           if k not in ("fetched", "fetched_at", "expires_at")}
             else:
                 stable = payload
-            stable_str = json.dumps(stable, ensure_ascii=False, default=str, sort_keys=True)
-            content_hash = hashlib.sha1(stable_str.encode("utf-8")).hexdigest()
+            stable_bytes = json.dumps(
+                stable, ensure_ascii=False, default=str, sort_keys=True
+            ).encode("utf-8")
+            del stable
+            content_hash = hashlib.sha1(stable_bytes).hexdigest()
             prev = c.execute(
                 "SELECT content_hash FROM snapshots WHERE layer_id=? "
                 "ORDER BY fetched_at DESC LIMIT 1",
                 (layer_id,),
             ).fetchone()
             if prev is not None and prev[0] == content_hash:
-                result["snapshot_added"] = False  # unchanged — dedup skip
-            else:
-                payload_str = json.dumps(payload, ensure_ascii=False, default=str)
-                payload_kb = round(len(payload_str.encode()) / 1024.0, 1)
-                blob = zlib.compress(payload_str.encode("utf-8"), level=6)
-                c.execute(
-                    "INSERT OR IGNORE INTO snapshots "
-                    "(layer_id, fetched_at, payload_kb, payload, rows_added, content_hash) "
-                    "VALUES (?,?,?,?,?,?)",
-                    (layer_id, fetched_at, payload_kb, blob, len(rows), content_hash),
-                )
-                result["snapshot_added"] = True
+                result["snapshot_added"] = False  # unchanged — full skip
+                return result
+        except sqlite3.Error as e:
+            result["errors"].append(f"dedup check: {e}")
+
+        # 2. Decompose to observation rows (only when content changed)
+        rows = _decompose(layer_id, payload, fetched_at)
+        if rows:
+            try:
+                # Chunked so sqlite parameter binding never holds the whole
+                # 350k-row set in its arg arena at once.
+                CHUNK = 10000
+                for i in range(0, len(rows), CHUNK):
+                    c.executemany(
+                        "INSERT OR IGNORE INTO observations "
+                        "(source_id, observed_at, fetched_at, value_num, value_text, value_json, meta_json) "
+                        "VALUES (?,?,?,?,?,?,?)",
+                        rows[i:i + CHUNK],
+                    )
+                result["observation_rows"] = len(rows)
+            except sqlite3.Error as e:
+                result["errors"].append(f"observations write: {e}")
+
+        # 3. Snapshot write — reuse the bytes serialized for the hash.
+        try:
+            payload_kb = round(len(stable_bytes) / 1024.0, 1)
+            blob = zlib.compress(stable_bytes, level=6)
+            c.execute(
+                "INSERT OR IGNORE INTO snapshots "
+                "(layer_id, fetched_at, payload_kb, payload, rows_added, content_hash) "
+                "VALUES (?,?,?,?,?,?)",
+                (layer_id, fetched_at, payload_kb, blob, len(rows), content_hash),
+            )
+            result["snapshot_added"] = True
         except sqlite3.Error as e:
             result["errors"].append(f"snapshot write: {e}")
 
@@ -1187,6 +1201,7 @@ def query_series(source_id: str, since: str | None = None,
     in 0.05s; GROUP BY observed_at adds a 50× slowdown because MAX(fetched_at)
     forces a full per-group scan even when the index is sorted right.
     """
+    limit = max(1, min(limit, 50_000))  # defense in depth — server also clamps
     c = _read_conn()
     try:
         sql = ("SELECT observed_at, fetched_at, value_num, value_text, meta_json "

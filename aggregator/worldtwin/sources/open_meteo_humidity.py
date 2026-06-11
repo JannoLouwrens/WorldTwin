@@ -23,28 +23,37 @@ LAYER = LayerMeta(
 )
 
 async def fetch(client: httpx.AsyncClient):
-    sem = asyncio.Semaphore(6)
+    # BATCHED: one multi-location request instead of 135 (quota fix —
+    # the per-point burst kept tripping Open-Meteo's rate limit and the
+    # near-empty grid was silently written over good data).
     points = [(lat, lon) for lat in range(-72, 73, 18) for lon in range(-180, 171, 24)]
-
-    async def _one(lat, lon):
-        async with sem:
-            try:
-                r = await client.get("https://api.open-meteo.com/v1/forecast",
-                    params={"latitude": lat, "longitude": lon,
-                            "current": "relative_humidity_2m,dew_point_2m,temperature_2m",
-                            "timezone": "UTC"}, timeout=20)
-                if r.status_code != 200: return None
-                d = r.json().get("current", {})
-                return {"lat": lat, "lon": lon,
-                        "humidity_pct": d.get("relative_humidity_2m"),
-                        "dew_point_c": d.get("dew_point_2m"),
-                        "temp_c": d.get("temperature_2m"),
-                        "time": d.get("time")}
-            except Exception:
-                return None
-
-    results = await asyncio.gather(*[_one(lat, lon) for lat, lon in points])
-    grid = [r for r in results if r and r.get("humidity_pct") is not None]
+    try:
+        r = await client.get("https://api.open-meteo.com/v1/forecast",
+            params={"latitude": ",".join(str(p[0]) for p in points),
+                    "longitude": ",".join(str(p[1]) for p in points),
+                    "current": "relative_humidity_2m,dew_point_2m,temperature_2m",
+                    "timezone": "UTC"}, timeout=60)
+        if r.status_code != 200:
+            print(f"[humidity_field] HTTP {r.status_code} — keeping previous cache")
+            return None
+        body = r.json()
+    except Exception as e:
+        print(f"[humidity_field] error: {e}")
+        return None
+    rows = body if isinstance(body, list) else [body]
+    grid = []
+    for (lat, lon), row in zip(points, rows):
+        d = (row or {}).get("current", {})
+        if d.get("relative_humidity_2m") is None:
+            continue
+        grid.append({"lat": lat, "lon": lon,
+                     "humidity_pct": d.get("relative_humidity_2m"),
+                     "dew_point_c": d.get("dew_point_2m"),
+                     "temp_c": d.get("temperature_2m"),
+                     "time": d.get("time")})
+    if len(grid) < len(points) * 0.3:
+        print(f"[humidity_field] only {len(grid)}/{len(points)} points — keeping previous cache")
+        return None
     return {"source": "Open-Meteo", "fetched": datetime.now(timezone.utc).isoformat(),
             "count": len(grid), "grid": grid}
 

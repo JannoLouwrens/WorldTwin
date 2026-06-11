@@ -168,6 +168,15 @@ async def _fetch_adsblol(client: httpx.AsyncClient) -> list | None:
     if not points:
         return None
 
+    # Evict stale route-cache entries — the module-level dict grew without
+    # bound (one entry per callsign ever seen) and the WHOLE cache was
+    # serialized into flights.json every refresh.
+    import time as _time
+    _cutoff = _time.time() - 6 * 3600
+    for cs in [c for c, t in _route_cache_time.items() if t < _cutoff]:
+        _route_cache.pop(cs, None)
+        _route_cache_time.pop(cs, None)
+
     # Enrich with route data — look up top 200 callsigns' origin/dest airports
     callsigns = list({p["props"].get("callsign", "") for p in points if p["props"].get("callsign")})[:200]
     await _fetch_routes(client, callsigns)
@@ -258,8 +267,10 @@ async def fetch(client: httpx.AsyncClient):
                 False,                                     # 15 spi
                 0,                                         # 16 pos_source
             ])
-        # Include routes keyed by callsign for frontend popup enrichment
-        routes = {cs: route for cs, route in _route_cache.items()}
+        # Include routes keyed by callsign — only for aircraft currently in
+        # view (the full accumulated cache was being shipped every refresh).
+        active = {p["props"].get("callsign", "") for p in points}
+        routes = {cs: _route_cache[cs] for cs in active if cs and cs in _route_cache}
         legacy = {"time": now_s, "states": states, "routes": routes}
         return points, legacy
     # Fallback to OpenSky

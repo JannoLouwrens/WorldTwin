@@ -136,6 +136,14 @@
       if (!coords || coords.length < 2) return;
       const [lon, lat] = coords;
       const props = v.properties || v;
+      // Live GVP GeoJSON uses underscored property names (Volcano_Name,
+      // Country, Elevation, ...) — the lowercase variants never matched and
+      // every card showed em-dashes. Old keys kept as fallbacks.
+      const vName = props.Volcano_Name || props.name || props.volcano || 'Volcano';
+      const vCountry = props.Country || props.country || '';
+      const vElev = props.Elevation ?? props.elevation;
+      const vType = props.Primary_Volcano_Type || props.primary_volcano_type || '—';
+      const vLast = props.Last_Eruption_Year ?? props.last_eruption;
       addEntity('volcanoes', {
         position: Cesium.Cartesian3.fromDegrees(lon, lat),
         billboard: {
@@ -144,23 +152,23 @@
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
-        name: props.name || props.volcano || 'Volcano',
+        name: vName,
         properties: pc({
-          title: props.name || props.volcano || 'Volcano',
+          title: vName,
           source_name: 'Smithsonian GVP',
-          source_url: 'https://volcano.si.edu/volcano.cfm?vn=' + (props.volcano_num || ''),
+          source_url: 'https://volcano.si.edu/volcano.cfm?vn=' + (props.Volcano_Number || props.volcano_num || ''),
           fetched_at: fmtISO(d.fetched),
           event_date: null,
-          location: props.country || '',
+          location: vCountry,
           values: [
-            { label: 'Country',   value: props.country || '—' },
-            { label: 'Elevation', value: (props.elevation || '—') + (props.elevation ? ' m' : '') },
-            { label: 'Type',      value: props.primary_volcano_type || '—' },
-            { label: 'Last eruption', value: props.last_eruption || '—' },
+            { label: 'Country',   value: vCountry || '—' },
+            { label: 'Elevation', value: vElev != null ? vElev + ' m' : '—' },
+            { label: 'Type',      value: vType },
+            { label: 'Last eruption', value: vLast != null ? String(vLast) : '—' },
           ],
           category_color: '#dc2626',
         }),
-        description: `<b>${props.name || 'Volcano'}</b><br>${props.country || ''}<br>Elev: ${props.elevation || '—'} m<br>Type: ${props.primary_volcano_type || '—'}`,
+        description: `<b>${vName}</b><br>${vCountry}<br>Elev: ${vElev != null ? vElev : '—'} m<br>Type: ${vType}`,
       });
     });
   }
@@ -239,15 +247,17 @@
           fetched_at: fmtISO(d.fetched),
           location: `${it.city || ''}${it.country ? ', ' + it.country : ''}`,
           values: [
+            // Live cache fields are pm25/no2/o3 (short names) — long names
+            // kept as fallbacks.
             { label: 'US AQI', value: aqi != null ? String(aqi) : '—' },
-            { label: 'PM2.5', value: it.pm2_5 != null ? it.pm2_5.toFixed(1) + ' µg/m³' : '—' },
-            { label: 'PM10',  value: it.pm10 != null ? it.pm10.toFixed(1) + ' µg/m³' : '—' },
-            { label: 'NO₂',   value: it.nitrogen_dioxide != null ? it.nitrogen_dioxide.toFixed(1) + ' µg/m³' : '—' },
-            { label: 'O₃',    value: it.ozone != null ? it.ozone.toFixed(1) + ' µg/m³' : '—' },
+            { label: 'PM2.5', value: (it.pm25 ?? it.pm2_5) != null ? Number(it.pm25 ?? it.pm2_5).toFixed(1) + ' µg/m³' : '—' },
+            { label: 'PM10',  value: it.pm10 != null ? Number(it.pm10).toFixed(1) + ' µg/m³' : '—' },
+            { label: 'NO₂',   value: (it.no2 ?? it.nitrogen_dioxide) != null ? Number(it.no2 ?? it.nitrogen_dioxide).toFixed(1) + ' µg/m³' : '—' },
+            { label: 'O₃',    value: (it.o3 ?? it.ozone) != null ? Number(it.o3 ?? it.ozone).toFixed(1) + ' µg/m³' : '—' },
           ],
           category_color: aqiColor(aqi),
         }),
-        description: `<b>${it.city}</b> AQI ${aqi}<br>PM2.5: ${it.pm2_5 || '—'}`,
+        description: `<b>${it.name ?? it.city ?? '—'}</b> AQI ${aqi}<br>PM2.5: ${(it.pm25 ?? it.pm2_5) || '—'}`,
       });
     });
   }
@@ -460,7 +470,10 @@
     const items = d.events || d.items || (Array.isArray(d) ? d : []);
     if (!Array.isArray(items)) return;
     const glyph = makeGlyph(P.swords, '#ef4444', 20);
-    items.slice(0, 1500).forEach(ev => {
+    // 600 most-mentioned (was 1500 in arrival order — entity budget blowout)
+    const rankedEvents = items.slice()
+      .sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
+    rankedEvents.slice(0, 600).forEach(ev => {
       if (ev.lat == null || ev.lon == null) return;
       if (ev.lat === 0 && ev.lon === 0) return;
       addEntity('conflict_events', {
@@ -856,7 +869,10 @@
   // Adds a Cesium imagery layer from the latest RainViewer radar frame.
   // ============================================================
   async function renderRainviewer() {
-    clearLayer('rainviewer');
+    // Must use the imagery-aware clear — the generic clearLayer only removes
+    // entities, so every re-render leaked one more imagery layer
+    // (live-verified: imageryLayers 3 → 4 → 5).
+    clearRainviewer();
     const d = await getCache('rainviewer');
     if (!d) return;
     // RainViewer returns { host, radar: { past: [{path, time}], nowcast: [...] } }
@@ -1199,7 +1215,12 @@
     const events = d.events || d.items || (Array.isArray(d) ? d : []);
     if (!Array.isArray(events)) return;
     const glyph = makeGlyph(P.swords, '#ef4444', 22);
-    events.slice(0, 3000).forEach(ev => {
+    // Cap at the 800 deadliest (data ships date-sorted, not severity-sorted);
+    // the old 3000-slice put War mode at 7,183 entities — 44% over budget.
+    const ranked = events.slice()
+      .sort((a, b) => (parseInt((b.props || {}).total_deaths || b.value || 0))
+                    - (parseInt((a.props || {}).total_deaths || a.value || 0)));
+    ranked.slice(0, 800).forEach(ev => {
       const lat = parseFloat(ev.lat);
       const lon = parseFloat(ev.lon);
       if (!lat || !lon || (lat === 0 && lon === 0)) return;
@@ -1382,7 +1403,13 @@
     window.LAYERS.humidity_field     = { render: renderHumidity,         clear: () => clearLayer('humidity_field') };
     window.LAYERS.entsoe_grid       = { render: renderEntsoe,           clear: () => clearLayer('entsoe_grid') };
     window.LAYERS.ucdp              = { render: renderUcdpApi,          clear: () => clearLayer('ucdp') };
-    window.LAYERS.noaa_co2           = { render: renderCO2,              clear: () => clearLayer('noaa_co2') };
+    window.LAYERS.noaa_co2           = { render: renderCO2,              clear: () => {
+      // Full teardown — the generic clear leaked the Clock subscription and
+      // the Scrubber band, so toggling off didn't fully clear.
+      if (_co2Unsub) { _co2Unsub(); _co2Unsub = null; }
+      if (window.Scrubber) window.Scrubber.unregisterLayer('noaa_co2');
+      clearLayer('noaa_co2');
+    } };
     console.log('[layers2] registered', Object.keys(window.LAYERS).length, 'total renderers');
   }
 

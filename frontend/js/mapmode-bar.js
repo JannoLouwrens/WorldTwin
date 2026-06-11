@@ -70,13 +70,20 @@
     }
   }
 
-  // Keyboard: 1-9 + 0 = first 10 mapmodes; q w e r t = next 5
+  // Keyboard: 1-9 + 0 = first 10 mapmodes; q w e = next 3.
+  // 'r' and 't' were REMOVED — they collided with reset-camera (app.js) and
+  // hide-timeline (scrubber), so pressing those triggered a surprise
+  // choropleth (the "phantom Politics mode" bug). Guards: no modifiers, no
+  // focused buttons (a just-clicked layer toggle keeps focus, so a bare key
+  // was also landing here right after toggling a layer).
   document.addEventListener('keydown', (e) => {
-    if (document.activeElement && ['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const ae = document.activeElement;
+    if (ae && ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(ae.tagName)) return;
     if (!window.Mapmode) return;
     const list = window.Mapmode.list();
     const key = e.key.toLowerCase();
-    const idxMap = {'1':0,'2':1,'3':2,'4':3,'5':4,'6':5,'7':6,'8':7,'9':8,'0':9,'q':10,'w':11,'e':12,'r':13,'t':14};
+    const idxMap = {'1':0,'2':1,'3':2,'4':3,'5':4,'6':5,'7':6,'8':7,'9':8,'0':9,'q':10,'w':11,'e':12};
     if (key in idxMap) {
       const i = idxMap[key];
       if (list[i]) {

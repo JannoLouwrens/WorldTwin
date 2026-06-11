@@ -30,7 +30,7 @@
     },
     nature: {
       label: 'Nature · Earth Events',
-      layers: ['quakes', 'fires', 'gdacs_events', 'nhc_cyclones', 'volcanoes', 'usgs_volcano_hans', 'disasters', 'dartmouth_floods', 'noaa_co2'],
+      layers: ['quakes', 'fires', 'gdacs_events', 'nhc_cyclones', 'volcanoes', 'usgs_volcano_hans', 'disasters', 'noaa_co2'],
       legend: {
         title: 'Hazard severity',
         ramp: 'fire',
@@ -155,7 +155,9 @@
     },
   };
 
-  let currentMode = 'world';
+  // Starts EMPTY — initializing to 'world' made boot's activateMode('world')
+  // hit the toggle-OFF branch above, so the default mode never rendered.
+  let currentMode = '';
   let _activationToken = 0;
 
   async function activateMode(modeId) {

@@ -592,6 +592,9 @@ async def history_series(
     to a single row (the latest). Pass `dedupe=false` to see every fetch."""
     if ".." in source_id or "/" in source_id:
         raise HTTPException(400, "Invalid source_id")
+    # Unauthenticated endpoint — clamp so ?limit=99999999 can't materialize
+    # millions of row dicts and OOM the 3G container with one curl.
+    limit = max(1, min(limit, 50_000))
     try:
         import asyncio
         from . import history
@@ -696,11 +699,16 @@ def _list_sources_sync(prefix: str | None, limit: int) -> list[dict]:
             )
             args.extend([prefix, prefix + "~"])
         else:
+            # No prefix: push the truncation into SQL. The decomposer mints
+            # a source_id per aircraft/quake/video, so DISTINCT source_ids
+            # reach millions — fetchall() of all groups was an OOM bomb.
+            # The ORDER BY temp B-tree stays inside SQLite, bounded.
             sql = (
                 "SELECT source_id, COUNT(*) AS n, MIN(observed_at) AS lo, MAX(observed_at) AS hi "
                 "FROM observations "
-                "GROUP BY source_id"
+                "GROUP BY source_id ORDER BY n DESC LIMIT ?"
             )
+            args.append(limit)
         rows = c.execute(sql, args).fetchall()
         rows.sort(key=lambda r: -r["n"])
         out = []
@@ -723,6 +731,7 @@ async def history_sources(prefix: str | None = None, limit: int = 500) -> dict[s
 
     Runs in a thread because the GROUP BY scan over 1.6M+ rows can take
     seconds on contended SQLite — would block the entire asyncio event loop."""
+    limit = max(1, min(limit, 2000))
     try:
         import asyncio
         out = await asyncio.to_thread(_list_sources_sync, prefix, limit)

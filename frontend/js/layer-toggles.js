@@ -14,7 +14,7 @@
   // Short human-readable names
   const LAYER_NAMES = {
     quakes: 'Quakes', fires: 'Fires', volcanoes: 'Volcanoes', usgs_volcano_hans: 'HANS',
-    nhc_cyclones: 'Cyclones', disasters: 'EONET', gdacs_events: 'GDACS', dartmouth_floods: 'Floods',
+    nhc_cyclones: 'Cyclones', disasters: 'EONET', gdacs_events: 'GDACS',
     temperature_field: 'Temp', pressure_field: 'Pressure', humidity_field: 'Humidity', noaa_sst: 'Ocean SST', rainviewer: 'Radar',
     air_quality: 'AQI', wind_sample: 'Wind', openaq_stations: 'OpenAQ', noaa_co2: 'CO₂',
     historical_borders: 'History', historical_disasters: 'Hist Disasters', paleo_temperature: 'Paleo °C',
@@ -38,7 +38,7 @@
 
   const LAYER_CATS = {
     quakes: 'nature', fires: 'nature', volcanoes: 'nature', usgs_volcano_hans: 'nature',
-    nhc_cyclones: 'nature', disasters: 'nature', gdacs_events: 'nature', dartmouth_floods: 'nature',
+    nhc_cyclones: 'nature', disasters: 'nature', gdacs_events: 'nature',
     temperature_field: 'weather', pressure_field: 'weather', humidity_field: 'weather', noaa_sst: 'weather', rainviewer: 'weather',
     air_quality: 'health', wind_sample: 'weather', openaq_stations: 'health', noaa_co2: 'nature',
     historical_borders: 'meta', historical_disasters: 'nature', paleo_temperature: 'weather',

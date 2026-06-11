@@ -108,11 +108,15 @@
         'cow_alliances',
         'historical_borders', 'historical_disasters',
         // Heavy + not needed for first paint. Lazy-loaded when their layer
-        // toggle / mapmode is activated. Total saved: ~9 MB / ~7 s cold boot.
+        // toggle / mapmode is activated. Total saved: ~25 MB cold boot.
         'climatetrace_assets',  // 4.2 MB
         'disasters',            // 2.6 MB
         'ucdp_ged',             // 1.1 MB
         'wri_power_plants',     // 1.2 MB
+        'gfw_events',           // 9.1 MB — renderer lazy-fetches
+        'ucdp',                 // 3.2 MB — renderer lazy-fetches
+        'openaq_stations',      // 2.0 MB — renderer lazy-fetches
+        'nasa_neows',           // 1.5 MB — renderer lazy-fetches
         // Note: maddison_history + hyde_population stay in preload because
         // gdp_pc and population mapmodes (always-shown defaults) read them
         // even at Live for the unified-mapmode UX. ~1.5MB combined.
@@ -135,6 +139,18 @@
 
     // Step 4: attach click + hover handlers (viewer now exists)
     attachGlobeHandlers();
+    // Planet switches rebuild the viewer with a NEW canvas — handlers bound
+    // to the old canvas die silently and clicks/hovers stop working after a
+    // Moon round-trip. Watch for canvas identity changes and re-attach.
+    let _handlerCanvas = window.viewer && window.viewer.scene.canvas;
+    setInterval(() => {
+      const c = window.viewer && !window.viewer.isDestroyed?.() && window.viewer.scene && window.viewer.scene.canvas;
+      if (c && c !== _handlerCanvas) {
+        _handlerCanvas = c;
+        attachGlobeHandlers();
+        console.log('[app] viewer canvas changed — handlers re-attached');
+      }
+    }, 2000);
 
     // Step 4b: mount historical timeline scrubber
     if (window.Scrubber) {

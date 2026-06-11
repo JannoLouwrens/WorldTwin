@@ -26,7 +26,14 @@ async def fetch(client: httpx.AsyncClient):
         timeout=60,
     )
     r1.raise_for_status()
-    core = {c.get("cca3"): c for c in r1.json() if c.get("cca3")}
+    data1 = r1.json()
+    if not isinstance(data1, list):
+        # restcountries.com intermittently returns an error dict (and the
+        # bare /all without fields is now rejected) — a dict here caused an
+        # AttributeError every cycle and froze the cache.
+        print(f"[population] unexpected body: {str(data1)[:200]}")
+        return None
+    core = {c.get("cca3"): c for c in data1 if isinstance(c, dict) and c.get("cca3")}
     try:
         r2 = await client.get(
             "https://restcountries.com/v3.1/all",
@@ -34,10 +41,12 @@ async def fetch(client: httpx.AsyncClient):
             timeout=60,
         )
         if r2.status_code == 200:
-            for c in r2.json():
-                cca3 = c.get("cca3")
-                if cca3 in core:
-                    core[cca3].update({k: v for k, v in c.items() if k != "cca3"})
+            data2 = r2.json()
+            if isinstance(data2, list):
+                for c in data2:
+                    cca3 = c.get("cca3") if isinstance(c, dict) else None
+                    if cca3 in core:
+                        core[cca3].update({k: v for k, v in c.items() if k != "cca3"})
     except Exception:
         pass
 

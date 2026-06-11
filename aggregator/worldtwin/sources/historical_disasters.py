@@ -59,7 +59,9 @@ async def _page_noaa(client: httpx.AsyncClient, base_url: str, kind: str) -> lis
     page = 1
     while True:
         try:
-            r = await client.get(base_url, params={"page": page, "itemsPerPage": 1000}, timeout=60)
+            # NOAA Hazel rejects itemsPerPage > 200 (verified — 1000 was the
+            # reason this cache never wrote).
+            r = await client.get(base_url, params={"page": page, "itemsPerPage": 200}, timeout=60)
             if r.status_code != 200:
                 break
             data = r.json()
@@ -98,8 +100,8 @@ async def _page_noaa(client: httpx.AsyncClient, base_url: str, kind: str) -> lis
         if page >= data.get("totalPages", 1):
             break
         page += 1
-        if page > 30:
-            break  # safety — 30,000 events max
+        if page > 40:
+            break  # safety — NOAA quakes are ~6,200 = 32 pages at 200/page
     return out
 
 
@@ -119,8 +121,9 @@ async def _fetch_volcanoes(client: httpx.AsyncClient) -> list[dict]:
         if len(coords) < 2:
             continue
         lon, lat = coords[0], coords[1]
-        # GVP fields vary; common ones: VolcanoName, EruptionStartYear, ExplosivityIndexMax, EventTypeName
-        year = props.get("EruptionStartYear") or props.get("StartYear")
+        # GVP WFS property names are underscored (verified live):
+        # Volcano_Name, StartDateYear, ExplosivityIndexMax, Eruption_Number.
+        year = props.get("StartDateYear") or props.get("EruptionStartYear") or props.get("StartYear")
         if year is None:
             continue
         try:
@@ -128,7 +131,7 @@ async def _fetch_volcanoes(client: httpx.AsyncClient) -> list[dict]:
         except (ValueError, TypeError):
             continue
         vei = props.get("ExplosivityIndexMax") or props.get("ExplosivityIndex")
-        name = props.get("VolcanoName") or props.get("VolcanoNameSI") or "Volcano"
+        name = props.get("Volcano_Name") or props.get("VolcanoName") or "Volcano"
         out.append({
             "kind": "vol",
             "year": year,
@@ -137,7 +140,8 @@ async def _fetch_volcanoes(client: httpx.AsyncClient) -> list[dict]:
             "label": f"{name}" + (f" — VEI {vei}" if vei else ""),
             "deaths": None,
             "mag": float(vei) if vei else None,
-            "source_id": str(props.get("EruptionNumber") or props.get("VolcanoNumber") or ""),
+            "source_id": str(props.get("Eruption_Number") or props.get("Volcano_Number")
+                             or props.get("EruptionNumber") or ""),
         })
     return out
 

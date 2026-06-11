@@ -2,12 +2,19 @@
 
 Free, no key. Returns volcanoes currently at elevated alert level (above
 NORMAL/GREEN). Complements Smithsonian GVP (which has all 1200+ volcanoes).
+
+The HANS getElevatedVolcanoes response carries NO coordinates (verified
+live 2026-06-11) — every row was being dropped and the layer was
+permanently empty. Coordinates are joined from the Smithsonian GVP cache
+(volcanoes.json) by Volcano_Number == vnum.
 """
+import json
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
+from .. import cache
 from ..models import LayerMeta
 from ..registry import register
 
@@ -29,6 +36,23 @@ LAYER = LayerMeta(
 ALERT_SEVERITY = {"NORMAL": 1, "GREEN": 1, "YELLOW": 3, "ADVISORY": 3, "ORANGE": 4, "WATCH": 4, "RED": 5, "WARNING": 5}
 
 
+def _gvp_coords() -> dict[int, tuple[float, float]]:
+    """Volcano_Number → (lat, lon) from the on-disk Smithsonian GVP cache."""
+    out: dict[int, tuple[float, float]] = {}
+    try:
+        with open(cache.legacy_path("volcanoes"), "r", encoding="utf-8") as f:
+            gvp = json.load(f)
+        for feat in gvp.get("features", []):
+            props = feat.get("properties") or {}
+            num = props.get("Volcano_Number")
+            coords = (feat.get("geometry") or {}).get("coordinates") or []
+            if num is not None and len(coords) >= 2:
+                out[int(num)] = (float(coords[1]), float(coords[0]))
+    except Exception as e:
+        print(f"[usgs_volcano_hans] GVP coord join unavailable: {e}")
+    return out
+
+
 async def fetch(client: httpx.AsyncClient):
     # Verified 2026-04-11: correct URL is hans-public (not hans2)
     try:
@@ -42,17 +66,20 @@ async def fetch(client: httpx.AsyncClient):
         rows = r.json()
         if not isinstance(rows, list):
             rows = rows.get("data") or []
+        coords_by_vnum = _gvp_coords()
         volcanoes = []
         for row in rows:
-            # hans-public schema: vnum, volcano_name, notice_type_cd, color_code,
-            # alert_level, obs_fullname, obs_abbr, sent_utc, latitude, longitude
-            lat = row.get("latitude") or row.get("lat")
-            lon = row.get("longitude") or row.get("lon")
-            if lat is None or lon is None:
-                continue
+            # hans-public schema (live 2026-06-11): vnum, volcano_name,
+            # notice_type_cd, color_code, alert_level, obs_*, sent_utc —
+            # NO coordinates. Join via Smithsonian GVP by vnum.
+            lat = lon = None
             try:
-                lat = float(lat); lon = float(lon)
+                vnum = int(row.get("vnum") or 0)
             except (ValueError, TypeError):
+                vnum = 0
+            if vnum and vnum in coords_by_vnum:
+                lat, lon = coords_by_vnum[vnum]
+            if lat is None or lon is None:
                 continue
             alert = (row.get("color_code") or row.get("alert_level") or "").upper()
             sev = ALERT_SEVERITY.get(alert, 2)
@@ -74,7 +101,7 @@ async def fetch(client: httpx.AsyncClient):
             "fetched": datetime.now(timezone.utc).isoformat(),
             "count": len(volcanoes),
             "volcanoes": volcanoes,
-        }
+        } if (volcanoes or not rows) else None  # rows present but none parsed = schema drift — keep previous cache
     except Exception as e:
         print(f"[usgs_volcano_hans] error: {type(e).__name__}: {e}")
         return None

@@ -62,25 +62,10 @@
     return results;
   }
 
-  // Monkey-patch fetchCache if it exists — prefer the preloaded store
-  const originalFetchCache = window.fetchCache;
-  window.fetchCache = async function(id) {
-    if (window._cacheStore.has(id)) {
-      return window._cacheStore.get(id);
-    }
-    if (originalFetchCache) {
-      const d = await originalFetchCache(id);
-      if (d) window._cacheStore.set(id, d);
-      return d;
-    }
-    try {
-      const r = await fetch(`/api/cache/${id}.json?_=${Date.now()}`);
-      if (!r.ok) return null;
-      const d = await r.json();
-      window._cacheStore.set(id, d);
-      return d;
-    } catch (_) { return null; }
-  };
+  // NOTE: window.fetchCache is owned by layers.js (loads after this file) —
+  // it is store-first against window._cacheStore with in-flight dedupe.
+  // The monkey-patch that used to live here was dead code: layers.js
+  // overwrote it at load time anyway.
 
   // Background refresh — every 2 minutes, re-fetch the fast-moving layers
   const FAST = ['quakes','flights','ships','iss','global_events','gdacs_events','wind_sample','commodity_prices','gdelt_gkg_themes'];

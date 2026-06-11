@@ -37,43 +37,54 @@ LAYER = LayerMeta(
 )
 
 
-async def _fetch_one(client: httpx.AsyncClient, lat: float, lon: float, sem: asyncio.Semaphore):
-    async with sem:
-        try:
-            r = await client.get(
-                "https://api.open-meteo.com/v1/forecast",
-                params={
-                    "latitude": lat,
-                    "longitude": lon,
-                    "current": "windspeed_10m,winddirection_10m,temperature_2m",
-                    "timezone": "UTC",
-                },
-                timeout=20,
-            )
-            if r.status_code != 200:
-                return None
-            d = r.json().get("current", {})
-            return {
-                "lat": lat,
-                "lon": lon,
-                "speed_ms": d.get("windspeed_10m"),
-                "dir_deg": d.get("winddirection_10m"),
-                "temp_c": d.get("temperature_2m"),
-            }
-        except Exception:
-            return None
-
-
 async def fetch(client: httpx.AsyncClient):
-    sem = asyncio.Semaphore(8)
-    tasks = []
-    lats = list(range(LAT_MIN, LAT_MAX + 1, LAT_STEP))
-    lons = list(range(-180, 180, LON_STEP))
-    for lat in lats:
-        for lon in lons:
-            tasks.append(_fetch_one(client, lat + 0.5, lon + 0.5, sem))
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    points = [r for r in results if isinstance(r, dict) and r.get("speed_ms") is not None]
+    # BATCHED: Open-Meteo accepts comma-separated coordinate lists, so the
+    # whole 180-point grid is ONE request instead of 180. The per-point
+    # version burned the free-tier daily quota (10k req/day) within hours
+    # whenever the container restart loop re-ran every plugin, and the grid
+    # then silently shrank to 0-5 points.
+    lats = [lat + 0.5 for lat in range(LAT_MIN, LAT_MAX + 1, LAT_STEP)]
+    lons = [lon + 0.5 for lon in range(-180, 180, LON_STEP)]
+    coords = [(la, lo) for la in lats for lo in lons]
+    try:
+        r = await client.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": ",".join(str(la) for la, _ in coords),
+                "longitude": ",".join(str(lo) for _, lo in coords),
+                "current": "windspeed_10m,winddirection_10m,temperature_2m",
+                "timezone": "UTC",
+            },
+            timeout=60,
+        )
+        if r.status_code != 200:
+            print(f"[wind_sample] HTTP {r.status_code} — keeping previous cache")
+            return None
+        body = r.json()
+    except Exception as e:
+        print(f"[wind_sample] error: {e}")
+        return None
+
+    # Multi-location responses are a list of per-point objects (single
+    # location degrades to one object).
+    rows = body if isinstance(body, list) else [body]
+    points = []
+    for (la, lo), row in zip(coords, rows):
+        d = (row or {}).get("current", {})
+        if d.get("windspeed_10m") is None:
+            continue
+        points.append({
+            "lat": la,
+            "lon": lo,
+            "speed_ms": d.get("windspeed_10m"),
+            "dir_deg": d.get("winddirection_10m"),
+            "temp_c": d.get("temperature_2m"),
+        })
+
+    if len(points) < len(coords) * 0.3:
+        # Partial/failed grid (rate limit mid-response) — keep previous cache.
+        print(f"[wind_sample] only {len(points)}/{len(coords)} grid points — keeping previous cache")
+        return None
 
     return {
         "source": "Open-Meteo global grid",

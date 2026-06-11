@@ -27,13 +27,14 @@ LAYER = LayerMeta(
 
 
 async def fetch(client: httpx.AsyncClient):
-    # Pull 10 days from VIIRS SNPP, VIIRS NOAA-20 and MODIS combined.
-    # FIRMS area endpoint format: /csv/{key}/{sensor}/world/{days}
+    # Pull 1 day (the layer is "Active Fires — past 24h"). world/10 across
+    # 3 sensors was blowing the FIRMS transaction quota and getting
+    # rejected, which blanked the layer to [] in production.
     sensors = ["VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT"]
     points = []
     legacy = []
     for sensor in sensors:
-        url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_KEY}/{sensor}/world/10"
+        url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{FIRMS_KEY}/{sensor}/world/1"
         try:
             r = await client.get(url, timeout=120)
             if r.status_code != 200:
@@ -75,6 +76,11 @@ async def fetch(client: httpx.AsyncClient):
                 })
         except Exception as e:
             print(f"[nasa_firms] {sensor} error: {e}")
+    if not points:
+        # All sensors failed (quota / outage) — keep the previous cache
+        # rather than blanking the layer to [].
+        print("[nasa_firms] 0 detections from all sensors — keeping previous cache")
+        return None
     return points, legacy
 
 

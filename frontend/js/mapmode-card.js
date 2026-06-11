@@ -237,10 +237,13 @@
       const water = c.water || {};
       return {
         title: 'Water Stress',
-        value: water.bws_label || water.stress_label || '—',
+        // Live cache fields are baseline_water_stress + stress_description
+        // (the bws/bws_label names never existed in production).
+        value: water.stress_description || water.bws_label || '—',
         rows: [
-          ['BWS score', water.bws != null ? water.bws.toFixed(2) : '—'],
-          ['Stress level', water.bws_label || water.stress_label || '—'],
+          ['BWS score', water.baseline_water_stress != null ? Number(water.baseline_water_stress).toFixed(2)
+                        : (water.bws != null ? water.bws.toFixed(2) : '—')],
+          ['Stress level', water.stress_description || water.bws_label || '—'],
           ['Freshwater withdrawal', pct((getWB()[iso3]?.['ER.H2O.FWTL.ZS'] || {}).value)],
           ['Agricultural land', pct((getWB()[iso3]?.['AG.LND.AGRI.ZS'] || {}).value)],
           ['Forest area', pct((getWB()[iso3]?.['AG.LND.FRST.ZS'] || {}).value)],
@@ -415,12 +418,14 @@
       const wb = getWB()[iso3] || {};
       const pop = (wb['SP.POP.TOTL'] || {}).value;
       return {
-        title: 'Religion (' + (rec.religion?.family || '—') + ')',
-        value: rec.religion?.label || '—',
+        // Live country_culture cache is FLAT (religion_family etc.) —
+        // nested rec.religion.family never existed in production.
+        title: 'Religion (' + (rec.religion_family || rec.religion?.family || '—') + ')',
+        value: rec.religion_primary || rec.religion?.label || '—',
         rows: [
-          ['Family', rec.religion?.family || '—'],
+          ['Family', rec.religion_family || rec.religion?.family || '—'],
           ['Population', pop ? fmtN(pop) : '—'],
-          ['Ethnicity', rec.ethnicity?.label || '—'],
+          ['Ethnicity', rec.ethnicity_primary || rec.ethnicity?.label || '—'],
         ],
         source: 'Wikidata SPARQL P140 + CIA/Pew fallback',
       };
@@ -433,12 +438,12 @@
       const wb = getWB()[iso3] || {};
       const pop = (wb['SP.POP.TOTL'] || {}).value;
       return {
-        title: 'Ethnicity (' + (rec.ethnicity?.family || '—') + ')',
-        value: rec.ethnicity?.label || '—',
+        title: 'Ethnicity (' + (rec.ethnicity_family || rec.ethnicity?.family || '—') + ')',
+        value: rec.ethnicity_primary || rec.ethnicity?.label || '—',
         rows: [
-          ['Family', rec.ethnicity?.family || '—'],
+          ['Family', rec.ethnicity_family || rec.ethnicity?.family || '—'],
           ['Population', pop ? fmtN(pop) : '—'],
-          ['Religion', rec.religion?.label || '—'],
+          ['Religion', rec.religion_primary || rec.religion?.label || '—'],
         ],
         source: 'Wikidata SPARQL P172 + CIA/Pew fallback',
       };

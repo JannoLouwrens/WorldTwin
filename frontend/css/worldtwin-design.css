@@ -2117,7 +2117,9 @@ body.tw-booted .tw-header   { opacity: 1; transform: none; transition-delay: 140
 body.tw-booted .tw-brief    { opacity: 1; transform: none; transition-delay: 280ms; }
 body.tw-booted #pollutionInset { opacity: 1; transform: none; transition-delay: 420ms; }
 body.tw-booted #timeline    { opacity: 1; transform: none; transition-delay: 360ms; }
-body.tw-booted .tw-scrubber { opacity: 1 !important; transform: none !important; }
+/* :not(.hidden) — without it this boot-reveal override defeated the T-key
+   hide-timeline toggle (scrubber stayed visible but went click-dead). */
+body.tw-booted .tw-scrubber:not(.hidden) { opacity: 1 !important; transform: none !important; }
 .tw-scrubber { transition: opacity 700ms cubic-bezier(.2,.8,.2,1); }
 
 /* Push the events ticker BELOW the new tw-header plate */
@@ -2300,15 +2302,11 @@ body.tw-booted .tw-scrubber { opacity: 1 !important; transform: none !important;
 }
 .tw-cite:hover::after { color: var(--phosphor); opacity: 1; }
 
-/* On wide screens, lay the three voices SIDE-BY-SIDE for the king's
-   council feel (three advisors at the table). On narrow screens stack. */
-@media (min-width: 1500px) {
-  .tw-brief { width: 720px !important; }
-  .tw-council-grid { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-  .tw-voice { padding: 9px 10px 10px; }
-  .tw-voice-title { display: none; }
-  .tw-voice-cites { flex-direction: column; align-items: stretch; }
-}
+/* (Removed) The wide-screen 3-column council layout is incompatible with
+   the fixed-width left rail: its `.tw-brief width:720px` half always lost
+   to `#twBriefing.tw-brief` on ID specificity, so only the
+   grid-template-columns half applied — squeezing 3 columns into a 328px
+   panel. Voices stack vertically at every width now. */
 
 /* ============================================================
    DATA INSPECTOR — global drill-into-data overlay.
@@ -3149,7 +3147,7 @@ body.tw-raw #twDiffStrip { top: 50px !important; }
   border-radius: 50%;
   color: #e6f6ff;
   cursor: pointer;
-  z-index: 60;
+  z-index: 118; /* above #twHeader (110) + planetRail (115), below masthead (120) */
   opacity: 0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
@@ -3166,7 +3164,7 @@ body.tw-raw #twDiffStrip { top: 50px !important; }
   position: fixed;
   width: 56px;
   pointer-events: none;
-  z-index: 55;
+  z-index: 114; /* above #twHeader (110) so the fade is actually visible */
   opacity: 0;
   transition: opacity 220ms ease;
 }
@@ -3736,14 +3734,18 @@ body.tw-raw #twDiffStrip { top: 50px !important; }
 /* Right-rail mutual exclusion. Dossier and inspector are the highest
    priority; when EITHER is up, the per-mode cards yield the lane.
    Dossier > layerBrowser > inspector > everything-else. */
-body:has(#twDossier) #kpiRow.kpi-row,
-body:has(#twDossier) #mapmodeCard,
-body:has(#twDossier) #legendCard,
-body:has(#twDossier) #bodyCard,
-body:has(#twDossier) #commodityPanel,
-body:has(#twDossier) #pulsePanel,
-body:has(#twDossier) #planetCard,
-body:has(#twDossier) #layerBrowser.show,
+/* NOTE: must match #twDossier.tw-open, not bare #twDossier — the dossier
+   element is created once and NEVER removed from the DOM (hide() only sets
+   display:none), so the bare selector permanently killed every right-lane
+   card after the first country click. */
+body:has(#twDossier.tw-open) #kpiRow.kpi-row,
+body:has(#twDossier.tw-open) #mapmodeCard,
+body:has(#twDossier.tw-open) #legendCard,
+body:has(#twDossier.tw-open) #bodyCard,
+body:has(#twDossier.tw-open) #commodityPanel,
+body:has(#twDossier.tw-open) #pulsePanel,
+body:has(#twDossier.tw-open) #planetCard,
+body:has(#twDossier.tw-open) #layerBrowser.show,
 body:has(#twDataInspector.tw-inspector-open) #kpiRow.kpi-row,
 body:has(#twDataInspector.tw-inspector-open) #mapmodeCard,
 body:has(#twDataInspector.tw-inspector-open) #legendCard,
@@ -3806,8 +3808,14 @@ body:has(#layerBrowser.show) #planetCard {
 /* --- Cesium credit lightbox: keep below our chrome ------------- */
 .cesium-credit-lightbox-overlay { z-index: 200 !important; }
 
-/* --- Loading element should never block our chrome ------------- */
-#loading { z-index: 90 !important; }
+/* --- Loading pill: float just above the scrubber's top-right corner.
+       Its inline position (bottom:20 right:20 z-90) put it entirely
+       INSIDE and UNDERNEATH the 168px-tall scrubber — never visible. */
+#loading {
+  bottom: calc(var(--ac-foot-h) + 28px) !important;
+  right: 16px !important;
+  z-index: 96 !important;
+}
 
 /* --- Smaller viewports: collapse right card to inspector width - */
 @media (max-width: 1280px) {

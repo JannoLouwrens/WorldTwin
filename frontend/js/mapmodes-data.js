@@ -257,11 +257,18 @@
     'inflation',
     'Inflation',
     (iso3) => {
-      const v = imfValue(iso3, 'PCPIPCH');
+      // IMF primary (forecast-aware); World Bank CPI as fallback — the IMF
+      // cache went empty for weeks (Akamai 403) and this mode painted
+      // 0 countries while WB carried the same indicator for 195.
+      let v = imfValue(iso3, 'PCPIPCH');
+      if (v == null) {
+        const wb = window.Mapmode.getDataCache('world_bank');
+        v = (wb?.countries?.[iso3]?.['FP.CPI.TOTL.ZG'] || {}).value;
+      }
       if (v == null) return null;
       return sampleRamp('bad', Math.max(0, Math.min(1, v / 15)));
     },
-    { title: 'Inflation % (IMF)', ramp: 'bad', min: '0% (stable)', max: '15%+ (high)', semantic: 'bad' },
+    { title: 'Inflation % (IMF/WB)', ramp: 'bad', min: '0% (stable)', max: '15%+ (high)', semantic: 'bad' },
     'percent',
     { timeAware: true, years: [1980, 2030] }
   );

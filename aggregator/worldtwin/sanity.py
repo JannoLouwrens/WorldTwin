@@ -197,29 +197,48 @@ def auto_sweep(payload, depth: int = 0, max_depth: int = 8) -> tuple[object, lis
 
 
 def _sweep_walk(node, path: list, warnings: list[dict], depth: int, max_depth: int):
+    """Copy-on-write walk: returns the ORIGINAL node unless something inside
+    it actually changed. The previous version reconstructed every dict and
+    list to depth 8 on every cache write — a full structural copy of e.g.
+    ucdp_ged's 350k-row archive (hundreds of MB) even when zero rules
+    matched. That copy was one of the drivers of the OOM-restart loop."""
     if depth > max_depth:
         return node
     if isinstance(node, dict):
-        out = {}
+        out = None  # allocated only on first actual change
         for k, v in node.items():
-            new_path = path + [str(k)]
-            rule = AUTO_SWEEP_KEYS.get(k)
-            if rule and isinstance(v, (int, float)):
-                checked = check(rule, v)
-                if checked is None and v is not None:
-                    warnings.append({
-                        "path": ".".join(new_path),
-                        "key": k,
-                        "rule": rule,
-                        "value": v,
-                    })
-                out[k] = checked
+            if isinstance(k, str) and k.startswith("_history_only_"):
+                new_v = v  # bulk archives are never user-facing — skip
             else:
-                out[k] = _sweep_walk(v, new_path, warnings, depth + 1, max_depth)
-        return out
+                rule = AUTO_SWEEP_KEYS.get(k)
+                if rule and isinstance(v, (int, float)):
+                    checked = check(rule, v)
+                    if checked is None and v is not None:
+                        warnings.append({
+                            "path": ".".join(path + [str(k)]),
+                            "key": k,
+                            "rule": rule,
+                            "value": v,
+                        })
+                    new_v = checked
+                else:
+                    new_v = _sweep_walk(v, path + [str(k)], warnings, depth + 1, max_depth)
+            if new_v is not v and out is None:
+                out = dict(node)  # shallow copy; earlier keys were unchanged
+            if out is not None:
+                out[k] = new_v
+        return out if out is not None else node
     if isinstance(node, list):
-        return [_sweep_walk(v, path + [str(i)], warnings, depth + 1, max_depth)
-                for i, v in enumerate(node)]
+        if len(node) > 50000:
+            return node  # bulk archive lists — too big to sweep, raw data anyway
+        out = None
+        for i, v in enumerate(node):
+            new_v = _sweep_walk(v, path + [str(i)], warnings, depth + 1, max_depth)
+            if new_v is not v and out is None:
+                out = list(node)
+            if out is not None:
+                out[i] = new_v
+        return out if out is not None else node
     return node
 
 

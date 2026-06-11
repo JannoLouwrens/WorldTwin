@@ -200,25 +200,6 @@
       "gotchas": "Was hans2, fixed to hans-public. Schema field names vary."
     },
     {
-      "id": "dartmouth_floods",
-      "name": "Dartmouth Flood Observatory (90d)",
-      "category": "nature",
-      "source": "Dartmouth Flood Observatory",
-      "source_url": "https://floodobservatory.colorado.edu/",
-      "license": "Free with attribution",
-      "refresh_s": 86400,
-      "requires_key": false,
-      "key_env": null,
-      "envelope": "points",
-      "what_it_returns": "~100 flood events (last 90 days) with deaths/severity",
-      "renderer": "glyphs",
-      "style": {"glyph": "drop", "color": "ramp:density"},
-      "modes": ["nature"],
-      "status": "ok",
-      "live_count": 0,
-      "gotchas": "Not in /api/health — may be a silent failure or intermittent."
-    },
-    {
       "id": "gdacs_events",
       "name": "GDACS Disaster Alerts",
       "category": "war",
@@ -1446,7 +1427,7 @@
   "modes_catalog": {
     "world":     {"label": "World · Overview",   "layers": ["quakes","fires","portwatch_chokepoints","iss","gdelt_gkg_themes","disasters"]},
     "weather":   {"label": "Weather · Atmosphere", "layers": ["wind_sample","rainviewer","air_quality","openaq_stations","nhc_cyclones","fires","noaa_co2"], "special": ["cloudComposite","windParticles","temp_field","pressure_field","sst_field"]},
-    "nature":    {"label": "Nature · Earth Events","layers": ["quakes","fires","gdacs_events","nhc_cyclones","volcanoes","usgs_volcano_hans","dartmouth_floods","disasters","noaa_co2"]},
+    "nature":    {"label": "Nature · Earth Events","layers": ["quakes","fires","gdacs_events","nhc_cyclones","volcanoes","usgs_volcano_hans","disasters","noaa_co2"]},
     "war":       {"label": "War · Conflict",       "layers": ["ucdp_ged","conflict_events","wikidata_battles","gdelt_gkg_themes","gdacs_events","conflicts","crises","reliefweb","relations"]},
     "economy":   {"label": "Economy · Trade & Markets","layers": ["trade_annual","trade_monthly","portwatch_chokepoints","portwatch_ports","fred","commodity_prices","eia_petroleum","fao_food_prices","economy"], "special": ["ticker"]},
     "resources": {"label": "Resources · Commodities","layers": ["trade_annual","wri_power_plants","climatetrace_assets","portwatch_chokepoints","eia_international","owid_energy","eia_930_grid","country_resources"], "special": ["commodityFilter","ticker"]},

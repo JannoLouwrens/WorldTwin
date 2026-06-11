@@ -28,8 +28,6 @@
     { id: 'nhc_cyclones',       name: 'Tropical cyclones',         category: 'hazards', source: 'NOAA NHC', default: true },
     { id: 'gdacs_events',       name: 'GDACS alerts',              category: 'hazards', source: 'GDACS', default: true },
     { id: 'disasters',          name: 'NASA EONET disasters',      category: 'hazards', source: 'NASA EONET', default: false },
-    { id: 'dartmouth_floods',   name: 'Floods (Dartmouth)',        category: 'hazards', source: 'Dartmouth FO', default: false },
-
     // ===== WEATHER =====
     { id: 'wind_sample',        name: 'Wind particles',            category: 'weather', source: 'Open-Meteo', default: false },
     { id: 'rainviewer',         name: 'Rain radar',                category: 'weather', source: 'RainViewer', default: false },
@@ -209,8 +207,10 @@
         row.onclick = () => {
           const id = row.dataset.mm;
           if (window.Mapmode.current() === id) {
-            // Click again to deselect — just re-activate political (default)
-            if (id !== 'political') window.Mapmode.activate('political');
+            // Click again = genuine deselect (no mode active). The old
+            // behavior force-activated 'political', which read as a
+            // phantom Politics choropleth appearing out of nowhere.
+            if (window.Mapmode.deactivate) window.Mapmode.deactivate();
           } else {
             window.Mapmode.activate(id);
           }

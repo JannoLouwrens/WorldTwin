@@ -475,7 +475,11 @@
           // Auto-load historical layers when entering pre-modern era (real year)
           if (window.autoLoadHistoricalLayers) window.autoLoadHistoricalLayers(year);
         };
-        window.Clock.subscribe(applyYearToCesiumClock);
+        // Unsubscribe the previous viewer's callback first — each Earth
+        // rebuild used to add a NEW subscriber while the old one kept a
+        // destroyed viewer alive and threw on every scrub.
+        if (window._cesiumClockUnsub) { try { window._cesiumClockUnsub(); } catch (_) {} }
+        window._cesiumClockUnsub = window.Clock.subscribe(applyYearToCesiumClock);
         applyYearToCesiumClock();
       }
     } catch (e) { console.warn('[setup] Clock binding failed:', e); }
