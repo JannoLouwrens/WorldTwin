@@ -12,6 +12,7 @@ Requires UCDP_TOKEN env var. Token is free but email-request:
 If UCDP_TOKEN is not set, the worker is disabled and returns None.
 """
 import os
+from datetime import date, timedelta
 from typing import Any
 
 import httpx
@@ -44,11 +45,12 @@ LAYER = LayerMeta(
 )
 
 
-async def _fetch_paginated(client: httpx.AsyncClient, resource: str, version: str, **params) -> list[dict]:
+async def _fetch_paginated(client: httpx.AsyncClient, resource: str, version: str, **params) -> tuple[list[dict], bool]:
     headers = {"x-ucdp-access-token": UCDP_TOKEN}
     params.setdefault("pagesize", 1000)
     params.setdefault("page", 0)
     out = []
+    truncated = False
     while True:
         r = await client.get(
             f"{BASE}/{resource}/{version}",
@@ -58,23 +60,25 @@ async def _fetch_paginated(client: httpx.AsyncClient, resource: str, version: st
         )
         if r.status_code == 401:
             print(f"[ucdp] 401 — token invalid or expired")
-            return []
+            return [], truncated
         if r.status_code != 200:
             print(f"[ucdp] HTTP {r.status_code}: {r.text[:200]}")
-            return out
+            return out, truncated
         try:
             body = r.json()
         except Exception:
-            return out
+            return out, truncated
         batch = body.get("Result", [])
         out.extend(batch)
         total_pages = body.get("TotalPages", 1)
         if params["page"] >= total_pages - 1:
             break
         params["page"] += 1
-        if params["page"] > 9:  # safety
+        if params["page"] > 19:  # safety
+            truncated = True
+            print(f"[ucdp] page cap hit at page {params['page']}/{total_pages} — results truncated")
             break
-    return out
+    return out, truncated
 
 
 async def fetch(client: httpx.AsyncClient):
@@ -87,10 +91,14 @@ async def fetch(client: httpx.AsyncClient):
         ("gedevents", "25.1"),
         ("gedevents", "24.1"),
     ]
+    # Rolling window: recent events only, so the result fits under the page cap
+    # (the API returns id-ascending, so a too-wide window keeps the OLDEST events).
+    start_date = (date.today() - timedelta(days=180)).isoformat()
     events = []
+    truncated = False
     for resource, version in candidates:
         try:
-            events = await _fetch_paginated(client, resource, version, pagesize=500, StartDate="2024-01-01")
+            events, truncated = await _fetch_paginated(client, resource, version, pagesize=1000, StartDate=start_date)
             if events:
                 print(f"[ucdp] fetched {len(events)} events from {resource}/{version}")
                 break
@@ -140,6 +148,7 @@ async def fetch(client: httpx.AsyncClient):
     legacy = {
         "source": "UCDP GED",
         "event_count": len(points_list),
+        "truncated": truncated,
         "events": points_list,
     }
     return points_list, legacy

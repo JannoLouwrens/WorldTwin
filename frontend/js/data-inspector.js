@@ -215,7 +215,7 @@
           <div class="tw-inspector-section-lbl">Time travel · trace this back through history</div>
           <div class="tw-tt-row">
             <label class="tw-tt-lbl">View this layer at:</label>
-            <input type="datetime-local" id="twTravelAt" class="tw-tt-input" value="${escapeHtml(new Date(Date.now() - 24*3600*1000).toISOString().slice(0,16))}" />
+            <input type="datetime-local" id="twTravelAt" class="tw-tt-input" value="${escapeHtml(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0,16))}" />
             <button id="twTravelGo" class="tw-tt-btn">Replay snapshot</button>
           </div>
           <div id="twTravelOut" class="tw-tt-out"></div>
@@ -278,12 +278,18 @@
     const sOut  = document.getElementById('twSeriesOut');
 
     if (goBtn && atIn && out) {
-      goBtn.addEventListener('click', async () => {
-        const at = atIn.value ? new Date(atIn.value).toISOString() : '';
-        out.innerHTML = `<div class="tw-tt-loading">Querying snapshot at ${escapeHtml(at)}…</div>`;
+      const replay = async (at) => {
+        out.innerHTML = `<div class="tw-tt-loading">Querying ${at ? `snapshot at ${escapeHtml(at)}` : 'latest snapshot'}…</div>`;
         try {
           const r = await fetch(`/api/history/snapshot/${encodeURIComponent(cacheName)}` + (at ? `?at=${encodeURIComponent(at)}` : ''));
-          if (r.status === 404) { out.innerHTML = `<div class="tw-tt-empty">No snapshot at-or-before ${escapeHtml(at)} for this layer.</div>`; return; }
+          if (r.status === 404) {
+            out.innerHTML = at
+              ? `<div class="tw-tt-empty">No snapshot at-or-before ${escapeHtml(at)} for this layer — the history store may not reach back that far.
+                  <button id="twTravelLatest" class="tw-tt-btn tw-tt-btn-ghost">Replay latest snapshot instead</button></div>`
+              : `<div class="tw-tt-empty">No snapshots stored yet for this layer.</div>`;
+            document.getElementById('twTravelLatest')?.addEventListener('click', () => replay(''));
+            return;
+          }
           if (!r.ok)            { out.innerHTML = `<div class="tw-tt-err">Snapshot fetch failed: HTTP ${r.status}</div>`; return; }
           const snap = await r.json();
           // Resolve the SAME path against the historical payload — so the user
@@ -302,7 +308,8 @@
         } catch (e) {
           out.innerHTML = `<div class="tw-tt-err">Snapshot fetch error: ${escapeHtml(String(e))}</div>`;
         }
-      });
+      };
+      goBtn.addEventListener('click', () => replay(atIn.value ? new Date(atIn.value).toISOString() : ''));
     }
 
     if (sBtn && sOut) {

@@ -68,16 +68,17 @@ async def _wal_checkpoint_loop():
       a writer in flight, and the TRUNCATE call needs the write lock.
       It hangs indefinitely whether called via asyncio.to_thread, a
       dedicated thread executor, OR a subprocess.
-    - Operational fix when WAL grows large: stop the aggregator briefly
-      and run `python -c "import sqlite3; c=sqlite3.connect('/history/history.sqlite'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)')"`
-      from a stopped-state. See docs/architecture/HISTORY_STORE.md for the
-      maintenance script.
+    - TRUNCATE now runs once per boot in lifespan(), BEFORE
+      scheduler.start_all() — the only guaranteed quiet window (zero
+      writers), so it completes instantly and reclaims the file on every
+      restart. Mid-flight reclaim still requires stopping the aggregator;
+      see docs/architecture/HISTORY_STORE.md for the maintenance script.
 
     This loop is left in place but does NOTHING — kept as a hook for
     future improvement (e.g., write-traffic-aware quiet-window detection).
     """
     import asyncio
-    print("[wal] loop started — checkpoint via writers' autocheckpoint=5000; TRUNCATE is a manual op", flush=True)
+    print("[wal] loop started — checkpoint via writers' autocheckpoint=5000; TRUNCATE runs at boot in lifespan()", flush=True)
     while True:
         try:
             await asyncio.sleep(3600)  # Hourly heartbeat
@@ -131,6 +132,28 @@ async def lifespan(app: FastAPI):
     registry.autodiscover()
     layers = registry.all_layers()
     print(f"[server] registered {len(layers)} layers; thread-pool=128")
+
+    # Boot-time WAL TRUNCATE — the one reliable quiet window. No plugin
+    # workers exist yet (scheduler.start_all runs below), so the TRUNCATE
+    # checkpoint takes the write lock instantly and shrinks
+    # history.sqlite-wal on disk. During normal operation
+    # wal_autocheckpoint=5000 only RECYCLES pages — the file itself
+    # ratchets up to its high-water mark whenever a long reader (e.g. a
+    # coverage scan) overlaps the 90-writer load, and that dead weight
+    # counts toward db_total_bytes() and the 30 GB emergency ceiling.
+    from . import history
+    def _boot_wal_truncate():
+        c = history._conn()
+        c.execute("PRAGMA busy_timeout=120000")
+        try:
+            return tuple(c.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone() or ())
+        finally:
+            c.execute("PRAGMA busy_timeout=60000")
+    try:
+        res = await asyncio.to_thread(_boot_wal_truncate)
+        print(f"[wal] boot wal_checkpoint(TRUNCATE) -> (blocked, log_pages, ckpt_pages)={res}", flush=True)
+    except Exception as e:
+        print(f"[wal] boot TRUNCATE failed (non-fatal): {e}", flush=True)
 
     # Background WAL checkpoint loop — keeps history.sqlite-wal bounded.
     app.state.wal_task = asyncio.create_task(_wal_checkpoint_loop())

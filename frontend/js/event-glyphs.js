@@ -85,12 +85,22 @@
   // ==========================================================
   // NASA DONKI — space weather events (flares as sunbursts, CME as stars, GST as siren)
   // ==========================================================
+  const DONKI_TYPE_NAMES = {
+    FLR: 'Solar Flare',
+    CME: 'Coronal Mass Ejection',
+    GST: 'Geomagnetic Storm',
+    SEP: 'Solar Energetic Particles',
+    RBE: 'Radiation Belt Enhancement',
+    IPS: 'Interplanetary Shock',
+    HSS: 'High Speed Stream',
+  };
+
   async function renderDonki() {
     clearLayer('nasa_donki');
     const d = await fetchCache('nasa_donki');
     if (!d || !d.events) return;
-    d.events.slice(0, 60).forEach(ev => {
-      const type = ev.type_code;
+    d.events.slice(0, 60).forEach((ev, i) => {
+      const type = ev.type;
       let path = PATHS.star, color = '#7c8cff';
       if (type === 'FLR') { path = PATHS.sunburst; color = '#fde047'; }
       else if (type === 'CME') { path = PATHS.star; color = '#a76bff'; }
@@ -100,9 +110,10 @@
       // Space weather events don't have a single Earth coordinate.
       // Render the active ones in the space around Earth, around the north pole,
       // at a small offset per event.
-      const off = (parseInt(ev.id?.toString().slice(-2) || '0', 16) || 0);
+      const off = i;
       const lat = 70 + (off % 20) * 0.4;
       const lon = -160 + ((off * 13) % 320);
+      const typeName = DONKI_TYPE_NAMES[type] || type || 'Space Weather Event';
       const glyph = makeGlyph(path, color, 32);
       addEntity('nasa_donki', {
         position: Cesium.Cartesian3.fromDegrees(lon, lat, 800000),
@@ -112,8 +123,8 @@
           height: 24 + ev.severity * 3,
           heightReference: Cesium.HeightReference.NONE,
         },
-        name: ev.type_name,
-        description: `<b>${ev.type_name}</b><br>${ev.time || ''}<br>Severity: ${ev.severity}/5<br>${ev.note || ev.source_location || ''}<br>${ev.link ? '<a href="' + ev.link + '" target="_blank">NASA DONKI details →</a>' : ''}`,
+        name: typeName,
+        description: `<b>${typeName}</b><br>${ev.start || ''}<br>Severity: ${ev.severity}/5<br>${ev.detail || ''}<br>${ev.link ? '<a href="' + ev.link + '" target="_blank">NASA DONKI details →</a>' : ''}`,
       });
     });
   }

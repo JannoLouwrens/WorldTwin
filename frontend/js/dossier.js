@@ -265,6 +265,7 @@
 
   function render(iso3) {
     const el = ensure();
+    el.style.width = '380px';   // reset compare-mode width (720px) on single render
     const d = build(iso3);
 
     const blocChips = (d.blocs || []).map(b =>
@@ -497,7 +498,9 @@
     render(iso3);
   }
   function hide() {
-    if (_el) { _el.style.display = 'none'; _el.classList.remove('tw-open'); }
+    // Reset compare-mode width too — Escape closed the 720px compare panel
+    // without restoring it, so the next single-country dossier opened huge.
+    if (_el) { _el.style.display = 'none'; _el.classList.remove('tw-open'); _el.style.width = '380px'; }
     _currentIso3 = null;
   }
 

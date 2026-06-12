@@ -30,9 +30,9 @@
 
     // Fuel colours
     fuelHue: {
-      coal:       '#3b3b3b',
+      coal:       '#9ca3af',  // light grey — readable on dark bg (was #3b3b3b)
       gas:        '#56B4E9',
-      oil:        '#2a2a2a',
+      oil:        '#a47148',  // warm brown — readable on dark bg (was #2a2a2a)
       nuclear:    '#5eead4',
       hydro:      '#3b82f6',
       solar:      '#fbbf24',
@@ -62,11 +62,13 @@
 
       // Legacy names kept for renderers that already reference them
       heat: ['#1e3a8a','#2563eb','#06b6d4','#84cc16','#fde047','#fb923c','#ef4444'],
-      fire: ['#fff7b8','#fde047','#fb923c','#ef4444','#b91c1c','#4a0e0e'],
+      // Dark-bg salience: low = dim ember, high = bright yellow-white (lightness = intensity)
+      fire: ['#4a1e10','#b91c1c','#ef4444','#fb923c','#fde047','#fffbe8'],
       coldHot: ['#1e40af','#4cc2ff','#f8fafc','#fb923c','#b91c1c'],
       density: ['#440154','#3b528b','#21908d','#5dc863','#fde725'],
       altitude: ['#ffffff','#fde047','#34d399','#4cc2ff','#2563eb','#a76bff'],
-      depth: ['#fde047','#fb923c','#ef4444','#7c2d12','#1e1b4b'],
+      // shallow = hot, deep = cool — tail kept light enough to read on dark bg
+      depth: ['#fde047','#fb923c','#ef4444','#a855f7','#818cf8'],
       recency: ['#7f1d1d','#ef4444','#fb923c','#fde047','#fef3c7'],
     },
 

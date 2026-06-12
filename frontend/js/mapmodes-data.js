@@ -116,6 +116,13 @@
   // 1) Political — coloured by primary bloc/alliance membership — TIME-AWARE
   // At Live: country_relations (NATO, EU, BRICS, AU, ...).
   // Scrubbed back: COW historical alliances (Triple Entente, Axis, Warsaw Pact, ...).
+  //
+  // 'Non-aligned' is a real semantic state (data present, no bloc) and gets a
+  // deliberate slate colour. 'No data' (cache missing) returns null so the
+  // country stays unpainted — same honest treatment as every numeric mapmode.
+  // The backend bakes '#6b7790' into bloc_color for countries with no primary
+  // bloc; we normalise that to NON_ALIGNED so both paths share one colour.
+  const POLITICAL_NON_ALIGNED = '#55617a';
   window.Mapmode.register(
     'political',
     'Political blocs',
@@ -125,18 +132,42 @@
       if (!isLive && year < 2009) {
         // Use COW historical alliance graph
         const cow = window.Mapmode.getDataCache('cow_alliances');
-        const aid = cow?.by_country_year?.[iso3]?.[String(year)];
+        if (!cow) return null; // no data loaded — unknown, not "non-aligned"
+        const aid = cow.by_country_year?.[iso3]?.[String(year)];
         if (aid && cow.alliances?.[aid]) return cow.alliances[aid].color;
-        // If no historical alliance — fall back to "non-aligned" grey
-        return '#2a3447';
+        // Data present, no alliance that year — genuinely non-aligned
+        return POLITICAL_NON_ALIGNED;
       }
       // Modern (2009+ or Live) — use curated bloc colours
       const rel = window.Mapmode.getDataCache('country_relations');
-      if (!rel) return '#6b7790';
+      if (!rel) return null;
       const r = (rel.by_country || {})[iso3];
-      return r?.bloc_color || '#2a3447';
+      const c = r?.bloc_color;
+      return (c && c !== '#6b7790') ? c : POLITICAL_NON_ALIGNED;
     },
-    { title: 'Political blocs / alliances', ramp: 'heat', min: 'Non-aligned', max: 'Major bloc' },
+    {
+      title: 'Political blocs / alliances', categorical: true, semantic: 'categorical',
+      // Swatches are read lazily at legend render time (after activate() has
+      // ensured country_relations is loaded) so they reflect the live bloc set.
+      // Only blocs that actually paint at least one country are listed.
+      get swatches() {
+        const rel = window.Mapmode.getDataCache('country_relations');
+        const out = [];
+        if (rel?.blocs && rel.by_country) {
+          const used = new Set();
+          for (const iso of Object.keys(rel.by_country)) {
+            const c = rel.by_country[iso]?.bloc_color;
+            if (c) used.add(c);
+          }
+          for (const name of Object.keys(rel.blocs)) {
+            const color = rel.blocs[name]?.color;
+            if (color && used.has(color)) out.push({ color, label: name });
+          }
+        }
+        out.push({ color: POLITICAL_NON_ALIGNED, label: 'Non-aligned' });
+        return out;
+      },
+    },
     'users',
     { timeAware: true, years: [1815, 2026] }
   );
@@ -437,7 +468,8 @@
     (iso3) => {
       const c = window.Mapmode.getDataCache('country_culture');
       const r = c?.countries?.[iso3];
-      return r?.religion_color || '#2a3447';
+      // null → unpainted (honest no-data), never a fake opaque navy category
+      return r?.religion_color || null;
     },
     {
       title: 'Primary religion', categorical: true, semantic: 'categorical',
@@ -456,30 +488,45 @@
   );
 
   // 16) Ethnicity — CATEGORICAL (family-colored)
+  //
+  // Frontend remap keyed on ethnicity_family. The backend's ethnicity_color
+  // palette was 10 near-identical tan/brown hues (skin-tone-coded — bad both
+  // for categorical discrimination and editorially), so we ignore it and key
+  // each family to a maximally-separated categorical palette (ColorBrewer
+  // 12-class Paired + 4 extensions, picked for the dark basemap and
+  // deliberately decoupled from any skin-tone connotation). The legend
+  // swatches are generated from this same table so map and legend can't desync.
+  const ETHNICITY_PALETTE = {
+    'European':              '#1f78b4',
+    'Slavic':                '#a6cee3',
+    'East Asian':            '#e31a1c',
+    'Southeast Asian':       '#fb9a99',
+    'South Asian':           '#ff7f00',
+    'Arab':                  '#fdbf6f',
+    'Iranian':               '#cab2d6',
+    'Turkic':                '#6a3d9a',
+    'Sub-Saharan African':   '#33a02c',
+    'Latino/Mestizo':        '#b2df8a',
+    'Indigenous Americas':   '#b15928',
+    'Pacific Islander':      '#ffd92f',
+    'Berber/Amazigh':        '#8dd3c7',
+    'Indigenous Australian': '#f781bf',
+    'Jewish':                '#bc80bd',
+    'Other':                 '#999999',
+  };
   window.Mapmode.register(
     'ethnicity',
     'Ethnicity',
     (iso3) => {
       const c = window.Mapmode.getDataCache('country_culture');
       const e = c?.countries?.[iso3];
-      return e?.ethnicity_color || '#2a3447';
+      const fam = e?.ethnicity_family || e?.ethnicity?.family;
+      // Unknown family / missing entry → null → unpainted (honest no-data)
+      return (fam && ETHNICITY_PALETTE[fam]) || null;
     },
     {
       title: 'Primary ethnic group', categorical: true, semantic: 'categorical',
-      swatches: [
-        { color: '#D4A574', label: 'European' },
-        { color: '#A8754E', label: 'Slavic' },
-        { color: '#E8B04B', label: 'East Asian' },
-        { color: '#C67E3E', label: 'Southeast Asian' },
-        { color: '#D47C4E', label: 'South Asian' },
-        { color: '#9B6B43', label: 'Arab' },
-        { color: '#B87A4F', label: 'Iranian' },
-        { color: '#C48254', label: 'Turkic' },
-        { color: '#6B8E3A', label: 'Sub-Saharan African' },
-        { color: '#B58A5C', label: 'Latino/Mestizo' },
-        { color: '#A07048', label: 'Indigenous' },
-        { color: '#5C8EA0', label: 'Pacific Islander' },
-      ],
+      swatches: Object.keys(ETHNICITY_PALETTE).map(label => ({ color: ETHNICITY_PALETTE[label], label })),
     },
     'users-round'
   );

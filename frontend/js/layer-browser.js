@@ -233,8 +233,27 @@
         </div>
         <div class="lb-cat-body">
           ${layers.map(l => {
+            // No renderer registered in window.LAYERS → toggling would silently
+            // do nothing. Render as a disabled "data-panel only" row instead of
+            // a live toggle so the user isn't lied to by a dead checkbox.
+            const dead = !(window.LAYERS && window.LAYERS[l.id]);
+            if (dead && state[l.id].on) state[l.id].on = false;
             const on = state[l.id].on;
             const ta = !!l.timeAware;
+            if (dead) {
+              return `
+                <div class="lb-row lb-dead${ta ? ' lb-time-aware' : ''}" data-id="${l.id}" data-time-aware="${ta}" style="opacity:0.45;cursor:default" title="No globe renderer yet — this data appears in panels / inspector only">
+                  <label class="lb-toggle">
+                    <input type="checkbox" disabled data-id="${l.id}">
+                    <span class="lb-swatch" style="background:transparent;border-color:${meta.color};opacity:0.5"></span>
+                  </label>
+                  <div class="lb-row-main">
+                    <div class="lb-row-name">${l.name}${ta ? ' <span class="lb-clock-badge" title="Time-aware: this layer responds to the timeline scrubber">⏱</span>' : ''}</div>
+                    <div class="lb-row-sub">${l.source} <span style="color:var(--text-lo);border:1px solid var(--text-lo);border-radius:3px;padding:0 3px;font-size:9px">data-panel only</span></div>
+                  </div>
+                </div>
+              `;
+            }
             return `
               <div class="lb-row${ta ? ' lb-time-aware' : ''}" data-id="${l.id}" data-time-aware="${ta}">
                 <label class="lb-toggle">

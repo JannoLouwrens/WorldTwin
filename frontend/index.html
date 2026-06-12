@@ -9,8 +9,12 @@
 <meta property="og:type" content="website">
 <title>WorldTwin — State of the World</title>
 <link rel="preconnect" href="https://rsms.me/">
+<link rel="preconnect" href="https://cesium.com">
+<link rel="preconnect" href="https://api.cesium.com">
+<link rel="preconnect" href="https://assets.ion.cesium.com">
+<link rel="preconnect" href="https://gibs.earthdata.nasa.gov">
 <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
-<script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js" defer></script>
 <link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 <style>
 /* ============================================================
@@ -1374,52 +1378,52 @@ body[data-scrubbed-past="true"] .mmbar .mmbar-btn:not([data-time-aware="true"]) 
 <div id="timeline"></div>
 
 <!-- App scripts -->
-<script src="js/time/clock.js"></script>
-<script src="js/time/cache.js"></script>
-<script src="js/time/series.js"></script>
-<script src="js/time/scrubber.js"></script>
-<script src="js/time/auto-history.js"></script>
-<script src="js/icons.js"></script>
-<script src="js/design.js"></script>
-<script src="js/pickcard.js"></script>
-<script src="js/cesium-setup.js?v=20260611"></script>
-<script src="js/wind-canvas.js"></script>
-<script src="js/preloader.js?v=20260611"></script>
-<script src="js/planets.js"></script>
-<script src="js/layers.js?v=20260612sat"></script>
-<script src="js/layers2.js?v=20260611"></script>
-<script src="js/historical-borders.js"></script>
-<script src="js/historical-events.js"></script>
-<script src="js/historical-wars.js"></script>
-<script src="js/connections.js?v=20260611"></script>
-<script src="js/dossier.js?v=20260611"></script>
-<script src="js/events-pulse.js"></script>
-<script src="js/briefing.js"></script>
-<script src="js/hover-tooltip.js?v=20260611"></script>
-<script src="js/onboarding.js?v=20260518welcome"></script>
-<script src="js/scroll-arrows.js?v=20260518f"></script>
-<script src="js/time-awareness-ui.js"></script>
-<script src="js/mapmode.js?v=20260611"></script>
-<script src="js/mapmodes-data.js?v=20260611b"></script>
-<script src="js/mapmode-bar.js?v=20260611"></script>
-<script src="js/event-glyphs.js"></script>
-<script src="js/war-hotspots.js"></script>
-<script src="js/energy-viz.js"></script>
-<script src="js/mapmode-card.js?v=20260611"></script>
-<script src="js/layer-browser.js?v=20260611"></script>
-<script src="js/layer-toggles.js?v=20260612pb"></script>
-<script src="js/pollution-inset.js"></script>
-<script src="js/admiralty.js?v=20260612pb"></script>
-<script src="js/concept-map.js"></script>
-<script src="js/data-inspector.js"></script>
-<script src="js/inspector-toggle.js"></script>
-<script src="js/url-state.js?v=20260612"></script>
-<script src="js/council.js"></script>
-<script src="js/diff-strip.js"></script>
-<script src="js/causal-lines.js"></script>
-<script src="js/raw-mode.js"></script>
-<script src="js/modes.js?v=20260612pb"></script>
-<script src="js/ui.js"></script>
-<script src="js/app.js?v=20260612pb"></script>
+<script src="js/time/clock.js" defer></script>
+<script src="js/time/cache.js" defer></script>
+<script src="js/time/series.js" defer></script>
+<script src="js/time/scrubber.js" defer></script>
+<script src="js/time/auto-history.js" defer></script>
+<script src="js/icons.js" defer></script>
+<script src="js/design.js?v=20260612r2" defer></script>
+<script src="js/pickcard.js" defer></script>
+<script src="js/cesium-setup.js?v=20260611" defer></script>
+<script src="js/wind-canvas.js" defer></script>
+<script src="js/preloader.js?v=20260611" defer></script>
+<script src="js/planets.js" defer></script>
+<script src="js/layers.js?v=20260612r2" defer></script>
+<script src="js/layers2.js?v=20260612r2" defer></script>
+<script src="js/historical-borders.js" defer></script>
+<script src="js/historical-events.js" defer></script>
+<script src="js/historical-wars.js" defer></script>
+<script src="js/connections.js?v=20260611" defer></script>
+<script src="js/dossier.js?v=20260612r2" defer></script>
+<script src="js/events-pulse.js" defer></script>
+<script src="js/briefing.js" defer></script>
+<script src="js/hover-tooltip.js?v=20260612r2" defer></script>
+<script src="js/onboarding.js?v=20260518welcome" defer></script>
+<script src="js/scroll-arrows.js?v=20260518f" defer></script>
+<script src="js/time-awareness-ui.js" defer></script>
+<script src="js/mapmode.js?v=20260612r2" defer></script>
+<script src="js/mapmodes-data.js?v=20260612r2" defer></script>
+<script src="js/mapmode-bar.js?v=20260611" defer></script>
+<script src="js/event-glyphs.js?v=20260612r2" defer></script>
+<script src="js/war-hotspots.js" defer></script>
+<script src="js/energy-viz.js" defer></script>
+<script src="js/mapmode-card.js?v=20260611" defer></script>
+<script src="js/layer-browser.js?v=20260612r2" defer></script>
+<script src="js/layer-toggles.js?v=20260612pb" defer></script>
+<script src="js/pollution-inset.js" defer></script>
+<script src="js/admiralty.js?v=20260612pb" defer></script>
+<script src="js/concept-map.js" defer></script>
+<script src="js/data-inspector.js?v=20260612r2" defer></script>
+<script src="js/inspector-toggle.js" defer></script>
+<script src="js/url-state.js?v=20260612" defer></script>
+<script src="js/council.js" defer></script>
+<script src="js/diff-strip.js" defer></script>
+<script src="js/causal-lines.js" defer></script>
+<script src="js/raw-mode.js" defer></script>
+<script src="js/modes.js?v=20260612r2" defer></script>
+<script src="js/ui.js" defer></script>
+<script src="js/app.js?v=20260612r2" defer></script>
 </body>
 </html>

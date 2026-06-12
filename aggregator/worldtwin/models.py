@@ -109,7 +109,9 @@ class Envelope:
         elif isinstance(data, dict) and isinstance(data.get("webcams"), list):
             count = len(data["webcams"])
         elif isinstance(data, dict) and isinstance(data.get("crew"), list):
-            count = 1  # iss has iss+crew dict
+            # iss has iss+crew dict — only count it if the position is present
+            iss = data.get("iss")
+            count = 1 if isinstance(iss, dict) and "lat" in iss and "lon" in iss else 0
         elif isinstance(data, dict) and isinstance(data.get("matches"), list):
             count = len(data["matches"])
         elif isinstance(data, dict) and isinstance(data.get("topGames"), list):
@@ -128,6 +130,14 @@ class Envelope:
             count = len(data["items"])
         elif isinstance(data, dict) and isinstance(data.get("plants"), list):
             count = len(data["plants"])
+        elif isinstance(data, dict) and isinstance(data.get("images"), list):
+            count = len(data["images"])
+        elif isinstance(data, dict) and isinstance(data.get("rovers"), dict):
+            count = sum(
+                len(rv.get("photos") or [])
+                for rv in data["rovers"].values()
+                if isinstance(rv, dict)
+            )
         elif isinstance(data, dict) and isinstance(data.get("countries"), dict):
             count = len(data["countries"])
         elif isinstance(data, dict) and isinstance(data.get("aurora"), dict):
@@ -136,6 +146,13 @@ class Envelope:
             count = len(data["data"])
         elif isinstance(data, list):
             count = len(data)
+        elif isinstance(data, dict):
+            # Unknown dict shape: len(data) (= number of top-level keys) is
+            # always >0 and defeats the scheduler's empty-clobber guard. Use
+            # the largest nested list/dict instead — 0 when all are empty —
+            # and fall back to 1 only for pure-scalar dicts (kind='scalar').
+            nested = [v for v in data.values() if isinstance(v, (list, dict))]
+            count = max((len(v) for v in nested), default=0) if nested else 1
         else:
             try:
                 count = len(data) if hasattr(data, "__len__") else 1

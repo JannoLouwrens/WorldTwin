@@ -42,7 +42,7 @@
   // the next hover shows real numbers instead of "—".
   const MODE_NEEDS = {
     gdp: ['world_bank'], gdp_pc: ['world_bank'], population: ['world_bank'],
-    inflation: ['imf_data'], debt: ['imf_data'],
+    inflation: ['imf_data', 'world_bank'], debt: ['world_bank'],
     military: ['world_bank'], internet: ['world_bank'], life: ['world_bank'],
     urban: ['world_bank'], co2: ['world_bank'], renewable: ['world_bank'],
     water_stress: ['country_deep_dive'], food: ['country_deep_dive'],
@@ -156,8 +156,12 @@
         return v == null ? '—' : v.toFixed(1) + ' %';
       },
       debt: () => {
-        const v = imf?.countries?.[iso3]?.GGXWDG_NGDP?.value;
-        return v == null ? '—' : v.toFixed(1) + ' % GDP';
+        // Read WB first — the choropleth paints from GC.DOD.TOTL.GD.ZS
+        // (mapmodes-data.js); imf_data.json is currently unavailable.
+        const v = (wb?.countries?.[iso3]?.['GC.DOD.TOTL.GD.ZS'] || {}).value;
+        if (v != null) return v.toFixed(1) + ' % GDP';
+        const iv = imf?.countries?.[iso3]?.GGXWDG_NGDP?.value;
+        return iv == null ? '—' : iv.toFixed(1) + ' % GDP (IMF)';
       },
       religion:  () => {
         const c = cc?.countries?.[iso3];

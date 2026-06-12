@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -80,6 +81,33 @@ async def _run_one(reg: registry.RegisteredLayer, client: httpx.AsyncClient) -> 
             traceback.print_exc()
 
 
+def _seed_status_from_disk(meta: Any, mtime: float) -> None:
+    """Seed in-memory status from the on-disk cache so /api/health and
+    /v1/health list a layer even when the restart-amnesia gate skips its
+    first fetch. cache._status is memory-only; without this, every restart
+    blinded monitoring to ~50 slow-refresh layers until their next real
+    fetch (verified 2026-06-12: /api/health listed 40 of ~90 layers while
+    Caddy was serving all their caches fine)."""
+    count: int | None = None
+    try:
+        # Envelope JSON is compact and "count" precedes "data" (dataclass
+        # field order), so the value sits in the first few hundred bytes —
+        # no need to parse a potentially huge payload at boot.
+        with cache.envelope_path(meta.id).open("r", encoding="utf-8") as f:
+            m = re.search(r'"count":(\d+)', f.read(4096))
+        if m:
+            count = int(m.group(1))
+    except OSError:
+        pass
+    cache.mark_ok(meta.id, count, 0.0)
+    st = cache.get_status(meta.id)
+    if st is not None:
+        # get_status returns the live dict — annotate that this status was
+        # rebuilt from disk, with the real fetch time (cache file mtime).
+        st["last_fetch"] = datetime.fromtimestamp(mtime, timezone.utc).isoformat()
+        st["from_cache"] = True
+
+
 async def _worker_loop(reg: registry.RegisteredLayer, client: httpx.AsyncClient) -> None:
     """Infinite loop for one layer — honors initial_delay_s and refresh_s.
 
@@ -96,6 +124,11 @@ async def _worker_loop(reg: registry.RegisteredLayer, client: httpx.AsyncClient)
         age = time.time() - mtime
         if age < meta.refresh_s:
             first_sleep = max(first_sleep, meta.refresh_s - age)
+            # The gate is about to sleep out the remainder without fetching —
+            # register the layer as healthy from disk so it isn't invisible
+            # in health endpoints until the next real fetch (days for weekly
+            # layers).
+            _seed_status_from_disk(meta, mtime)
     except OSError:
         pass  # no cache yet — fetch after the normal stagger delay
     await asyncio.sleep(first_sleep)

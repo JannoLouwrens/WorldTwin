@@ -46,7 +46,8 @@
               <div class="lg-row"><span class="swatch"></span>R — Reset camera</div>
               <div class="lg-row"><span class="swatch"></span>L — Layer browser</div>
               <div class="lg-row"><span class="swatch"></span>D — Diagnostics</div>
-              <div class="lg-row"><span class="swatch"></span>1-9 0 q w e r t — Mapmode shortcuts</div>
+              <div class="lg-row"><span class="swatch"></span>1-9 0 q w e — Mapmode shortcuts</div>
+              <div class="lg-row"><span class="swatch"></span>T — Hide/show timeline</div>
             </div>
             <div class="lg-section">
               <div class="lg-section-label">Modes</div>
@@ -62,6 +63,10 @@
           `);
         }
       }
+      // Guard: typing 'r' in the layer-browser search (or any input) must
+      // not fly the camera — every other hotkey (L, D, T) already guards.
+      if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.key === 'r' || e.key === 'R') && window.viewer) {
         window.viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(20, 10, 20000000),
@@ -246,10 +251,17 @@
         } catch (_) {}
       }
 
-      // Case 2: clicked an entity with a description → Cesium shows infobox
+      // Case 2: clicked an entity with a description → Cesium shows infobox.
+      // Mutual exclusion: the infoBox wins this click, so EVERY other
+      // right-lane card must yield — previously the dossier (z-110) and
+      // mapmode card stayed open underneath the infoBox (z-130), stacking
+      // three cards in the same lane. We can't call dismissAllPopups()
+      // here because it clears viewer.selectedEntity, which would close
+      // the infoBox Cesium just opened for this very click.
       if (picked && picked.id && picked.id.description) {
-        // Close our custom popups so they don't overlap
         if (window.hidePickCard) window.hidePickCard();
+        if (window.hideDossier) window.hideDossier();
+        if (window.hideMapmodeCard) window.hideMapmodeCard();
         const cc = document.getElementById('countryCard');
         if (cc) cc.style.display = 'none';
         const lc = document.getElementById('legendCard');

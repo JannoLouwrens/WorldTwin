@@ -3,16 +3,14 @@
 Returns the latest full-disk natural-colour image of Earth taken from the
 DSCOVR spacecraft at L1 Lagrange point.
 """
-import os
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
+from .. import cache
 from ..models import LayerMeta
 from ..registry import register
-
-NASA_API_KEY = os.environ.get("NASA_API_KEY", "")
 
 LAYER = LayerMeta(
     id="nasa_epic_earth",
@@ -20,27 +18,25 @@ LAYER = LayerMeta(
     category="space",
     kind="raw",
     source="NASA EPIC (DSCOVR)",
-    source_url="https://api.nasa.gov/EPIC/api/natural/images",
+    # api.nasa.gov's EPIC proxy now 302-redirects to a GitHub-Pages 404
+    # (verified 2026-06-12) — use the canonical keyless GSFC API instead.
+    source_url="https://epic.gsfc.nasa.gov/api/natural",
     license="Public Domain (NASA)",
     refresh_s=10800,
     initial_delay_s=110,
     description="Latest full-disk Earth images from DSCOVR at Sun-Earth L1. Sub-solar point per image.",
-    requires_key=True,
-    key_env="NASA_API_KEY",
-    enabled=bool(NASA_API_KEY),
 )
 
 
 async def fetch(client: httpx.AsyncClient):
-    if not NASA_API_KEY:
-        return None
     try:
         r = await client.get(
-            "https://api.nasa.gov/EPIC/api/natural/images",
-            params={"api_key": NASA_API_KEY},
+            "https://epic.gsfc.nasa.gov/api/natural",
             timeout=30,
         )
         if r.status_code != 200:
+            # Surface the failure in /api/health — scheduler skips silently on None.
+            cache.mark_error(LAYER.id, f"HTTP {r.status_code} from EPIC API")
             return None
         rows = r.json() or []
         images = []
@@ -62,6 +58,7 @@ async def fetch(client: httpx.AsyncClient):
         }
     except Exception as e:
         print(f"[nasa_epic] error: {e}")
+        cache.mark_error(LAYER.id, f"{type(e).__name__}: {e}")
         return None
 
 

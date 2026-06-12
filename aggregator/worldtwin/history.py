@@ -167,20 +167,47 @@ def _year_to_iso(year: int | str) -> str:
     return f"-{abs(y):04d}-01-01"
 
 
+_ITEM_ID_KEYS = ("id", "uuid", "stationuuid", "mmsi", "norad",
+                 "OBJECT_ID", "NORAD_CAT_ID", "name", "portid",
+                 "ICAO24", "country")
+
+
+def _real_item_id(item: dict) -> Any:
+    """Most-specific real identifier carried by the item, or None."""
+    for k in _ITEM_ID_KEYS:
+        v = item.get(k)
+        if v:
+            return v
+    return None
+
+
 def _decompose_list(layer_id: str, payload: list, fetched_at: str) -> list[tuple]:
     """Top-level list of dicts (air_quality, population, ships, satellites,
     radio). One observation row per item, identified by the most-specific
     available id field."""
     rows: list[tuple] = []
+    # Refuse to decompose huge lists whose items carry no real identifier
+    # (fires/nasa_firms: ~14k anonymous detections per 10-min fetch).
+    # Positional source_ids (layer.0..layer.N) churn identity every fetch,
+    # producing millions of unqueryable rows; the snapshot blob keeps the
+    # full payload for forensics anyway.
+    if len(payload) > 1000:
+        first = next((it for it in payload if isinstance(it, dict)), None)
+        if first is not None and _real_item_id(first) is None:
+            return rows
     for i, item in enumerate(payload):
         if not isinstance(item, dict):
             continue
         # Best-guess identifier
-        item_id = (item.get("id") or item.get("uuid") or item.get("stationuuid")
-                   or item.get("mmsi") or item.get("norad")
-                   or item.get("OBJECT_ID") or item.get("NORAD_CAT_ID")
-                   or item.get("name") or item.get("portid")
-                   or item.get("ICAO24") or item.get("country") or i)
+        item_id = _real_item_id(item)
+        if item_id is None:
+            # Mint a stable content id so identity survives re-fetches;
+            # the bare list index is a last resort only.
+            try:
+                item_id = (f"{float(item['lat']):.3f}_{float(item['lon']):.3f}"
+                           f"_{item.get('date', '')}_{item.get('time', '')}")
+            except (KeyError, TypeError, ValueError):
+                item_id = i
         # Best-guess time — drill into common nested locations.
         # ALWAYS prefer the data's own datetime over fetched_at.
         observed = _extract_observed_at(item, fetched_at)
@@ -1445,7 +1472,8 @@ def compact() -> dict:
     # Prune those older than 30 days. Economic/conflict/climate series
     # are NEVER touched.
     EPHEMERAL_PREFIXES = ("flights.", "ships.", "webcams.", "youtube.",
-                          "radio.", "gaming.", "trends.", "news.", "iss.")
+                          "radio.", "gaming.", "trends.", "news.", "iss.",
+                          "fires.")
     obs_deleted = 0
     for prefix in EPHEMERAL_PREFIXES:
         cur = c.execute(

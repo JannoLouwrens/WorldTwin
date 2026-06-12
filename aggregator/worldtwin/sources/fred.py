@@ -4,7 +4,8 @@ Expanded from 10 US-centric series to ~50 across inflation, unemployment,
 bond yields, commodity prices, currencies, industrial production, risk
 indicators, and monetary policy across major economies.
 
-Rate: FRED free tier = 120 req/min. 50 calls/refresh × hourly = well under.
+Rate: FRED free tier = 120 req/min. 50 calls/refresh × every 6h = well under.
+These are daily/weekly/monthly macro series — hourly refresh was pure waste.
 """
 import asyncio
 import os
@@ -101,7 +102,7 @@ LAYER = LayerMeta(
     source="Federal Reserve Bank of St. Louis (FRED)",
     source_url="https://fred.stlouisfed.org/docs/api/fred/",
     license="Public (US Government)",
-    refresh_s=3600,
+    refresh_s=21600,  # 6h — series publish at most daily; hourly burned ~1,080 FRED calls/day
     initial_delay_s=245,
     description=f"{len(SERIES)} global macro series — inflation, rates, unemployment, commodities, currencies, risk, production, trade, labor.",
     requires_key=True,
@@ -113,8 +114,13 @@ LAYER = LayerMeta(
 async def _fetch_one(client: httpx.AsyncClient, series_id: str, name: str, unit: str, category: str, sem: asyncio.Semaphore):
     """Pull the FULL FRED history for this series (ascending order, no limit).
     Some series go back to 1947. Daily series ~20k samples; monthly ~900.
-    The History Store ingests every sample; the cache file's `series` keeps
-    only the most recent 12 for the briefing/UI to render quickly."""
+
+    The cached entry keeps only the trailing 120 samples — the full history
+    used to ship NESTED as `series_full`, which dodged the top-level
+    `_history_only_` strips in scheduler.py/cache.py and bloated the live
+    cache to 5.5 MB, re-downloaded by every cold boot while the frontend
+    only reads `.latest` and the sparkline. fetch() now parks the full
+    history under the top-level `_history_only_series` key instead."""
     async with sem:
         try:
             r = await client.get(
@@ -150,11 +156,15 @@ async def _fetch_one(client: httpx.AsyncClient, series_id: str, name: str, unit:
                 "category": category,
                 "latest": latest["v"] if latest else None,
                 "latest_date": latest["t"] if latest else None,
-                # UI keeps a 12-point sparkline; History Store gets the full series
-                "series": full_series[-12:],
-                "series_full": full_series,   # picked up by the decomposer
+                # Trailing window for UI sparklines AND for the History
+                # Store decomposer (history.py reads series_full|series
+                # nested here). 120 points covers months of daily data, so
+                # every newly published observation still gets ingested;
+                # the deep backfill is already in the observations table
+                # and the raw full payload stays in the snapshot archive.
+                "series": full_series[-120:],
                 "series_full_count": len(full_series),
-            }
+            }, full_series
         except Exception as e:
             print(f"[fred] {series_id} failed: {type(e).__name__}: {e}")
             return None
@@ -168,15 +178,22 @@ async def fetch(client: httpx.AsyncClient):
     results = await asyncio.gather(*tasks)
     result = {"source": "FRED", "series": {}}
     by_category: dict[str, list[str]] = {}
+    history_full: dict[str, list] = {}
     for r in results:
         if not r:
             continue
-        series_id, data = r
+        series_id, data, full_series = r
         result["series"][series_id] = data
+        history_full[series_id] = full_series
         by_category.setdefault(data["category"], []).append(series_id)
     if not result["series"]:
         return None
     result["by_category"] = by_category
+    # Full per-series history. The `_history_only_` prefix makes
+    # scheduler.py and cache.py strip this from the legacy cache and both
+    # /cache/v1 files (the 5.5 MB bug), while history.snapshot still
+    # receives and archives the complete payload for re-decomposition.
+    result["_history_only_series"] = history_full
     # Freshness timestamp — every public number must carry a date
     from datetime import datetime, timezone
     result["fetched"] = datetime.now(timezone.utc).isoformat()

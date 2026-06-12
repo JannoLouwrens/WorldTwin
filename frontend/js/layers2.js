@@ -19,6 +19,11 @@
   // (not exported — so we re-roll a minimal version here)
   const GLYPH_CACHE = {};
   function makeGlyph(svgPath, color, size = 28) {
+    if (!svgPath) {
+      // new Path2D(undefined) yields an empty path → invisible billboard.
+      console.warn('[layers2] makeGlyph: undefined svgPath — falling back to P.siren');
+      svgPath = P.siren;
+    }
     const key = `${svgPath}|${color}|${size}`;
     if (GLYPH_CACHE[key]) return GLYPH_CACHE[key];
     const canvas = document.createElement('canvas');
@@ -56,6 +61,9 @@
     volcano:  'M12 3 2 21h20z',
     swords:   'M14.5 17.5 3 6l3-3 11.5 11.5zM19 3l2 2-3 3-2-2zM5 19l2 2 3-3-2-2z',
     news:     'M3 4h18v16H3zM7 8h10v2H7zm0 4h10v2H7zm0 4h6v2H7z',
+    cyclone:  'M12 2a10 10 0 0 1 0 20 10 10 0 0 1-5-18 6 6 0 0 1 8 11 3 3 0 0 1-5-5',
+    // Hollow diamond (inner ring wound opposite → nonzero-fill hole)
+    diamond_o:'M12 2 L22 12 L12 22 L2 12 Z M12 5.5 L5.5 12 L12 18.5 L18.5 12 Z',
   };
 
   // ============================================================
@@ -469,7 +477,9 @@
     if (!d) return;
     const items = d.events || d.items || (Array.isArray(d) ? d : []);
     if (!Array.isArray(items)) return;
-    const glyph = makeGlyph(P.swords, '#ef4444', 20);
+    // Hollow orange diamond: machine-coded GDELT mentions must read differently
+    // from UCDP's verified solid-red swords (renderUcdpApi below).
+    const glyph = makeGlyph(P.diamond_o, '#fb923c', 20);
     // 600 most-mentioned (was 1500 in arrival order — entity budget blowout)
     const rankedEvents = items.slice()
       .sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
@@ -493,7 +503,7 @@
             { label: 'Mentions', value: String(ev.mentions || '—') },
             { label: 'Goldstein',value: ev.goldstein != null ? ev.goldstein.toFixed(1) : '—' },
           ],
-          category_color: '#ef4444',
+          category_color: '#fb923c',
         }),
       });
     });
@@ -1226,7 +1236,8 @@
       if (!lat || !lon || (lat === 0 && lon === 0)) return;
       const props = ev.props || {};
       const deaths = parseInt(props.total_deaths || ev.value || 0);
-      const sizeScale = Math.max(0.4, Math.min(1.2, deaths / 50));
+      // sqrt scale topping out near 1,000 deaths (old linear /50 saturated at 60)
+      const sizeScale = Math.max(0.4, Math.min(1.2, 0.4 + 0.8 * Math.sqrt(deaths / 1000)));
       addEntity('ucdp', {
         position: Cesium.Cartesian3.fromDegrees(lon, lat),
         billboard: { image: glyph, scale: sizeScale, disableDepthTestDistance: Number.POSITIVE_INFINITY },

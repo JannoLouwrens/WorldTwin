@@ -70,8 +70,10 @@ async def fetch(client: httpx.AsyncClient):
 
     sem = asyncio.Semaphore(3)
     all_events = []
+    failed_chunks = 0
 
     async def _fetch_chunk(code, endpoint, start_str, end_str):
+        nonlocal failed_chunks
         async with sem:
             try:
                 r = None
@@ -86,9 +88,11 @@ async def fetch(client: httpx.AsyncClient):
                         continue
                     break
                 if not r or r.status_code != 200:
+                    failed_chunks += 1
                     return
                 data = r.json()
                 if not isinstance(data, list):
+                    failed_chunks += 1
                     return
                 for ev in data:
                     severity = 1
@@ -124,6 +128,7 @@ async def fetch(client: httpx.AsyncClient):
                         "link": ev.get("link", ""),
                     })
             except Exception as e:
+                failed_chunks += 1
                 print(f"[nasa_donki] {code} {start_str}..{end_str}: {e}")
 
     tasks = []
@@ -133,12 +138,23 @@ async def fetch(client: httpx.AsyncClient):
     await asyncio.gather(*tasks)
     all_events.sort(key=lambda x: x.get("start", ""), reverse=True)
 
+    # An empty result with failed chunks is an upstream outage (e.g. DONKI
+    # 503), not a quiet sun — raise so the scheduler marks the layer errored
+    # and keeps the previous cache instead of caching "0 events" as success.
+    if not all_events and failed_chunks:
+        raise RuntimeError(
+            f"all {failed_chunks}/{len(tasks)} chunks failed or returned no "
+            f"events — DONKI likely down; keeping previous cache"
+        )
+
     by_type = {}
     for ev in all_events:
         by_type.setdefault(ev["type"], []).append(ev)
 
-    # Mark deep backfill done so future runs only do incremental.
-    if mode == "deep_backfill":
+    # Mark deep backfill done so future runs only do incremental — but only
+    # if the backfill actually fetched something; otherwise an outage during
+    # the first run would permanently skip the 2010+ archive.
+    if mode == "deep_backfill" and all_events:
         try:
             MARKER.parent.mkdir(parents=True, exist_ok=True)
             MARKER.write_text(datetime.now(timezone.utc).isoformat())

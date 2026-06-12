@@ -46,13 +46,26 @@ async def fetch(client: httpx.AsyncClient):
 
         events = []
         by_type: dict[str, int] = {}
+        seen: set[tuple[Any, Any]] = set()
         for f in features:
             props = f.get("properties") or {}
             geom = f.get("geometry") or {}
             coords = geom.get("coordinates") or []
-            if len(coords) < 2:
+            if geom.get("type") == "LineString" and coords:
+                # TC tracks ship as LineString — take the last vertex as the
+                # current position instead of leaking [lon,lat] pairs as lat/lon.
+                coords = coords[-1]
+            if len(coords) < 2 or not all(
+                isinstance(v, (int, float)) for v in coords[:2]
+            ):
                 continue
             lon, lat = coords[0], coords[1]
+            # Dedupe track vertices / repeated features for the same episode.
+            key = (props.get("eventid"), props.get("episodeid"))
+            if key[0]:
+                if key in seen:
+                    continue
+                seen.add(key)
             # Parse severity — GDACS uses 'alertlevel' (Green, Orange, Red) and 'alertscore'
             alert_level = props.get("alertlevel", "Green")
             severity_map = {"Green": 1, "Orange": 3, "Red": 5}

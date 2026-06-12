@@ -17,8 +17,19 @@
   }
   function clearLayer(id) {
     const arr = window._layerEntities[id] || [];
-    arr.forEach(e => { try { viewer.entities.remove(e); } catch(_){} });
+    if (arr.length) batch(() => {
+      arr.forEach(e => { try { viewer.entities.remove(e); } catch(_){} });
+    });
     window._layerEntities[id] = [];
+  }
+  // Batch bulk entity adds/removes so EntityCollection fires ONE
+  // collectionChanged instead of one per entity. suspendEvents is
+  // reference-counted in Cesium, so nesting (clearLayer inside a
+  // batched renderer) is safe. Only wrap synchronous loops — never
+  // code containing awaits.
+  function batch(fn) {
+    viewer.entities.suspendEvents();
+    try { fn(); } finally { viewer.entities.resumeEvents(); }
   }
 
   // Canonical cache fetch: store-first (preloader fills window._cacheStore),
@@ -56,7 +67,7 @@
     clearLayer('quakes');
     const d = await fetchCache('quakes');
     if (!d || !d.features) return;
-    d.features.forEach(f => {
+    batch(() => d.features.forEach(f => {
       const c = f.geometry && f.geometry.coordinates;
       if (!c) return;
       const [lon, lat, depth] = c;
@@ -64,10 +75,12 @@
       const depthKm = depth || 0;
       const age = Date.now() - (f.properties.time || Date.now());
       const fresh = age < 3600 * 1000;
-      // Size = sqrt(mag), colour = depth
-      const radius = DS.pointRadius(Math.pow(10, mag), 1000);
-      const t = Math.min(1, depthKm / 300);
-      const hex = DS.sampleRamp('depth', t);
+      // Size = magnitude mapped linearly to px (mag is already log-scaled;
+      // 10^mag through pointRadius saturated the 22px clamp at M4.0).
+      // Colour = magnitude on a bright ramp; depth stays in the description.
+      const radius = Math.min(22, Math.max(3, 3 + (mag - 2.5) * 3.2));
+      const t = Math.min(1, Math.max(0, (mag - 2.5) / 5.5));
+      const hex = DS.sampleRamp(['#fde047','#fb923c','#ef4444','#b91c1c'], t);
       addEntity('quakes', {
         position: Cesium.Cartesian3.fromDegrees(lon, lat),
         point: {
@@ -80,7 +93,7 @@
         name: f.properties.place || 'Quake',
         description: `<b>M${mag.toFixed(1)}</b> • ${depthKm.toFixed(0)} km deep<br>${f.properties.place || ''}<br><a href="${f.properties.url}" target="_blank">USGS details →</a>`,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -92,7 +105,7 @@
     if (!Array.isArray(d)) return;
     // Keep only top-frp 1500 to avoid overload
     const sorted = d.slice().sort((a,b) => (b.frp||0) - (a.frp||0)).slice(0, 1500);
-    sorted.forEach(f => {
+    batch(() => sorted.forEach(f => {
       if (!f.lat || !f.lon) return;
       const frp = f.frp || 0;
       const radius = DS.pointRadius(frp, 10);
@@ -109,7 +122,7 @@
         name: 'Wildfire',
         description: `Fire radiative power: ${frp.toFixed(1)} MW<br>Detected: ${f.date} ${f.time} UTC<br>Satellite: ${f.sat}`,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -119,7 +132,7 @@
     clearLayer('cables');
     const d = await fetchCache('cables');
     if (!d || !d.features) return;
-    d.features.forEach(f => {
+    batch(() => d.features.forEach(f => {
       if (!f.geometry) return;
       const p = f.properties || {};
       const colour = DS.c('#5eead4', 0.7);
@@ -145,7 +158,7 @@
       }
       if (f.geometry.type === 'LineString') addLine(f.geometry.coordinates);
       else if (f.geometry.type === 'MultiLineString') f.geometry.coordinates.forEach(addLine);
-    });
+    }));
   }
 
   // ==================================================
@@ -156,7 +169,7 @@
     const d = await fetchCache('portwatch_chokepoints');
     if (!d || !d.chokepoints) return;
     const median = 80;
-    d.chokepoints.forEach(cp => {
+    batch(() => d.chokepoints.forEach(cp => {
       const radius = DS.pointRadius(cp.n_total, median, 6, 28);
       // Colour by dominant cargo type
       const types = [
@@ -203,7 +216,7 @@
           <br><small>Source: IMF PortWatch (CC BY 4.0)</small>
         `,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -225,7 +238,7 @@
     flows = flows.slice(0, 200);
 
     const maxVal = flows[0] ? flows[0].value_usd : 1;
-    flows.forEach((f, i) => {
+    batch(() => flows.forEach((f, i) => {
       const catHue = DS.categoryHue[f.category] || '#ffffff';
       const w = DS.arcWidth(f.value_usd, 1, 6);
 
@@ -252,7 +265,7 @@
           <small>Source: UN Comtrade</small>
         `,
       });
-    });
+    }));
   }
 
   // Build positions array for a great-circle arc with altitude hump
@@ -289,7 +302,7 @@
     if (!d || !d.plants) return;
     // Top 1000 for render budget
     const plants = d.plants.slice(0, 1000);
-    plants.forEach(p => {
+    batch(() => plants.forEach(p => {
       if (filterFuel && p.fuel_canonical !== filterFuel) return;
       const hex = DS.fuelHue[p.fuel_canonical] || '#6b7790';
       const radius = DS.pointRadius(p.capacity_mw, 500, 2, 14);
@@ -311,7 +324,7 @@
           Owner: ${p.owner || '—'}
         `,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -321,7 +334,7 @@
     clearLayer('ucdp_ged');
     const d = await fetchCache('ucdp_ged');
     if (!d || !d.events) return;
-    d.events.slice(0, 500).forEach(e => {
+    batch(() => d.events.slice(0, 500).forEach(e => {
       const radius = DS.pointRadius(e.best, 20, 3, 18);
       const hex = DS.sampleRamp('fire', Math.min(1, e.best / 200));
       addEntity('ucdp_ged', {
@@ -343,7 +356,7 @@
           <small>Source: UCDP GED (CC BY 4.0)</small>
         `,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -353,7 +366,7 @@
     clearLayer('wikidata_battles');
     const d = await fetchCache('wikidata_battles');
     if (!d || !d.battles) return;
-    d.battles.forEach(b => {
+    batch(() => d.battles.forEach(b => {
       addEntity('wikidata_battles', {
         position: Cesium.Cartesian3.fromDegrees(b.lon, b.lat, 8000),
         point: {
@@ -369,7 +382,7 @@
           <a href="${b.article_url || b.wikidata_url}" target="_blank">Wikipedia →</a>
         `,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -383,7 +396,7 @@
     // Downsample again to keep entity count reasonable.
     const points = d.aurora.points.filter(p => p[2] > 5);  // only prob >5
     const stride = Math.max(1, Math.floor(points.length / 1500));
-    for (let i = 0; i < points.length; i += stride) {
+    batch(() => { for (let i = 0; i < points.length; i += stride) {
       const [lon, lat, prob] = points[i];
       if (Math.abs(lat) < 50) continue;  // only polar regions
       const lonNorm = lon > 180 ? lon - 360 : lon;
@@ -397,7 +410,7 @@
           outlineWidth: 0,
         },
       });
-    }
+    } });
   }
 
   // ==================================================
@@ -407,7 +420,7 @@
     clearLayer('gdelt_gkg_themes');
     const d = await fetchCache('gdelt_gkg_themes');
     if (!d || !d.pulses) return;
-    d.pulses.slice(0, 150).forEach(p => {
+    batch(() => d.pulses.slice(0, 150).forEach(p => {
       const radius = DS.pointRadius(p.count, 20, 4, 18);
       // Hue by theme family
       let hex = '#34d399';
@@ -427,7 +440,7 @@
         name: p.theme,
         description: `<b>${p.theme}</b> in ${p.country}<br>Mentions: ${p.count}<br>${p.sample_url ? '<a href="' + p.sample_url + '" target="_blank">Sample article →</a>' : ''}`,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -442,7 +455,7 @@
     const states = d?.states;
     if (!Array.isArray(states)) return;
     const top = states.slice(0, 1500);
-    top.forEach(s => {
+    batch(() => top.forEach(s => {
       const lon = s[5], lat = s[6];
       if (typeof lon !== 'number' || typeof lat !== 'number') return;
       const altM = s[7] || 0;            // baro alt in metres
@@ -463,7 +476,7 @@
         name: callsign || 'Flight',
         description: `Callsign: ${callsign || '—'}<br>Origin: ${country}<br>Alt: ${altFt.toLocaleString(undefined,{maximumFractionDigits:0})} ft<br>Speed: ${speedKts ?? '?'} kts`,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -473,7 +486,7 @@
     clearLayer('ships');
     const d = await fetchCache('ships');
     if (!d || !Array.isArray(d)) return;
-    d.slice(0, 500).forEach(s => {
+    batch(() => d.slice(0, 500).forEach(s => {
       if (!s.lat || !s.lon) return;
       addEntity('ships', {
         position: Cesium.Cartesian3.fromDegrees(s.lon, s.lat),
@@ -485,7 +498,7 @@
         },
         name: s.name || 'Ship',
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -541,7 +554,7 @@
     const now = new Date();
     const gmst = satellite.gstime(now);
     let plotted = 0;
-    for (const o of d.slice(0, 400)) {
+    batch(() => { for (const o of d.slice(0, 400)) {
       try {
         const rec = satellite.json2satrec(o);
         const pv = satellite.propagate(rec, now);
@@ -563,7 +576,7 @@
         });
         plotted++;
       } catch (_) {}
-    }
+    } });
     console.log('[satellites] SGP4 propagated', plotted, 'real positions');
   }
 
@@ -575,7 +588,7 @@
     const d = await fetchCache('pulse_mode');
     if (!d || !d.countries) return;
     const entries = Object.values(d.countries);
-    entries.forEach(c => {
+    batch(() => entries.forEach(c => {
       if (c.lat == null || c.lon == null) return;
       const s = c.composite || 0;
       // Color ramp: green→yellow→orange→red
@@ -606,7 +619,7 @@
           <small>Composite of 5 per-country signals. Source: WorldTwin internal aggregation.</small>
         `,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -618,7 +631,7 @@
     if (!d || !d.events) return;
     const typeIcon = { EQ: 'earthquake', TC: 'cyclone', FL: 'flood', VO: 'volcano', WF: 'fire', DR: 'drought' };
     const severityHex = { 1: '#22c55e', 3: '#fb923c', 5: '#ef4444' };
-    d.events.slice(0, 300).forEach(e => {
+    batch(() => d.events.slice(0, 300).forEach(e => {
       const hex = severityHex[e.severity] || '#fbbf24';
       const radius = 4 + e.severity * 2;
       addEntity('gdacs_events', {
@@ -640,7 +653,7 @@
           <br><small>Source: GDACS (JRC/ECHO) CC-BY</small>
         `,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -651,7 +664,7 @@
     const d = await fetchCache('nhc_cyclones');
     if (!d || !d.storms) return;
     const catColor = { TD:'#4cc2ff', TS:'#fde047', Cat1:'#fb923c', Cat2:'#f97316', Cat3:'#ef4444', Cat4:'#dc2626', Cat5:'#ffffff' };
-    d.storms.forEach(s => {
+    batch(() => d.storms.forEach(s => {
       const hex = catColor[s.category] || '#fde047';
       addEntity('nhc_cyclones', {
         position: Cesium.Cartesian3.fromDegrees(s.lon, s.lat),
@@ -683,7 +696,7 @@
           <small>Source: NOAA NHC · Public Domain</small>
         `,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -710,7 +723,7 @@
     let assets = d.assets;
     if (sectorFilter) assets = (d.by_sector?.[sectorFilter] || []).slice(0, 500);
     const median = assets.length ? assets[Math.floor(assets.length/2)].emissions_tco2e || 1e6 : 1e6;
-    assets.forEach(a => {
+    batch(() => assets.forEach(a => {
       const hex = sectorHue[a.sector] || '#6b7790';
       const radius = DS.pointRadius(a.emissions_tco2e, median, 3, 16);
       addEntity('climatetrace_assets', {
@@ -732,7 +745,7 @@
           <br><small>Source: ClimateTRACE · CC-BY 4.0</small>
         `,
       });
-    });
+    }));
   }
 
   // ==================================================
@@ -742,9 +755,11 @@
     clearLayer('wind_sample');
     const d = await fetchCache('wind_sample');
     if (!d || !d.points) return;
-    d.points.forEach(p => {
+    batch(() => d.points.forEach(p => {
       const speed = p.speed_ms || 0;
-      const dir = (p.dir_deg || 0) * Math.PI / 180;
+      // dir_deg is meteorological convention (direction the wind comes FROM)
+      // — flip 180° to draw downwind, matching wind-canvas.js.
+      const dir = ((p.dir_deg || 0) - 180) * Math.PI / 180;
       // Colour by speed (blue slow → red fast, max ~30 m/s)
       const t = Math.min(1, speed / 30);
       const hex = DS.sampleRamp('heat', t);
@@ -771,7 +786,7 @@
           outlineWidth: 0,
         },
       });
-    });
+    }));
   }
   // ==================================================
   // POPULATION / country centroids (for country-click interaction)

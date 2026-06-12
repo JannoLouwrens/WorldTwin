@@ -44,10 +44,17 @@ async def fetch(client: httpx.AsyncClient):
 
     points = []
     for f in geo.get("features", []):
+        props = f.get("properties") or {}
+        # GeoServer WFS feature ids embed a per-request session token
+        # ("...fid-5d14b8df_19eb5a3c1c5_-25c5"), so the decomposer minted
+        # ~1,200 brand-new source_ids on every fetch and snapshot dedup never
+        # matched this static catalogue. Rewrite with the stable Volcano_Number.
+        vnum = str(props.get("Volcano_Number", ""))
+        if vnum:
+            f["id"] = vnum
         coords = (f.get("geometry") or {}).get("coordinates") or []
         if len(coords) < 2:
             continue
-        props = f.get("properties") or {}
         points.append(point(
             lat=coords[1], lon=coords[0],
             id=str(props.get("Volcano_Number", "")),
@@ -59,6 +66,9 @@ async def fetch(client: httpx.AsyncClient):
             region=props.get("Region"),
             subregion=props.get("Subregion"),
         ))
+    # WFS stamps every response with a fresh timeStamp — drop it so the
+    # snapshot content hash stays stable between fetches of unchanged data.
+    geo.pop("timeStamp", None)
     return points, geo
 
 

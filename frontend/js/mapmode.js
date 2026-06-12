@@ -21,11 +21,47 @@
 
   // Hover highlight colour — set by layer-browser or country-click handler
   window.MAPMODE_HIGHLIGHT = {};
-  window.MAPMODE_COLORS = {};
 
+  // window.MAPMODE_COLORS is an accessor so `_hasMode` stays in sync with
+  // EVERY writer (modes.js / planets.js / mapmodes-data.js assign `= {}`
+  // directly) — the outline CallbackProperty reads the boolean instead of
+  // running Object.keys() on 1,620 entities every frame.
+  let _mapmodeColors = {};
+  let _hasMode = false;
+  Object.defineProperty(window, 'MAPMODE_COLORS', {
+    configurable: true,
+    get: () => _mapmodeColors,
+    set: (v) => {
+      _mapmodeColors = v || {};
+      _hasMode = Object.keys(_mapmodeColors).length > 0;
+    },
+  });
+
+  // Memoized hex → Cesium.Color. Legends use small palettes, so the cache
+  // stays tiny while saving a CSS string parse + 2 Color allocations per
+  // entity per frame (the single largest per-frame cost in the app).
+  const _colorCache = new Map();  // 'hex|alpha' → Cesium.Color
   function hexToCesiumColor(hex, alpha = 0.72) {
-    if (!hex || typeof hex !== 'string') return Cesium.Color.fromCssColorString(NO_DATA).withAlpha(NO_DATA_ALPHA);
-    return Cesium.Color.fromCssColorString(hex).withAlpha(alpha);
+    if (!hex || typeof hex !== 'string') { hex = NO_DATA; alpha = NO_DATA_ALPHA; }
+    const key = hex + '|' + alpha;
+    let c = _colorCache.get(key);
+    if (!c) {
+      c = Cesium.Color.fromCssColorString(hex).withAlpha(alpha);
+      _colorCache.set(key, c);
+    }
+    return c;
+  }
+
+  // Pre-allocated outline colours — the CallbackProperty must never allocate.
+  const OUTLINE_HOVER = Cesium.Color.WHITE.withAlpha(0.9);
+  const OUTLINE_MODE = Cesium.Color.WHITE.withAlpha(0.18);
+  const OUTLINE_IDLE = Cesium.Color.WHITE.withAlpha(0.06);
+  // War-pulse reds at quantized alpha steps (0.4 → 1.0) instead of
+  // Color.RED.withAlpha() per entity per frame.
+  const PULSE_STEPS = 24;
+  const PULSE_COLORS = [];
+  for (let i = 0; i <= PULSE_STEPS; i++) {
+    PULSE_COLORS.push(Cesium.Color.RED.withAlpha(0.4 + (i / PULSE_STEPS) * 0.6));
   }
 
   function makeColorProperty(iso3) {
@@ -47,15 +83,14 @@
       const warLevel = (window.MAPMODE_WAR_HOTSPOTS || {})[iso3];
       if (warLevel) {
         const t = (Math.sin(window._animT * 3) + 1) / 2;
-        return Cesium.Color.RED.withAlpha(0.4 + t * 0.6);
+        return PULSE_COLORS[Math.round(t * PULSE_STEPS)];
       }
       // Hover: thick white outline on hovered + allies + enemies
       if ((window.MAPMODE_HIGHLIGHT || {})[iso3]) {
-        return Cesium.Color.WHITE.withAlpha(0.9);
+        return OUTLINE_HOVER;
       }
       // Default outline: very faint hairline. Brightens only when a mapmode is active.
-      const hasMode = Object.keys(window.MAPMODE_COLORS || {}).length > 0;
-      return Cesium.Color.WHITE.withAlpha(hasMode ? 0.18 : 0.06);
+      return _hasMode ? OUTLINE_MODE : OUTLINE_IDLE;
     }, false);
   }
 
