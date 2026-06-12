@@ -8,7 +8,9 @@
 set -euo pipefail
 
 LOG_TAG="[wt-mem-watchdog]"
-THRESHOLD_PCT=85   # restart when MemUsage% >= this
+THRESHOLD_PCT=90   # restart when MemUsage% >= this (was 85 — too eager on a
+                   # 3GB box; the boot WAL-truncate + round-2 fixes lowered
+                   # steady-state RAM, so this should rarely fire now)
 
 # Get current usage via docker stats (no streaming, just one snapshot)
 LINE=$(docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.MemPerc}}' aggregator 2>/dev/null || true)
@@ -24,22 +26,20 @@ PCT_INT=$(printf '%.0f' "$PCT" 2>/dev/null || echo 0)
 if [ "$PCT_INT" -ge "$THRESHOLD_PCT" ]; then
   echo "$(date -Iseconds) $LOG_TAG MEM AT ${PCT}% — restarting (line: $LINE)"
   cd /home/opc/worldtwin
-  # Three-tier recovery, escalating force:
-  # 1. graceful `docker compose restart` (30s timeout)
-  # 2. hard `docker rm -f` + `docker compose up -d`
-  # 3. nuclear: `systemctl restart docker` + force-recreate
-  # Reason: when memory is near 100%, kernel cgroup pauses processes and
-  # SIGTERM/SIGKILL can't be delivered. Only restarting the docker daemon
-  # frees the cgroup.
-  if ! timeout 30 docker compose restart aggregator 2>&1; then
-    echo "$(date -Iseconds) $LOG_TAG step 1 failed — hard recreating"
-    if ! timeout 20 docker rm -f aggregator 2>&1; then
-      echo "$(date -Iseconds) $LOG_TAG step 2 failed — restarting docker daemon"
-      sudo systemctl restart docker
-      sleep 5
-    fi
-    docker compose up -d --force-recreate aggregator 2>&1 | tail -3
-  fi
-  echo "$(date -Iseconds) $LOG_TAG restart complete"
+  # TENANT-SAFE recovery — only ever touches the aggregator's own cgroup,
+  # NEVER the docker daemon (the old tier-3 `systemctl restart docker`
+  # bounced every container on the box: Caddy, OpenClaw, all of it).
+  #
+  # 1. docker kill — SIGKILL straight to the single container's cgroup.
+  #    This is what actually works under memory pressure; `compose restart`
+  #    sends SIGTERM and waits, which wedges ("did not receive an exit
+  #    event") exactly when the process is too starved to handle SIGTERM.
+  # 2. docker rm -f as backstop if kill left a dead container.
+  # 3. compose up -d to bring it back. unless-stopped restart policy may
+  #    already be doing this, so `up -d` is idempotent.
+  timeout 25 docker kill aggregator 2>&1 || echo "$(date -Iseconds) $LOG_TAG kill returned non-zero (may already be down)"
+  timeout 25 docker rm -f aggregator 2>&1 || true
+  timeout 60 docker compose up -d aggregator 2>&1 | tail -2
+  echo "$(date -Iseconds) $LOG_TAG restart complete (aggregator-only)"
 fi
 # Silent on healthy — keeps log readable
