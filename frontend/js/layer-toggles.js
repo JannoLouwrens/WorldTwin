@@ -12,20 +12,22 @@
   const LAYER_ICONS = {};
 
   // Short human-readable names
+  // Plain language, no source codenames — a reader shouldn't need to know
+  // what EONET or HANS is to decide whether to look at disasters.
   const LAYER_NAMES = {
-    quakes: 'Quakes', fires: 'Fires', volcanoes: 'Volcanoes', usgs_volcano_hans: 'HANS',
-    nhc_cyclones: 'Cyclones', disasters: 'EONET', gdacs_events: 'GDACS',
-    temperature_field: 'Temp', pressure_field: 'Pressure', humidity_field: 'Humidity', noaa_sst: 'Ocean SST', rainviewer: 'Radar',
-    air_quality: 'AQI', wind_sample: 'Wind', openaq_stations: 'OpenAQ', noaa_co2: 'CO₂',
-    historical_borders: 'History', historical_disasters: 'Hist Disasters', paleo_temperature: 'Paleo °C',
+    quakes: 'Quakes', fires: 'Fires', volcanoes: 'Volcanoes', usgs_volcano_hans: 'Volcano alerts',
+    nhc_cyclones: 'Cyclones', disasters: 'Disasters', gdacs_events: 'Floods & storms',
+    temperature_field: 'Temp', pressure_field: 'Pressure', humidity_field: 'Humidity', noaa_sst: 'Ocean temp', rainviewer: 'Rain radar',
+    air_quality: 'Air quality', wind_sample: 'Wind', openaq_stations: 'Air stations', noaa_co2: 'CO₂',
+    historical_borders: 'Old borders', historical_disasters: 'Past disasters', paleo_temperature: 'Paleo °C',
     flights: 'Planes', ships: 'Vessels', iss: 'ISS', satellites: 'Sats',
-    spacetrack_gp: 'SATCAT', swpc_aurora: 'Aurora', nasa_donki: 'DONKI', nasa_neows: 'Asteroids',
-    ucdp_ged: 'UCDP (hist)', ucdp: 'UCDP (2024)', conflict_events: 'Conflicts', wikidata_battles: 'Battles',
-    conflicts: 'War News', crises: 'Crises', reliefweb: 'ReliefWeb',
-    trade_annual: 'Trade', portwatch_chokepoints: 'Chokepoints', portwatch_ports: 'Ports',
-    climatetrace_assets: 'Emissions', wri_power_plants: 'Plants', eia_930_grid: 'US Grid', entsoe_grid: 'EU Grid', energy_viz: 'Energy Mix',
-    gdelt_gkg_themes: 'Themes', news: 'News', youtube: 'YouTube', radio: 'Radio', webcams: 'Webcams',
-    who_don: 'WHO', cables: 'Cables', cloudflare_radar: 'Internet',
+    spacetrack_gp: 'Satellites', swpc_aurora: 'Aurora', nasa_donki: 'Sun storms', nasa_neows: 'Asteroids',
+    ucdp_ged: 'Conflict history', ucdp: 'Conflicts', conflict_events: 'Violence (live)', wikidata_battles: 'Battles',
+    conflicts: 'War news', crises: 'Crises', reliefweb: 'Humanitarian',
+    trade_annual: 'Trade flows', portwatch_chokepoints: 'Chokepoints', portwatch_ports: 'Ports',
+    climatetrace_assets: 'Emitters', wri_power_plants: 'Power plants', eia_930_grid: 'US grid', entsoe_grid: 'EU grid', energy_viz: 'Energy mix',
+    gdelt_gkg_themes: 'News themes', news: 'News', youtube: 'YouTube', radio: 'Radio', webcams: 'Webcams',
+    who_don: 'Outbreaks', cables: 'Sea cables', cloudflare_radar: 'Internet',
     sports: 'Sports', gaming: 'Gaming', pulse_mode: 'Pulse',
   };
 

@@ -128,13 +128,24 @@
         .map(l => l.id);
     }
 
+    // PROGRESSIVE BOOT: the preload is NOT awaited. A first-time visitor
+    // was staring at a black splash for up to 18s while 65 caches loaded —
+    // but the globe doesn't need them to render, and every renderer
+    // lazy-fetches via the store-first fetchCache anyway. The Earth is the
+    // admission; the data streams in behind it (progress shown in the
+    // small #loading pill, not a full-screen wall).
     if (window.Preloader) {
-      const res = await window.Preloader.preload(preloadIds, (done, total, id) => {
-        if (pt) pt.textContent = `Loading ${done}/${total} layers…`;
-        if (pf) pf.style.width = ((done/total)*100) + '%';
-      });
-      if (pt) pt.textContent = `${res.ok} layers ready · entering`;
+      const pill = document.getElementById('loading');
+      const pillText = document.getElementById('loadingText');
+      if (pill) pill.style.opacity = '1';
+      window.Preloader.preload(preloadIds, (done, total) => {
+        if (pillText) pillText.textContent = `DATA ${done}/${total}`;
+      }).then(res => {
+        if (pillText) pillText.textContent = `${res.ok} SOURCES LIVE`;
+        if (pill) setTimeout(() => { pill.style.opacity = '0'; }, 2500);
+      }).catch(() => {});
     }
+    if (pt) pt.textContent = 'Starting the globe…';
 
     // Step 3: build the Earth viewer through the canonical planets.js path
     await window.Planets.switchToBody('earth');
@@ -161,11 +172,9 @@
       window.Clock.setYear(window.Clock.MAX_YEAR, { force: true });
     }
 
-    // Step 5: hide boot splash
-    setTimeout(() => {
-      const bootEl = document.getElementById('boot');
-      if (bootEl) bootEl.classList.add('hidden');
-    }, 400);
+    // Step 5: hide boot splash NOW — the globe is up; data keeps streaming.
+    const bootEl = document.getElementById('boot');
+    if (bootEl) bootEl.classList.add('hidden');
   }
 
   function attachGlobeHandlers() {

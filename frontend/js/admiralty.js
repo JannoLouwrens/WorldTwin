@@ -33,11 +33,18 @@
       </div>
       <div class="tw-masthead-rule" aria-hidden="true"></div>
       <div class="tw-masthead-meta">
-        <span>Earth Observatory</span>
-        <span>No. 04</span>
+        <a href="brief.html" style="color:#4cc2ff;text-decoration:none;letter-spacing:inherit">Daily Brief</a>
+        <a href="#" id="twTimeMachine" style="color:#4cc2ff;text-decoration:none;letter-spacing:inherit">Time Machine</a>
         <span>${stamp}</span>
       </div>`;
     document.body.appendChild(el);
+    // Time Machine: one click drops you a century back — the feature no
+    // other globe has, demonstrated instead of explained.
+    const tm = el.querySelector('#twTimeMachine');
+    if (tm) tm.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (window.Clock) window.Clock.setYear(1914, { force: true });
+    });
   }
 
   function wrapHeader() {

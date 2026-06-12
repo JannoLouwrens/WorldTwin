@@ -6,14 +6,17 @@
   const MODES = {
     world: {
       label: 'World · Overview',
-      layers: ['quakes', 'fires', 'portwatch_chokepoints', 'iss', 'gdelt_gkg_themes', 'disasters', 'who_don'],
+      // The Editor's Globe: six curated, high-trust layers a first-time
+      // reader can parse at a glance. The long tail lives in the Layer
+      // Browser (L) for power users.
+      layers: ['quakes', 'fires', 'gdacs_events', 'nhc_cyclones', 'portwatch_chokepoints', 'ucdp'],
       legend: {
         title: 'Global Overview',
         ramp: 'heat',
         min: 'Low activity',
         max: 'High activity',
       },
-      describe: 'All modes at a glance. Earth events, shipping pulses, ISS, trending news themes, disease outbreaks.',
+      describe: 'The state of the world right now: earthquakes, wildfires, floods and storms, cyclones, shipping chokepoints, armed conflicts. Press L for 60+ more layers.',
     },
     weather: {
       label: 'Weather · Atmosphere',
