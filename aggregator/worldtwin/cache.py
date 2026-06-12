@@ -41,6 +41,26 @@ def _atomic_write(path: Path, payload: Any) -> None:
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
     tmp.replace(path)
+    # Precompressed sidecar for Caddy's `file_server precompressed gzip` —
+    # an 18 MB world_bank.json ships as ~2 MB with zero per-request CPU.
+    # Written atomically alongside the json so the sidecar can never be
+    # stale relative to its source.
+    try:
+        if path.stat().st_size > 4096:
+            import gzip
+            gz_tmp = path.with_suffix(path.suffix + ".gz.tmp")
+            with path.open("rb") as src, gzip.open(gz_tmp, "wb", compresslevel=6) as dst:
+                while True:
+                    chunk = src.read(1 << 20)
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+            gz_tmp.replace(path.with_suffix(path.suffix + ".gz"))
+        else:
+            # Small file — drop any leftover sidecar so it can't go stale.
+            path.with_suffix(path.suffix + ".gz").unlink(missing_ok=True)
+    except Exception as e:
+        print(f"[cache] gzip sidecar failed for {path.name}: {e}")
 
 
 def write_envelope(layer_id: str, envelope_dict: dict[str, Any]) -> None:

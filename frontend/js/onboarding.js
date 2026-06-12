@@ -40,7 +40,7 @@
         <div style="margin:0 0 8px 0;padding:10px 14px;background:rgba(255,184,77,0.08);border:1px solid rgba(255,184,77,0.28);border-radius:10px;display:flex;gap:10px;align-items:flex-start">
           <span style="color:#ffb84d;font-weight:700;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;white-space:nowrap;padding-top:1px">Early dev</span>
           <span style="color:#c8d0e0;font-size:12px;line-height:1.55">
-            This is a one-person project in active development. Things break, some sources rate-limit (you'll see "no data right now" toasts), cold boot takes ~10 s. Feedback welcome — code is at <a href="https://github.com/JannoLouwrens/WorldTwin" target="_blank" style="color:#4cc2ff;text-decoration:none">github.com/JannoLouwrens/WorldTwin</a>.
+            This is a one-person project in active development. Things break, some sources rate-limit (you'll see "no data right now" toasts), cold boot takes ~10 s. Start with the <a href="/worldtwin/brief.html" style="color:#4cc2ff;text-decoration:none">Daily Earth Brief</a> · code at <a href="https://github.com/JannoLouwrens/WorldTwin" target="_blank" style="color:#4cc2ff;text-decoration:none">GitHub</a>. Your view is always shareable — the URL follows what you see.
           </span>
         </div>
 
