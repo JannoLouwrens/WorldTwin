@@ -523,11 +523,48 @@
   // ==================================================
   async function renderSatellites() {
     clearLayer('satellites');
-    // DISABLED: the previous implementation plotted Math.random() positions
-    // — fake data presented as live satellites, which is the one thing a
-    // "news source of actual data" can never do. Re-enable when real SGP4
-    // propagation (satellite.js) or the Space-Track positions land.
-    console.warn('[satellites] renderer disabled — no real position data yet (TLEs need SGP4)');
+    const d = await fetchCache('satellites');
+    if (!d || !Array.isArray(d) || !d.length) return;
+    // REAL SGP4 via satellite.js — the cache carries full OMM elements
+    // (MEAN_MOTION, ECCENTRICITY, EPOCH, BSTAR...). The old renderer
+    // plotted Math.random(); this propagates the actual orbits to NOW and
+    // discloses the element epoch age per the Charter.
+    if (!window.satellite) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/satellite.js@5.0.0/dist/satellite.min.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      }).catch(() => null);
+    }
+    if (!window.satellite) { console.warn('[satellites] satellite.js failed to load'); return; }
+    const now = new Date();
+    const gmst = satellite.gstime(now);
+    let plotted = 0;
+    for (const o of d.slice(0, 400)) {
+      try {
+        const rec = satellite.json2satrec(o);
+        const pv = satellite.propagate(rec, now);
+        if (!pv || !pv.position) continue;
+        const gd = satellite.eciToGeodetic(pv.position, gmst);
+        const lat = satellite.degreesLat(gd.latitude);
+        const lon = satellite.degreesLong(gd.longitude);
+        const altKm = gd.height;
+        if (!Number.isFinite(lat) || !Number.isFinite(altKm) || altKm < 100) continue;
+        const ageDays = Math.round((now - new Date(o.EPOCH)) / 86400000);
+        let hex = '#ffffff';
+        if (o._group === 'starlink') hex = '#c7d2fe';
+        else if (o._group === 'gps-ops') hex = '#fde047';
+        else if (o._group === 'geo') hex = '#a76bff';
+        addEntity('satellites', {
+          position: Cesium.Cartesian3.fromDegrees(lon, lat, altKm * 1000),
+          point: { pixelSize: 2.5, color: DS.c(hex, 0.85) },
+          name: (o.OBJECT_NAME || 'Satellite') + ' · SGP4 from elements ' + ageDays + 'd old',
+        });
+        plotted++;
+      } catch (_) {}
+    }
+    console.log('[satellites] SGP4 propagated', plotted, 'real positions');
   }
 
   // ==================================================
