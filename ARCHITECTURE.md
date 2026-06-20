@@ -208,7 +208,7 @@ There is **ONE** AI call in the system: `aggregator/worldtwin/sources/ai_narrati
 
 ## Deploy workflow
 
-Server: Oracle Cloud `129.151.191.74`. SSH key: `Solo/ssh-key-2026-02-08.key`.
+Server: Oracle Cloud `129.151.191.74`. SSH key path: see `CLAUDE.local.md` (git-ignored).
 
 ```
 # Frontend JS file
