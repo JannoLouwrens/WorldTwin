@@ -70,7 +70,7 @@ cp .env.example .env
 # Fill in API keys
 
 docker compose up -d
-# Frontend at http://localhost/weather/
+# Frontend at http://localhost/worldtwin/  (/weather/ also works — back-compat alias)
 # API health at http://localhost/api/health
 ```
 
