@@ -27,6 +27,10 @@ const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900, isMobile: false, hasTouch: false, deviceScaleFactor: 1 },
 ]
 
+/** Third-party tile CDNs. Their aborted/failed requests are map behaviour, not
+ *  application faults. */
+const TILE_HOSTS = /cartocdn|gibs\.earthdata\.nasa\.gov/
+
 const problems = []
 let webglUnavailable = false
 const note = (s) => console.log(`  ${s}`)
@@ -95,12 +99,14 @@ for (const vp of VIEWPORTS) {
       problems.push(`[${vp.name}] pageerror: ${msg.slice(0, 200)}`)
     })
     page.on('requestfailed', (r) => {
-      // Tile 404s at the poles are normal for a raster basemap on a globe.
-      if (/cartocdn/.test(r.url())) return
+      // Map tiles get aborted whenever the view moves — and unconditionally
+      // when the GL context dies, which on this GPU-less box it does. An
+      // aborted tile is not a fault signal; a 4xx/5xx from the API is.
+      if (TILE_HOSTS.test(r.url())) return
       problems.push(`[${vp.name}] request failed: ${r.url().slice(0, 120)} (${r.failure()?.errorText})`)
     })
     page.on('response', (r) => {
-      if (r.status() >= 400 && !/cartocdn/.test(r.url())) {
+      if (r.status() >= 400 && !TILE_HOSTS.test(r.url())) {
         problems.push(`[${vp.name}] HTTP ${r.status()}: ${r.url().slice(0, 120)}`)
       }
     })

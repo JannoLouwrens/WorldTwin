@@ -76,6 +76,14 @@ export default function App() {
     <div className="relative h-full w-full">
       <GlobeMap loaded={loaded} active={active} onPick={onPick} />
 
+      {/* Vignette. Pulls the eye to the centre of the globe and stops the bright
+          limb of the planet from fighting the chrome at the screen edges. */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[5]"
+        style={{ background: 'radial-gradient(ellipse at 50% 45%, transparent 42%, rgba(3,5,9,0.55) 100%)' }}
+        aria-hidden
+      />
+
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="pointer-events-auto rounded-full border border-[var(--color-hairline)] bg-[var(--color-surface)]/80 px-3 py-1.5 backdrop-blur">
           <span className="text-sm font-medium tracking-tight">WorldTwin</span>

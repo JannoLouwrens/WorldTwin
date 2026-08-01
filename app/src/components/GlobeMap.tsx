@@ -4,34 +4,89 @@ import { LAYERS } from '../layers/registry'
 import { makeShapeIcon } from '../lib/shapes'
 import type { LoadedLayer, Point } from '../lib/types'
 
-/** Keyless raster basemap. No Mapbox/MapTiler token to leak or rotate, and no
- *  third-party JS — just tiles. Carto's dark base is the same one the previous
- *  client used, so attribution and usage terms are unchanged. */
+/** Keyless imagery. No Mapbox/MapTiler token to leak or rotate and no
+ *  third-party JS — just tiles.
+ *
+ *  The basemap is NASA's Blue Marble (shaded relief + bathymetry) rather than a
+ *  vector street style: this is a view of a planet, and a grey road map reads as
+ *  a diagram of one. GIBS only publishes to zoom 8, so `maxzoom` is set there
+ *  and MapLibre overzooms rather than requesting tiles that 404.
+ *
+ *  Place labels ride on top from Carto, faded in only once you have zoomed past
+ *  the whole-globe view, so the planet stays uncluttered at rest. */
+const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
+
 const STYLE: StyleSpecification = {
   version: 8,
   projection: { type: 'globe' },
   sources: {
-    carto: {
+    bluemarble: {
+      type: 'raster',
+      // GIBS orders its REST path {TileMatrix}/{TileRow}/{TileCol} — z/y/x, not
+      // the usual z/x/y. MapLibre substitutes the tokens positionally, so the
+      // order below is deliberate.
+      tiles: [`${GIBS}/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg`],
+      tileSize: 256,
+      maxzoom: 8,
+      attribution:
+        'Imagery <a href="https://earthdata.nasa.gov/gibs">NASA EOSDIS GIBS</a> · labels © <a href="https://carto.com/attributions">CARTO</a>, OpenStreetMap',
+    },
+    citylights: {
+      type: 'raster',
+      tiles: [`${GIBS}/VIIRS_CityLights_2012/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg`],
+      tileSize: 256,
+      maxzoom: 8,
+    },
+    labels: {
       type: 'raster',
       tiles: [
-        'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
+        'https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
+        'https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
+        'https://c.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
       ],
       tileSize: 256,
       maxzoom: 18,
-      attribution: '© <a href="https://carto.com/attributions">CARTO</a> © OpenStreetMap contributors',
     },
   },
   layers: [
-    { id: 'bg', type: 'background', paint: { 'background-color': '#0d1117' } },
-    { id: 'carto', type: 'raster', source: 'carto', paint: { 'raster-opacity': 0.92 } },
+    { id: 'space', type: 'background', paint: { 'background-color': '#05070b' } },
+    {
+      id: 'bluemarble',
+      type: 'raster',
+      source: 'bluemarble',
+      paint: {
+        // Tuned down so the planet sits in the same register as the dark UI and
+        // the data marks stay the brightest thing on screen.
+        'raster-brightness-max': 0.82,
+        'raster-saturation': -0.12,
+        'raster-contrast': 0.08,
+      },
+    },
+    {
+      id: 'citylights',
+      type: 'raster',
+      source: 'citylights',
+      // Human settlement, coming up as you approach. Kept low so it warms the
+      // night side rather than washing the imagery out.
+      paint: {
+        'raster-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.16, 3, 0.3, 6, 0.42],
+      },
+    },
+    {
+      id: 'labels',
+      type: 'raster',
+      source: 'labels',
+      paint: { 'raster-opacity': ['interpolate', ['linear'], ['zoom'], 1.8, 0, 3.2, 0.55, 6, 0.8] },
+    },
   ],
   sky: {
-    'sky-color': '#0d1117',
-    'horizon-color': '#1c2733',
+    'sky-color': '#060a12',
+    'horizon-color': '#2b5f8f',
     'fog-color': '#0d1117',
-    'fog-ground-blend': 0.6,
+    'fog-ground-blend': 0.7,
+    'horizon-fog-blend': 0.45,
+    'sky-horizon-blend': 0.7,
+    'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 6, 0.2],
   },
 }
 
@@ -93,6 +148,23 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
           m.addImage(name, makeShapeIcon(def.shape, def.color), { pixelRatio: 2 })
         }
         m.addSource(def.id, { type: 'geojson', data: toFeatureCollection([]) })
+
+        // A soft halo beneath each mark. Against satellite imagery a flat dot
+        // disappears into terrain; the glow lifts it off the planet and gives
+        // the layer's hue somewhere to read from at a glance. Cheap — one
+        // blurred circle per point, drawn under the shape.
+        m.addLayer({
+          id: `${def.id}-glow`,
+          type: 'circle',
+          source: def.id,
+          paint: {
+            'circle-color': def.color,
+            'circle-radius': ['*', ['get', 'px'], 0.85],
+            'circle-blur': 1,
+            'circle-opacity': 0.45,
+          },
+        })
+
         m.addLayer({
           id: def.id,
           type: 'symbol',
@@ -142,10 +214,12 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
       fc.features.forEach((f, i) => {
         const p = points[i]
         const px = def.sizeBy ? def.sizeBy(p) : def.size
-        f.properties = { ...f.properties, scale: px / 22 }
+        f.properties = { ...f.properties, scale: px / 22, px }
       })
       src.setData(fc)
-      m.setLayoutProperty(def.id, 'visibility', isOn ? 'visible' : 'none')
+      const vis = isOn ? 'visible' : 'none'
+      m.setLayoutProperty(def.id, 'visibility', vis)
+      m.setLayoutProperty(`${def.id}-glow`, 'visibility', vis)
     }
   }
 
