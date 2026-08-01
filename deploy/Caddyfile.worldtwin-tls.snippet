@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# WorldTwin over HTTPS. Separate site block on purpose: the :80 block above
+# carries the tenant routes (admin, jj, company agents) and the VPN paths, and
+# nothing here touches it. Requests to the bare IP keep behaving exactly as
+# before; only this hostname gets TLS.
+#
+# Caddy fetches and renews the Let's Encrypt certificate itself (HTTP-01 over
+# port 80, which is already open) — no Cloudflare, no manual certbot.
+#
+# The frontend hardcodes absolute /worldtwin/* paths (app.js fetches
+# /worldtwin/config.json, brief.html deep-links /worldtwin/?layers=...), so the
+# path layout is kept identical here and the bare root just redirects in.
+# ---------------------------------------------------------------------------
+worldtwin.duckdns.org {
+    encode zstd gzip
+
+    handle /api/cache/* {
+        uri strip_prefix /api/cache
+        root * /srv/cache
+        encode zstd gzip
+        file_server {
+            precompressed gzip
+        }
+        header Access-Control-Allow-Origin *
+        header Cache-Control "public, max-age=10"
+    }
+
+    handle /api/* {
+        reverse_proxy aggregator:8090
+        header Access-Control-Allow-Origin *
+    }
+
+    handle /v1/cache/* {
+        uri strip_prefix /v1/cache
+        root * /srv/cache/v1
+        file_server
+        header Access-Control-Allow-Origin *
+        header Cache-Control "public, max-age=10"
+    }
+
+    handle /v1/* {
+        reverse_proxy aggregator:8090
+        header Access-Control-Allow-Origin *
+    }
+
+    handle /worldtwin* {
+        root * /srv/weather
+        uri strip_prefix /worldtwin
+        file_server
+    }
+
+    @rootPath path / ""
+    redir @rootPath /worldtwin/ 302
+
+    handle {
+        redir /worldtwin/ 302
+    }
+}
