@@ -1,6 +1,25 @@
 import { LAYERS } from '../layers/registry'
 import { relTime } from '../lib/api'
+import type { Shape } from '../lib/shapes'
 import type { LoadedLayer } from '../lib/types'
+
+/** The legend mark, mirroring the shape drawn on the globe.
+ *
+ *  Drawn as SVG rather than a clip-path'd box: clip-path cuts the border along
+ *  with the fill, which collapsed the triangle into a sliver. Since shape — not
+ *  a fourth hue — is what distinguishes layers past the third, this mark has to
+ *  be unambiguous. */
+function Swatch({ shape, color, filled }: { shape: Shape; color: string; filled: boolean }) {
+  const paint = filled ? { fill: color } : { fill: 'none', stroke: color, strokeWidth: 1.6 }
+  return (
+    <svg viewBox="0 0 12 12" className="mt-1 size-3 shrink-0 overflow-visible" aria-hidden>
+      {shape === 'circle' && <circle cx="6" cy="6" r="5" {...paint} />}
+      {shape === 'triangle' && <polygon points="6,1 11,10.5 1,10.5" strokeLinejoin="round" {...paint} />}
+      {shape === 'diamond' && <polygon points="6,0.8 11.2,6 6,11.2 0.8,6" strokeLinejoin="round" {...paint} />}
+      {shape === 'square' && <rect x="1.2" y="1.2" width="9.6" height="9.6" rx="1" {...paint} />}
+    </svg>
+  )
+}
 
 interface Props {
   open: boolean
@@ -57,23 +76,7 @@ export function LayerSheet({ open, onClose, active, onToggle, loaded, loading }:
                   aria-pressed={on}
                   className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-white/[0.03]"
                 >
-                  <span
-                    className="mt-1 size-3 shrink-0 rounded-[2px]"
-                    style={{
-                      background: on ? def.color : 'transparent',
-                      border: `1.5px solid ${def.color}`,
-                      // Shape echoes the map mark, so the legend identifies by
-                      // form as well as hue.
-                      clipPath:
-                        def.shape === 'triangle'
-                          ? 'polygon(50% 0%, 100% 100%, 0% 100%)'
-                          : def.shape === 'diamond'
-                            ? 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
-                            : undefined,
-                      borderRadius: def.shape === 'circle' ? '50%' : undefined,
-                    }}
-                    aria-hidden
-                  />
+                  <Swatch shape={def.shape} color={def.color} filled={on} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className="text-sm text-[var(--color-ink)]">{def.label}</span>
