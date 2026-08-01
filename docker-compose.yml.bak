@@ -1,0 +1,40 @@
+# WorldTwin — stand-alone compose.
+# This file lives at /home/opc/worldtwin/docker-compose.yml
+# WorldTwin sits on a DEDICATED network (worldtwin_edge) that is ONLY
+# bridged by OpenClaw's Caddy reverse proxy. Company agents on openclaw's
+# frontend/backend networks cannot reach aggregator at L2.
+
+services:
+
+  # ==========================================
+  # AGGREGATOR — WorldTwin data aggregator
+  # ==========================================
+  aggregator:
+    build:
+      context: ./aggregator
+      dockerfile: Dockerfile
+    container_name: aggregator
+    restart: unless-stopped
+    expose:
+      - "8090"
+    volumes:
+      - ./cache:/cache
+      - ./aggregator/worldtwin:/app/worldtwin
+    env_file:
+      - .env
+    environment:
+      - CACHE_DIR=/cache
+    networks:
+      - worldtwin_edge
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+networks:
+  # Dedicated network — only Caddy (OpenClaw side) joins this from the
+  # outside. Everything else on WorldTwin's side stays L2-isolated from
+  # OpenClaw's company agents.
+  worldtwin_edge:
+    external: true
+    name: worldtwin_edge

@@ -1,0 +1,6 @@
+aggregator.py
+workers_new.py
+add_to_compose.py
+update_caddy.py
+__pycache__
+*.pyc

@@ -1,0 +1,21 @@
+# Secrets — NEVER commit these
+.env
+.env.*
+*.gmail_oauth.json
+.gmail_oauth.json
+
+# Data volumes (bind-mounted from /data, not source)
+cache
+cache/
+history/
+snapshots/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Editor / OS noise
+*.swp
+.DS_Store

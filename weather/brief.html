@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Daily Earth Brief — WorldTwin</title>
+<meta name="description" content="What changed on Earth in the last 24 hours — from raw, dated, cross-checked data sources. No headlines, just readings.">
+<style>
+  :root { --ink:#0e1320; --paper:#f7f4ee; --rule:#d8d2c4; --accent:#1d4ed8; --warm:#92400e; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--paper); color:var(--ink); font-family: Georgia, 'Times New Roman', serif; line-height:1.65; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { border-bottom: 3px double var(--ink); padding-bottom: 18px; margin-bottom: 8px; }
+  .kicker { font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--warm); }
+  h1 { font-size: 42px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; margin-top: 6px; }
+  .dateline { font-family: ui-monospace, monospace; font-size: 12px; color: #555; margin-top: 10px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  .lede { font-size: 19px; margin: 28px 0 8px; }
+  .lede::first-letter { font-size: 56px; float: left; line-height: .9; padding-right: 8px; font-weight: 700; }
+  .numbers { margin: 30px 0; border: 1px solid var(--rule); background: #fffdf8; }
+  .numbers h2, section h2 { font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .2em; text-transform: uppercase; padding: 10px 14px; border-bottom: 1px solid var(--rule); color: var(--warm); }
+  .num-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); }
+  .num { padding: 14px; border-right:1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .num b { display:block; font-size: 26px; font-variant-numeric: tabular-nums; }
+  .num span { font-size: 12px; color:#666; }
+  .num a { color: var(--accent); text-decoration: none; font-size: 12px; }
+  section { margin: 30px 0; border: 1px solid var(--rule); background:#fffdf8; }
+  section .body { padding: 14px 16px; font-size: 15px; }
+  .charter { margin-top: 50px; border-top: 3px double var(--ink); padding-top: 22px; font-size: 14px; }
+  .charter h2 { border: 0; padding: 0 0 8px; }
+  .charter ol { padding-left: 22px; }
+  .charter li { margin-bottom: 6px; }
+  .globe-cta { display:block; text-align:center; margin: 36px 0 0; padding: 14px; background: var(--ink); color: #fff; text-decoration:none; font-family: ui-monospace, monospace; letter-spacing: .14em; font-size: 12px; text-transform: uppercase; }
+  .prov { font-family: ui-monospace, monospace; font-size: 10.5px; color:#777; padding: 8px 16px 12px; }
+  footer { margin-top: 40px; font-size: 12px; color:#666; font-family: ui-monospace, monospace; }
+  footer a { color: var(--accent); }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#e8e4da; --paper:#14161c; --rule:#33363f; --accent:#7aa2ff; --warm:#e0a458; }
+    .numbers, section { background:#1a1d24; }
+    .dateline, .num span, .prov, footer { color:#9aa; }
+    .globe-cta { background:#e8e4da; color:#14161c; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">WorldTwin · Evidence-first news</div>
+    <h1>The Daily Earth Brief</h1>
+    <div class="dateline"><span id="dateline">Loading…</span><span>No headlines. Readings.</span></div>
+  </header>
+
+  <p class="lede" id="lede">Reading the instruments…</p>
+
+  <div class="numbers">
+    <h2>By the numbers — last 24 hours</h2>
+    <div class="num-grid" id="numbers"></div>
+    <div class="prov" id="numProv"></div>
+  </div>
+
+  <section id="riskSec" style="display:none">
+    <h2>Biggest risk on the board</h2>
+    <div class="body" id="risk"></div>
+  </section>
+
+  <section id="trendSec" style="display:none">
+    <h2>Trend of the week</h2>
+    <div class="body" id="trend"></div>
+  </section>
+
+  <a class="globe-cta" href="/worldtwin/">Open the live globe →</a>
+
+  <div class="charter">
+    <h2>The Charter</h2>
+    <ol>
+      <li><b>Every number carries its source and its timestamp.</b> No orphan claims.</li>
+      <li><b>No fabricated or interpolated data without explicit marking.</b> Reconstructions are labeled reconstructions.</li>
+      <li><b>Gaps are shown, not hidden.</b> A silent source is displayed as silent.</li>
+      <li><b>The record is permanent.</b> What we showed on any date is replayable; corrections add to history, they don't erase it.</li>
+      <li><b>Raw is one click away.</b> Any rendered value traces to the cached payload and the upstream URL.</li>
+    </ol>
+  </div>
+
+  <footer>
+    Generated from live caches at read time — this page has no editor and no opinions.
+    Sources: USGS · NASA · NOAA · UCDP · IMF PortWatch · World Bank · GDACS and ~70 more.
+    <a href="/worldtwin/">globe</a> · <a href="https://github.com/JannoLouwrens/WorldTwin">code</a>
+  </footer>
+</div>
+
+<script>
+(async function(){
+  const get = async id => {
+    try { const r = await fetch('/api/cache/' + id + '.json'); return r.ok ? r.json() : null; }
+    catch (_) { return null; }
+  };
+  const [nar, quakes, gdacs, fires, ports] = await Promise.all([
+    get('gemini_narrative'), get('quakes'), get('gdacs_events'), get('fires'), get('portwatch_chokepoints'),
+  ]);
+
+  const now = new Date();
+  document.getElementById('dateline').textContent =
+    now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) + ' · ' +
+    now.toISOString().slice(11,16) + ' UTC';
+
+  if (nar && nar.today) {
+    document.getElementById('lede').textContent = nar.today;
+    if (nar.biggest_risk) {
+      document.getElementById('riskSec').style.display = '';
+      document.getElementById('risk').textContent = nar.biggest_risk;
+    }
+    if (nar.trend_of_week) {
+      document.getElementById('trendSec').style.display = '';
+      document.getElementById('trend').textContent = nar.trend_of_week;
+    }
+  } else {
+    document.getElementById('lede').textContent =
+      'The narrative engine is quiet right now — the numbers below are live regardless.';
+  }
+
+  const cells = [];
+  const dayMs = 86400000;
+  if (quakes && quakes.features) {
+    const recent = quakes.features.filter(f => (Date.now() - (f.properties?.time || 0)) < dayMs);
+    const big = recent.filter(f => (f.properties?.mag || 0) >= 5).length;
+    cells.push({ n: recent.length, l: 'earthquakes recorded', link: '/worldtwin/?layers=quakes', sub: big + ' at M5+' });
+  }
+  if (fires && Array.isArray(fires)) {
+    cells.push({ n: fires.length.toLocaleString(), l: 'active fire detections', link: '/worldtwin/?layers=fires', sub: 'VIIRS+MODIS, 24h' });
+  }
+  if (gdacs && (gdacs.events || gdacs.items)) {
+    const ev = gdacs.events || gdacs.items;
+    cells.push({ n: ev.length, l: 'disaster alerts active', link: '/worldtwin/?layers=gdacs_events', sub: 'GDACS unified feed' });
+  }
+  if (ports && ports.chokepoints) {
+    const suez = ports.chokepoints.find(c => /suez/i.test(c.name || ''));
+    if (suez && suez.n_total != null) {
+      cells.push({ n: suez.n_total, l: 'ships through Suez', link: '/worldtwin/?layers=portwatch_chokepoints&cam=32.5,30.5,2000', sub: 'IMF PortWatch' });
+    }
+  }
+  document.getElementById('numbers').innerHTML = cells.map(c =>
+    `<div class="num"><b>${c.n}</b><span>${c.l} · ${c.sub}</span><br><a href="${c.link}">see it on the globe →</a></div>`
+  ).join('') || '<div class="num"><b>—</b><span>caches warming up</span></div>';
+
+  const stamps = [quakes, fires && {fetched:null}, gdacs, ports].filter(Boolean);
+  const newest = (nar && nar.fetched) || (quakes && quakes.fetched) || '';
+  document.getElementById('numProv').textContent =
+    'Every figure above is read directly from the public data caches at page load. Narrative fetched ' +
+    (newest ? newest.slice(0, 16).replace('T', ' ') + ' UTC' : 'recently') + '.';
+})();
+</script>
+</body>
+</html>
