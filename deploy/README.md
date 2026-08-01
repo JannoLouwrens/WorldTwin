@@ -21,6 +21,24 @@ port 80, which is already open. No Cloudflare, no certbot, no cron.
 2. Inbound TCP 443 must be permitted in the OCI security list for this VM.
    Port 80 already is. Caddy is already listening on 443.
 
+   **Confirmed blocked as of 2026-08-01.** Applying this config issued the
+   certificate fine, but Let's Encrypt's TLS-ALPN-01 probe failed with
+   `129.151.191.74: Timeout during connect (likely firewall problem)` before
+   falling back to HTTP-01 over port 80, which succeeded. The host firewall is
+   not the cause — `iptables -t nat -S DOCKER` has identical DNAT rules for 80
+   and 443 — so the block is Oracle's cloud firewall.
+
+   Open it at: Console -> Networking -> Virtual Cloud Networks -> your VCN ->
+   Security Lists -> the subnet's list -> Add Ingress Rule:
+   Stateless *No*, Source CIDR `0.0.0.0/0`, IP Protocol *TCP*,
+   Destination Port Range `443`.
+
+   Until that is done the certificate is valid and HTTPS serves correctly on
+   the box, but is unreachable from the internet — and because Caddy adds a
+   host-scoped HTTP->HTTPS redirect, `http://worldtwin.duckdns.org` will 308
+   to an unreachable HTTPS URL. The bare IP is unaffected and keeps serving.
+   So do not share the domain link until 443 is open.
+
 ### Applying it
 
 ```bash
