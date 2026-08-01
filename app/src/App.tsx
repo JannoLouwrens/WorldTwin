@@ -3,6 +3,7 @@ import { GlobeMap } from './components/GlobeMap'
 import { LayerSheet } from './components/LayerSheet'
 import { Freshness } from './components/Freshness'
 import { DetailCard } from './components/DetailCard'
+import { Credits } from './components/Credits'
 import { DEFAULT_ON, LAYERS } from './layers/registry'
 import { loadHealth, loadLayer } from './lib/api'
 import type { Health, LoadedLayer, Point } from './lib/types'
@@ -80,7 +81,7 @@ export default function App() {
           limb of the planet from fighting the chrome at the screen edges. */}
       <div
         className="pointer-events-none absolute inset-0 z-[5]"
-        style={{ background: 'radial-gradient(ellipse at 50% 45%, transparent 42%, rgba(3,5,9,0.55) 100%)' }}
+        style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 46%, rgba(3,5,9,0.5) 100%)' }}
         aria-hidden
       />
 
@@ -112,6 +113,8 @@ export default function App() {
         loaded={loaded}
         loading={loading}
       />
+
+      <Credits />
 
       <DetailCard pick={pick} loaded={loaded} onClose={() => setPick(null)} />
     </div>

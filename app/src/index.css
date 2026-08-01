@@ -61,12 +61,22 @@ body {
   overflow: hidden;
 }
 
-.maplibregl-ctrl-attrib {
-  font-size: 10px;
-  background: rgb(13 17 23 / 0.7) !important;
+/* Credits are rendered by <Credits/> instead of MapLibre's control, which
+ * renders expanded and collides with the bottom-left chrome on a phone. */
+/* Match the zoom buttons to the rest of the chrome instead of leaving them as
+ * bright white default controls sitting on top of the planet. */
+.maplibregl-ctrl-group {
+  background: rgb(22 27 34 / 0.85) !important;
+  border: 1px solid var(--color-hairline);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  overflow: hidden;
 }
-.maplibregl-ctrl-attrib a {
-  color: var(--color-ink-muted) !important;
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--color-hairline);
+}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1) opacity(0.65);
 }
 
 @keyframes pulse-ring {

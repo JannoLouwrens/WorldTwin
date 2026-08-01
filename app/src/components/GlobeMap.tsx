@@ -90,6 +90,19 @@ const STYLE: StyleSpecification = {
   },
 }
 
+/** Zoom at which the whole globe sits inside the viewport with margin.
+ *
+ *  A fixed zoom cannot work across a 390px portrait phone and a 1440px desktop:
+ *  1.6 filled a phone edge to edge and clipped the planet at both sides.
+ *  Calibrated empirically — at zoom 1.6 the globe spans ~390 CSS px — and
+ *  driven off the *smaller* axis so the sphere is never cropped. */
+function fitZoom(el: HTMLElement): number {
+  const { width, height } = el.getBoundingClientRect()
+  const shortest = Math.min(width || 390, height || 844)
+  const target = shortest * 0.86
+  return Math.max(0.4, Math.min(4, 1.6 + Math.log2(target / 390)))
+}
+
 function toFeatureCollection(points: Point[]): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
@@ -112,6 +125,7 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MLMap | null>(null)
   const ready = useRef(false)
+  const resizeObs = useRef<ResizeObserver | null>(null)
   // Held in a ref so the map's event handlers always see current data without
   // being torn down and rebound on every render.
   const latest = useRef({ loaded, active, onPick })
@@ -123,11 +137,14 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
     const m = new maplibregl.Map({
       container: container.current,
       style: STYLE,
-      center: [12, 25],
-      zoom: 1.6,
-      minZoom: 0.6,
+      center: [12, 18],
+      zoom: fitZoom(container.current),
+      minZoom: 0.4,
       maxZoom: 12,
-      attributionControl: { compact: true },
+      // MapLibre's own control renders expanded and, on a 390px phone, lands
+      // straight under the Layers button with no room to sit beside it. The
+      // credits are still shown — see <Credits/> — just laid out deliberately.
+      attributionControl: false,
       // Touch devices: let a one-finger drag rotate the globe rather than
       // fighting the page, and keep pitch off — it buys nothing on a globe.
       pitchWithRotate: false,
@@ -135,7 +152,21 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
     })
     map.current = m
 
-    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
+    // Pinch and double-tap already zoom on touch, so the buttons are just
+    // clutter over the planet. Keep them where there is no touch.
+    if (!window.matchMedia('(pointer: coarse)').matches) {
+      m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
+    }
+
+    // Keep the whole planet in frame across rotation and window resizes.
+    const refit = () => {
+      if (!container.current) return
+      const target = fitZoom(container.current)
+      if (Math.abs(m.getZoom() - target) > 0.35) m.setZoom(target)
+    }
+    const ro = new ResizeObserver(refit)
+    ro.observe(container.current)
+    resizeObs.current = ro
 
     // Without this, a bad style or a failed source fails silently and the globe
     // is simply absent — which is exactly how the container-height bug hid.
@@ -192,6 +223,8 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
     })
 
     return () => {
+      resizeObs.current?.disconnect()
+      resizeObs.current = null
       m.remove()
       map.current = null
       ready.current = false
