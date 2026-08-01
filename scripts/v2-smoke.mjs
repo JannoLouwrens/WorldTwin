@@ -120,10 +120,30 @@ for (const vp of VIEWPORTS) {
       const gl = await page.evaluate(() => {
         const c = document.querySelector('canvas.maplibregl-canvas')
         const ctx = c?.getContext('webgl2') || c?.getContext('webgl')
-        return { ok: !!ctx, w: c?.width ?? 0, h: c?.height ?? 0 }
+        const r = c?.getBoundingClientRect()
+        const cont = document.querySelector('.maplibregl-map')?.getBoundingClientRect()
+        return {
+          ok: !!ctx,
+          w: c?.width ?? 0,
+          h: c?.height ?? 0,
+          cssW: Math.round(r?.width ?? 0),
+          cssH: Math.round(r?.height ?? 0),
+          contH: Math.round(cont?.height ?? 0),
+        }
       })
-      note(`canvas ${gl.w}x${gl.h}, webgl=${gl.ok}`)
+      note(`canvas ${gl.w}x${gl.h} (css ${gl.cssW}x${gl.cssH}), container h=${gl.contH}, webgl=${gl.ok}`)
       if (!gl.ok || gl.w === 0) problems.push(`[${vp.name}] canvas has no WebGL context or zero size`)
+      // The bug this catches: MapLibre's stylesheet overriding the container's
+      // position collapsed it to height 0, the canvas fell back to its
+      // intrinsic 300px, and the globe was invisible on every real device while
+      // every other check still passed. A map that does not fill its viewport
+      // is a failure, not a cosmetic issue.
+      if (gl.cssH < vp.height * 0.9) {
+        problems.push(`[${vp.name}] map canvas is ${gl.cssH}px tall, expected ~${vp.height}px — container not sized`)
+      }
+      if (gl.cssW < vp.width * 0.9) {
+        problems.push(`[${vp.name}] map canvas is ${gl.cssW}px wide, expected ~${vp.width}px`)
+      }
     }
 
     // 2. Chrome that must be present.

@@ -1,5 +1,11 @@
-@import 'tailwindcss';
+/* MapLibre's stylesheet MUST come first. It sets `.maplibregl-map {position:
+ * relative}`, which has the same specificity as Tailwind's `.absolute` — so
+ * whichever is imported later wins. With Tailwind first, MapLibre overrode the
+ * map container's positioning, `inset-0` stopped sizing it, the container
+ * collapsed to height 0, and the canvas fell back to its intrinsic 300px:
+ * a black screen on every device. Import order is load-bearing here. */
 @import 'maplibre-gl/dist/maplibre-gl.css';
+@import 'tailwindcss';
 
 /* Design tokens.
  *

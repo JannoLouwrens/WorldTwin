@@ -82,6 +82,10 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
 
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right')
 
+    // Without this, a bad style or a failed source fails silently and the globe
+    // is simply absent — which is exactly how the container-height bug hid.
+    m.on('error', (e) => console.error('[map]', e.error?.message ?? e))
+
     m.on('load', () => {
       for (const def of LAYERS) {
         const name = `icon-${def.id}`
@@ -147,5 +151,8 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
 
   useEffect(sync, [loaded, active])
 
-  return <div ref={container} className="absolute inset-0" />
+  // Sized by normal flow (h-full/w-full) rather than absolute insets, so the
+  // container keeps its dimensions regardless of what MapLibre's own stylesheet
+  // does to `position`. See the import-order note in index.css.
+  return <div ref={container} className="h-full w-full" />
 }
