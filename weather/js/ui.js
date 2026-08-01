@@ -48,24 +48,50 @@
     // Freshness
     updateFreshness();
   }
+  // Freshness has to be honest even — especially — when the backend is gone.
+  // The old version bailed on a failed /api/health and left the last good
+  // timestamp frozen on screen, so during the Jul 2026 outage the globe
+  // cheerfully read "moments ago" for six days while serving stale cache.
+  // It also reported the single most-recent layer, which meant one 10-second
+  // ISS refresh made 90 day-old sources look live.
   async function updateFreshness() {
+    const el = document.getElementById('lgFreshness');
+    if (!el) return;
     try {
-      const r = await fetch('/api/health');
-      if (!r.ok) return;
+      const r = await fetch('/api/health', { cache: 'no-store' });
+      if (!r.ok) throw new Error('health ' + r.status);
       const d = await r.json();
       const layers = d.layers || {};
-      // Find most recent fetch among any layer
-      let latest = 0;
+      const dayAgo = Date.now() - 86400000;
+      let latest = 0, stale = 0, total = 0;
       Object.values(layers).forEach(l => {
-        if (l.last_fetch) {
-          const t = new Date(l.last_fetch).getTime();
-          if (t > latest) latest = t;
-        }
+        if (!l.last_fetch) return;
+        const t = new Date(l.last_fetch).getTime();
+        if (!t) return;
+        total++;
+        if (t > latest) latest = t;
+        if (t < dayAgo) stale++;
       });
-      if (latest > 0) {
-        document.getElementById('lgFreshness').textContent = DS.fmtRelTime(new Date(latest).toISOString());
+      if (!total) throw new Error('no layers reporting');
+      el.textContent = DS.fmtRelTime(new Date(latest).toISOString());
+      el.title = stale
+        ? stale + ' of ' + total + ' sources have not updated in over a day'
+        : 'all ' + total + ' sources updated within the last day';
+      el.classList.toggle('is-stale', stale > total / 2);
+    } catch (_) {
+      // Live API unreachable. The page still renders because Caddy serves the
+      // cached JSON straight off disk, so say that plainly and date it from
+      // the cache itself rather than pretending the data is current.
+      el.classList.add('is-stale');
+      el.title = 'Live API unreachable — showing data cached on the server';
+      try {
+        const c = await fetch('/api/cache/v1/quakes.json', { cache: 'no-store' });
+        const j = await c.json();
+        el.textContent = j.fetched_at ? 'cached · ' + DS.fmtRelTime(j.fetched_at) : 'offline';
+      } catch (_) {
+        el.textContent = 'offline';
       }
-    } catch (_) {}
+    }
   }
   setInterval(updateFreshness, 30000);
 

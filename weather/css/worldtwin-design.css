@@ -1141,6 +1141,12 @@ body[data-scrubbed-past="true"] .layer-browser .lb-row:not(.lb-time-aware) .lb-r
   text-transform: uppercase;
   margin-left: auto;
 }
+/* Stale or offline data must look different from live data — the charter
+   says gaps are shown, not hidden. Set when most sources are over a day old
+   or the API is unreachable (see updateFreshness in js/ui.js). */
+.legend-strip .lg-freshness.is-stale {
+  color: var(--warn, #e0a33e);
+}
 
 /* ============================================================
    ONBOARDING — first-visit overlay
