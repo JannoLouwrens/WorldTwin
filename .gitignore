@@ -19,3 +19,6 @@ __pycache__/
 # Editor / OS noise
 *.swp
 .DS_Store
+
+# v2 client build output — regenerate with `cd app && npm run build`
+weather/v2/

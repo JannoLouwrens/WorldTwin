@@ -1,0 +1,75 @@
+@import 'tailwindcss';
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+/* Design tokens.
+ *
+ * The three series hues are the first three categorical slots of the validated
+ * palette, dark steps. Three is not an aesthetic choice: on a map any layer can
+ * sit beside any other, so the palette must clear the all-pairs floors, and past
+ * three slots no ordering does. Anything beyond three layers is separated by
+ * mark SHAPE, not by a fourth hue.
+ *
+ * Verified with the palette validator against this surface:
+ *   #3987e5,#d95926,#199e70 --mode dark --surface #0d1117 --pairs all
+ *   worst CVD dE 9.4 (>=8), worst normal-vision dE 20.9 (>=15), all >=3:1. PASS.
+ *
+ * Alert levels use the reserved status palette instead — a status colour must
+ * never impersonate a series — and always ship with a text label beside them.
+ */
+@theme {
+  --color-surface: #0d1117;
+  --color-surface-raised: #161b22;
+  --color-hairline: #22272e;
+
+  --color-ink: #f0f3f6;
+  --color-ink-muted: #9aa4b0;
+  --color-ink-faint: #6b7683;
+
+  --color-series-1: #3987e5;
+  --color-series-2: #d95926;
+  --color-series-3: #199e70;
+
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-serious: #ec835a;
+  --color-status-critical: #d03b3b;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* The globe is the page; nothing else may introduce a scrollbar. */
+body {
+  overflow: hidden;
+}
+
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+  background: rgb(13 17 23 / 0.7) !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--color-ink-muted) !important;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
