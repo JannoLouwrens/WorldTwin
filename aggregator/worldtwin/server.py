@@ -78,7 +78,7 @@ async def _wal_checkpoint_loop():
     future improvement (e.g., write-traffic-aware quiet-window detection).
     """
     import asyncio
-    print("[wal] loop started — checkpoint via writers' autocheckpoint=5000; TRUNCATE runs at boot in lifespan()", flush=True)
+    print("[wal] loop started — checkpoint via writers' autocheckpoint=5000; TRUNCATE deferred to a post-startup background task", flush=True)
     while True:
         try:
             await asyncio.sleep(3600)  # Hourly heartbeat
@@ -165,11 +165,30 @@ async def lifespan(app: FastAPI):
             return tuple(c.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone() or ())
         finally:
             c.execute("PRAGMA busy_timeout=60000")
-    try:
-        res = await asyncio.to_thread(_boot_wal_truncate)
-        print(f"[wal] boot wal_checkpoint(TRUNCATE) -> (blocked, log_pages, ckpt_pages)={res}", flush=True)
-    except Exception as e:
-        print(f"[wal] boot TRUNCATE failed (non-fatal): {e}", flush=True)
+    async def _boot_wal_truncate_bg():
+        """TRUNCATE the WAL AFTER startup, never during it.
+
+        This used to be awaited inline in lifespan(), so uvicorn could not
+        accept connections until it finished. On 2026-08-09 a routine
+        single-container restart met a 1.74 GB WAL and the API returned 502
+        for the duration — a self-inflicted outage from a restart that
+        changed nothing else. docs/MASTER_PLAN.md Stage 8 already called for
+        exactly this fix ("move it to a post-startup background task so it
+        can never block uvicorn accepting"); it had not been applied.
+
+        Kept unconditional rather than gated on a size threshold: a LARGE WAL
+        is precisely when the truncate matters most, so skipping it above
+        512 MB would disable it exactly when it is needed. Deferring is the
+        fix; skipping is not.
+        """
+        try:
+            res = await asyncio.to_thread(_boot_wal_truncate)
+            print(f"[wal] boot wal_checkpoint(TRUNCATE) -> "
+                  f"(blocked, log_pages, ckpt_pages)={res}", flush=True)
+        except Exception as e:
+            print(f"[wal] boot TRUNCATE failed (non-fatal): {e}", flush=True)
+
+    app.state.boot_wal_task = asyncio.create_task(_boot_wal_truncate_bg())
 
     # Background WAL checkpoint loop — keeps history.sqlite-wal bounded.
     app.state.wal_task = asyncio.create_task(_wal_checkpoint_loop())
