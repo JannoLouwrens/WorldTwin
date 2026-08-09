@@ -19,6 +19,7 @@ Legacy endpoints kept alive for the current CesiumJS frontend:
 """
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -635,6 +636,43 @@ async def admin_docs() -> HTMLResponse:
 # of any cited value and "view at any past date" via snapshot replay.
 # ---------------------------------------------------------------------------
 
+
+# ── observations demand meter ────────────────────────────────────────────
+# The `observations` table is ~112M rows and the bulk of a ~39 GB/day write
+# rate. docs/MASTER_PLAN.md says it exists to serve three static sparklines,
+# and proposes dropping the rest — but that justification is "no checked-in
+# frontend reads it", the live frontend is NOT in this repo, and Caddy is not
+# writing access logs. So the claim is unverifiable from this box, and gating
+# the table on it would be a guess that silently breaks a live product.
+#
+# This measures the thing instead. Every /api/history/series request records
+# which source_id was asked for. After a day of real traffic the retention
+# policy can be set from demand rather than from assumption: keep decomposing
+# what is actually queried, stop decomposing what nobody has ever asked for.
+#
+# Deliberately cheap and lossy: an in-memory counter flushed every 25 requests.
+# It must never be able to slow or break the endpoint it observes.
+_SERIES_DEMAND: dict[str, int] = {}
+_SERIES_DEMAND_PATH = Path("/history/series_demand.json")
+_SERIES_DEMAND_N = 0
+_SERIES_DEMAND_START = datetime.now(timezone.utc).isoformat()
+
+
+def _record_series_demand(source_id: str) -> None:
+    global _SERIES_DEMAND_N
+    try:
+        _SERIES_DEMAND[source_id] = _SERIES_DEMAND.get(source_id, 0) + 1
+        _SERIES_DEMAND_N += 1
+        if _SERIES_DEMAND_N % 25 == 0:
+            tmp = _SERIES_DEMAND_PATH.with_suffix(".tmp")
+            tmp.write_text(json.dumps(
+                {"since": _SERIES_DEMAND_START, "requests": _SERIES_DEMAND_N,
+                 "by_source": _SERIES_DEMAND}, indent=1, sort_keys=True))
+            tmp.replace(_SERIES_DEMAND_PATH)
+    except Exception:
+        pass   # a meter must never break the thing it measures
+
+
 @app.get("/api/history/series/{source_id}")
 async def history_series(
     source_id: str,
@@ -650,6 +688,7 @@ async def history_series(
     to a single row (the latest). Pass `dedupe=false` to see every fetch."""
     if ".." in source_id or "/" in source_id:
         raise HTTPException(400, "Invalid source_id")
+    _record_series_demand(source_id)
     # Unauthenticated endpoint — clamp so ?limit=99999999 can't materialize
     # millions of row dicts and OOM the 3G container with one curl.
     limit = max(1, min(limit, 50_000))
