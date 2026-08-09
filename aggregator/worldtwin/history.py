@@ -1109,6 +1109,36 @@ def _decompose(layer_id: str, payload: Any, fetched_at: str) -> list[tuple]:
 # Public API
 # ============================================================
 
+# ── HISTORY_POLICY ───────────────────────────────────────────────────────
+# Stage 2 of docs/MASTER_PLAN.md. Only the entries whose DATA is worthless or
+# recomputable are set here; the plan's wider `latest`/`daily` retention rules
+# are deliberately NOT applied, because their justification is "no checked-in
+# frontend reads it" and the live frontend is not in this repo (and Caddy is
+# not writing access logs), so that claim cannot be verified from this box.
+# Changing a tenant-facing service on an unverifiable assumption is not worth
+# the disk.
+#
+#   iss         a deterministic function of a TLE — the position can be
+#               recomputed exactly at any past instant, so archiving it stores
+#               nothing that is not already derivable. Measured at 46% of all
+#               snapshot rows.
+#   rainviewer  archives radar TILE POINTERS that 404 within hours. The rows
+#               are dead links on arrival; no consumer can use them, present
+#               or future.
+#
+# "none" skips the snapshot AND the observation decompose for that layer.
+# Existing rows are untouched — this only stops new writes, so it is fully
+# reversible by deleting an entry here.
+HISTORY_POLICY: dict[str, str] = {
+    "iss": "none",
+    "rainviewer": "none",
+}
+
+
+def history_policy(layer_id: str) -> str:
+    return HISTORY_POLICY.get(layer_id, "full")
+
+
 def snapshot(layer_id: str, payload: Any) -> dict:
     """Append a fetch to the history store. Called from cache.write_legacy.
 
@@ -1121,6 +1151,9 @@ def snapshot(layer_id: str, payload: Any) -> dict:
     indefinitely under the asyncio thread pool, defeating auto-checkpoint.
     """
     result = {"snapshot_added": False, "observation_rows": 0, "errors": []}
+    if history_policy(layer_id) == "none":
+        result["skipped_by_policy"] = True
+        return result
     c = None
     try:
         fetched_at = (payload.get("fetched") if isinstance(payload, dict) else None) \
