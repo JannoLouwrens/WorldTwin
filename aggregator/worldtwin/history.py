@@ -1135,8 +1135,26 @@ HISTORY_POLICY: dict[str, str] = {
 }
 
 
+# DEFAULT "none" — history recording is OFF for every layer.
+# Owner decision, 2026-08-09: "just cancel all future data history keepers".
+# Taken after being shown exactly what it costs (below), so this is a choice,
+# not an accident.
+#
+# WHAT STOPS: no new snapshots, no new observation rows, for any layer.
+# WHAT KEEPS WORKING: every /api/history/* endpoint still serves the data
+#   already recorded (11 Jun – 9 Aug 2026). The dossier sparklines
+#   (maddison_history, vdem_democracy, clio_life_expectancy) and the data
+#   inspector still render — their series simply stop growing past today.
+# WHY: the store was writing ~39 GB/day into a 100 GB volume that reached
+#   100% full, and ~99.95% of those rows served nothing that is read.
+#
+# TO RE-ENABLE one layer:  HISTORY_POLICY["quakes"] = "full"
+# TO RE-ENABLE everything: change the default below back to "full".
+HISTORY_POLICY_DEFAULT = "none"
+
+
 def history_policy(layer_id: str) -> str:
-    return HISTORY_POLICY.get(layer_id, "full")
+    return HISTORY_POLICY.get(layer_id, HISTORY_POLICY_DEFAULT)
 
 
 def snapshot(layer_id: str, payload: Any) -> dict:
