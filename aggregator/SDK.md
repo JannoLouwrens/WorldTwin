@@ -160,8 +160,7 @@ Don't hardcode layers. **Hit `/v1/layers` at startup and build your UI dynamical
       "units": "magnitude (Richter)",
       "description": "...",
       "status": { "ok": true, "count": 39, "last_fetch": "..." },
-      "url": "/v1/layers/quakes",
-      "data_url": "/v1/layers/quakes/data"
+      "url": "/v1/layers/quakes"
     },
     ...
   ]

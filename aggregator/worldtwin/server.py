@@ -4,7 +4,7 @@ Endpoints:
   GET /v1/                    — API root, version
   GET /v1/layers              — list every layer with metadata
   GET /v1/layers/{id}         — full envelope for one layer
-  GET /v1/layers/{id}/data    — just the .data payload (low bandwidth)
+  GET /v1/layers/{id}/data    — 410 Gone (the .data.json duplicate was retired 2026-09-24)
   GET /v1/categories          — list categories
   GET /v1/categories/{id}     — layers in a category
   GET /v1/health              — per-layer status
@@ -150,6 +150,14 @@ async def lifespan(app: FastAPI):
     layers = registry.all_layers()
     print(f"[server] registered {len(layers)} layers; thread-pool=128")
 
+    # Durable status + delivery contract — BEFORE the scheduler starts:
+    # load_status restores last_success_at across restarts (computed health
+    # derives ok from it); seed_manifest builds an entry for EVERY registry
+    # meta (enabled and retired) from one disk scan so manifest.json lists
+    # all layers from first flush, not just the ones that have fetched.
+    cache.load_status()
+    cache.seed_manifest([r.meta for r in layers])
+
     # Boot-time WAL TRUNCATE — the one reliable quiet window. No plugin
     # workers exist yet (scheduler.start_all runs below), so the TRUNCATE
     # checkpoint takes the write lock instantly and shrinks
@@ -219,6 +227,9 @@ async def lifespan(app: FastAPI):
         app.state.mem_task.cancel()
         for t in app.state.tasks:
             t.cancel()
+        # Final unconditional status persist — the 5 s write throttle may be
+        # holding back the last marks.
+        cache.flush_status()
         await app.state.client.aclose()
 
 
@@ -279,7 +290,6 @@ async def list_layers() -> dict[str, Any]:
                 **m.public(),
                 "status": statuses.get(m.id, {"ok": False, "error": "never fetched"}),
                 "url": f"/v1/layers/{m.id}",
-                "data_url": f"/v1/layers/{m.id}/data",
             }
             for m in metas
         ],
@@ -302,16 +312,19 @@ async def get_layer(layer_id: str) -> Response:
 
 @app.get("/v1/layers/{layer_id}/data")
 async def get_layer_data(layer_id: str) -> Response:
-    """Just the `data` payload (no envelope). Useful for low-bandwidth clients."""
+    """RETIRED 2026-09-24. This served /cache/v1/<id>.data.json — 92
+    near-byte-identical duplicates of the envelopes (361 MB, ~12 GB/day of
+    write amplification) that no checked-in client read. The write is
+    deleted; existing files are quarantined. Honest 410 instead of an
+    eternal 503 pretending the layer 'has not been fetched yet'."""
     if "/" in layer_id or ".." in layer_id:
         raise HTTPException(400, "Invalid layer id")
-    reg = registry.get(layer_id)
-    if reg is None:
+    if registry.get(layer_id) is None:
         raise HTTPException(404, f"Unknown layer: {layer_id}")
-    path = cache.data_path(layer_id)
-    if not path.exists():
-        raise HTTPException(503, f"Layer '{layer_id}' has not been fetched yet")
-    return FileResponse(path, media_type="application/json")
+    raise HTTPException(
+        410,
+        "The data-only representation was retired 2026-09-24. Use "
+        f"/v1/layers/{layer_id} (full envelope) or /api/cache/v1/{layer_id}.json.")
 
 
 # ---------------------------------------------------------------------------
@@ -352,17 +365,63 @@ async def get_category(category_id: str) -> dict[str, Any]:
 # /v1/health and /v1/stats
 # ---------------------------------------------------------------------------
 
+def _computed_layer_health() -> dict[str, dict[str, Any]]:
+    """Per-layer health for EXACTLY the enabled set (registry-filtered —
+    retired layers never appear and are excluded from the error budget).
+
+    `ok` is COMPUTED, never asserted: cache.compute_state derives it from the
+    durable last_success_at (falling back to the on-disk envelope's own
+    fetched_at), never from _status.last_fetch — a failed attempt updates
+    last_fetch, so trusting it would paint failures green. Thresholds are
+    documented once, in cache.py above compute_state (grace =
+    max(3×refresh_s, 1800 s); stale ≤3×grace; dead beyond; plus the
+    max_staleness_s data-age check).
+
+    Every pre-existing per-layer key (ok, count, error, last_fetch,
+    elapsed_s, from_cache) is preserved — weather/js/ui.js and
+    app/src/components/Freshness.tsx read last_fetch and count."""
+    now = datetime.now(timezone.utc)
+    statuses = cache.all_status()
+    out: dict[str, dict[str, Any]] = {}
+    for reg in registry.all_layers():
+        meta = reg.meta
+        if not meta.enabled:
+            continue
+        st = statuses.get(meta.id) or {}
+        facts = cache.manifest_facts(meta.id)
+        last_success = cache._newer_iso(st.get("last_success_at"),
+                                        facts.get("fetched_at"))
+        state, detail = cache.compute_state(
+            meta, last_success, facts.get("data_period"), now)
+        entry: dict[str, Any] = {
+            "ok": state == "ok",
+            # Fallback to the on-disk envelope's own count for the boot
+            # window before the worker's amnesia seed has run.
+            "count": st.get("count") if st.get("count") is not None
+                     else facts.get("count"),
+            "error": st.get("error") or (detail if state != "ok" else None),
+            "last_fetch": st.get("last_fetch"),
+            "elapsed_s": st.get("elapsed_s", 0.0),
+            "last_success_at": last_success,
+            "state": state,
+        }
+        if st.get("from_cache"):
+            entry["from_cache"] = True
+        out[meta.id] = entry
+    return out
+
+
 @app.get("/v1/health")
 async def health() -> dict[str, Any]:
-    statuses = cache.all_status()
-    total = len(registry.all_metas())
-    ok = sum(1 for v in statuses.values() if v.get("ok"))
+    layers = _computed_layer_health()
+    total = len(layers)
+    ok = sum(1 for v in layers.values() if v["ok"])
     return {
         "ok": ok,
         "total": total,
         "unhealthy": total - ok,
         "time": datetime.now(timezone.utc).isoformat(),
-        "layers": statuses,
+        "layers": layers,
     }
 
 
@@ -531,8 +590,7 @@ async def admin_docs() -> HTMLResponse:
             <td>{elapsed:.2f}s</td>
             <td class="mt">{last[:19] if last != 'never' else 'never'}</td>
             <td>
-              <a href="/v1/layers/{meta.id}" target="_blank">envelope</a><br>
-              <a href="/v1/layers/{meta.id}/data" target="_blank">data</a>
+              <a href="/v1/layers/{meta.id}" target="_blank">envelope</a>
             </td>
           </tr>
         """)
@@ -631,9 +689,15 @@ async def admin_docs() -> HTMLResponse:
 # ---------------------------------------------------------------------------
 # /api/history/* — read-only access to the History Store
 #
-# Vision: trace every claim back to the instrument that measured it.
-# These endpoints let the frontend Inspector show the full time-series
-# of any cited value and "view at any past date" via snapshot replay.
+# HONEST STATUS (2026-09-24): the store is EMPTY. All recorded observations
+# and snapshots covering 2026-06-11 → 2026-08-09 were destroyed on
+# 2026-08-09 (the tables were emptied to 0 rows), and recording has been
+# default-off (HISTORY_POLICY_DEFAULT = "none") since the same date. These
+# endpoints therefore serve NOTHING until recording is deliberately
+# re-enabled per layer; they are kept for API-shape compatibility and for
+# that future re-enablement, with cost gates below (prefix required on
+# /sources, 8 MB decompression cap on /snapshot) so an empty-or-full store
+# can never be an unauthenticated resource-amplification vector.
 # ---------------------------------------------------------------------------
 
 
@@ -710,11 +774,23 @@ async def history_series(
         raise HTTPException(500, f"History query failed: {type(e).__name__}: {e}")
 
 
+_SNAPSHOT_DECOMPRESS_CAP = 8 * 1024 * 1024  # 8 MB decompressed
+
+
+class _SnapshotTooLarge(Exception):
+    """Snapshot expands past _SNAPSHOT_DECOMPRESS_CAP — surfaced as HTTP 413."""
+
+
 def _read_snapshot_bytes(layer_id: str, at: str | None) -> tuple[bytes | None, str | None, float | None, int | None]:
     """Return the gzipped payload bytes plus metadata, OR (None,)*4 if not found.
     Skips json.loads/dump round-trip — the payload is already valid JSON inside
     the zlib blob. Streaming the bytes directly cuts a 5.5 MB FRED snapshot
     from 60s+ to <1s by avoiding two FastAPI serialisations.
+
+    Decompression is capped at 8 MB via zlib.decompressobj(max_length=…):
+    a 2.3 MB fires blob expands to ~25 MB, and concurrent requests on this
+    unauthenticated endpoint are a memory-amplification vector. Raises
+    _SnapshotTooLarge (→ 413) rather than allocating past the cap.
 
     Uses ephemeral read connection so it doesn't pin the WAL."""
     import zlib
@@ -735,7 +811,12 @@ def _read_snapshot_bytes(layer_id: str, at: str | None) -> tuple[bytes | None, s
             ).fetchone()
         if not row:
             return (None, None, None, None)
-        raw = zlib.decompress(row["payload"])
+        d = zlib.decompressobj()
+        raw = d.decompress(row["payload"], _SNAPSHOT_DECOMPRESS_CAP)
+        if d.unconsumed_tail:
+            raise _SnapshotTooLarge(
+                f"snapshot for {layer_id} exceeds "
+                f"{_SNAPSHOT_DECOMPRESS_CAP // (1024 * 1024)} MB decompressed")
         return (raw, row["fetched_at"], row["payload_kb"], row["rows_added"])
     finally:
         c.close()
@@ -770,43 +851,35 @@ async def history_snapshot(layer_id: str, at: str | None = None):
         return Response(content=body, media_type="application/json")
     except HTTPException:
         raise
+    except _SnapshotTooLarge as e:
+        raise HTTPException(413, str(e))
     except Exception as e:
         raise HTTPException(500, f"Snapshot read failed: {type(e).__name__}: {e}")
 
 
-def _list_sources_sync(prefix: str | None, limit: int) -> list[dict]:
-    """Range-scan when a prefix is supplied — `LIKE 'fred.%'` is 158s on
-    5M rows because SQLite scans the whole index. `>= 'fred.' AND < 'fred.~'`
-    converts to an O(matches) seek and runs in <1s. Sort in Python instead
-    of in SQL because ORDER BY n DESC requires a temp B-tree.
+def _list_sources_sync(prefix: str, limit: int) -> list[dict]:
+    """Range-scan — `LIKE 'fred.%'` is 158s on 5M rows because SQLite scans
+    the whole index. `>= 'fred.' AND < 'fred.~'` converts to an O(matches)
+    seek and runs in <1s. Sort in Python instead of in SQL because ORDER BY
+    n DESC requires a temp B-tree.
+
+    `prefix` is mandatory (the handler 400s without it): the un-prefixed
+    variant was an unauthenticated, publicly routed GROUP BY over the whole
+    observations table.
 
     Uses ephemeral read connection so it doesn't pin the WAL."""
     from . import history
     c = history._read_conn()
     try:
-        args: list[Any] = []
-        if prefix:
-            # '~' (0x7E) is the highest printable ASCII char, so any source_id
-            # starting with `prefix` sorts strictly less than `prefix + '~'`.
-            sql = (
-                "SELECT source_id, COUNT(*) AS n, MIN(observed_at) AS lo, MAX(observed_at) AS hi "
-                "FROM observations "
-                "WHERE source_id >= ? AND source_id < ? "
-                "GROUP BY source_id"
-            )
-            args.extend([prefix, prefix + "~"])
-        else:
-            # No prefix: push the truncation into SQL. The decomposer mints
-            # a source_id per aircraft/quake/video, so DISTINCT source_ids
-            # reach millions — fetchall() of all groups was an OOM bomb.
-            # The ORDER BY temp B-tree stays inside SQLite, bounded.
-            sql = (
-                "SELECT source_id, COUNT(*) AS n, MIN(observed_at) AS lo, MAX(observed_at) AS hi "
-                "FROM observations "
-                "GROUP BY source_id ORDER BY n DESC LIMIT ?"
-            )
-            args.append(limit)
-        rows = c.execute(sql, args).fetchall()
+        # '~' (0x7E) is the highest printable ASCII char, so any source_id
+        # starting with `prefix` sorts strictly less than `prefix + '~'`.
+        sql = (
+            "SELECT source_id, COUNT(*) AS n, MIN(observed_at) AS lo, MAX(observed_at) AS hi "
+            "FROM observations "
+            "WHERE source_id >= ? AND source_id < ? "
+            "GROUP BY source_id"
+        )
+        rows = c.execute(sql, [prefix, prefix + "~"]).fetchall()
         rows.sort(key=lambda r: -r["n"])
         out = []
         for row in rows[:limit]:
@@ -824,10 +897,15 @@ def _list_sources_sync(prefix: str | None, limit: int) -> list[dict]:
 @app.get("/api/history/sources")
 async def history_sources(prefix: str | None = None, limit: int = 500) -> dict[str, Any]:
     """List distinct source_ids in the store, with row count + observed_at range.
-    Optional prefix filter (e.g. ?prefix=fred. shows all FRED series).
+    REQUIRES a prefix filter (e.g. ?prefix=fred. shows all FRED series) —
+    without one this was an unauthenticated GROUP BY over the whole
+    observations table.
 
-    Runs in a thread because the GROUP BY scan over 1.6M+ rows can take
-    seconds on contended SQLite — would block the entire asyncio event loop."""
+    Runs in a thread because even the prefix scan can take seconds on
+    contended SQLite — would block the entire asyncio event loop."""
+    if not prefix:
+        raise HTTPException(
+            400, "prefix parameter is required (e.g. ?prefix=fred.)")
     limit = max(1, min(limit, 2000))
     try:
         import asyncio
@@ -854,11 +932,16 @@ async def history_coverage() -> dict[str, Any]:
 
 @app.get("/api/health")
 async def legacy_health() -> dict[str, Any]:
-    """Back-compat: old health endpoint shape."""
+    """Back-compat shape, honest content. The old handler asserted
+    `"ok": True` unconditionally and dumped raw _status (which leaked full
+    request URLs incl. API keys inside httpx error strings — now scrubbed at
+    the source in cache.mark_error). Top-level ok is computed: True only when
+    every enabled layer's state is ok."""
+    layers = _computed_layer_health()
     return {
-        "ok": True,
+        "ok": all(v["ok"] for v in layers.values()) if layers else False,
         "time": datetime.now(timezone.utc).isoformat(),
-        "layers": cache.all_status(),
+        "layers": layers,
     }
 
 
@@ -869,15 +952,17 @@ async def legacy_stats() -> dict[str, Any]:
 
 @app.get("/api/{layer_id}")
 async def legacy_layer(layer_id: str) -> Response:
-    """Back-compat: /api/{layer} → return legacy JSON shape from /cache/legacy/."""
+    """Back-compat: /api/{layer} → return legacy JSON shape from /cache/legacy/.
+
+    2026-09-24: the undocumented fallback to /cache/v1/<id>.data.json is
+    retired along with the .data.json write itself (no checked-in client
+    used it; the real per-layer files are served by Caddy at
+    /api/cache/<id>.json). This handler now serves only the legacy path
+    and 404s otherwise."""
     if "/" in layer_id or ".." in layer_id:
         raise HTTPException(400, "Invalid layer id")
     # Legacy files live at /cache/legacy/<id>.json
     legacy_path = cache.CACHE_DIR / "legacy" / f"{layer_id}.json"
     if legacy_path.exists():
         return FileResponse(legacy_path, media_type="application/json")
-    # Fall back to v1 data
-    data_path = cache.data_path(layer_id)
-    if data_path.exists():
-        return FileResponse(data_path, media_type="application/json")
     raise HTTPException(404, f"Layer '{layer_id}' not cached")

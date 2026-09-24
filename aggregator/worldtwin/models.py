@@ -59,6 +59,15 @@ class LayerMeta:
     requires_key: bool = False          # true if an env var must be set
     key_env: str = ""                   # which env var, for documentation
     enabled: bool = True
+    # --- Contract fields (MASTER_PLAN §5, added 2026-09-24). All defaulted so
+    # every existing plugin compiles unchanged; populated opportunistically. ---
+    max_staleness_s: int | None = None  # data-age ceiling (vs max(data_period))
+    retired_reason: str | None = None   # plain-English reason when enabled=False
+    heavy: bool = False                 # bulk layer — candidate for one-shot cgroup
+    max_bytes: int = 2_000_000          # audit flag threshold per representation
+    history_policy: str | None = None   # none|latest|daily|full (None = default)
+    family: str | None = None           # visual family for the v2 client
+    provenance: str | None = None       # how the data reaches us (method note)
 
     def public(self) -> dict[str, Any]:
         """Serializable view for /v1/layers."""
@@ -85,6 +94,14 @@ class Envelope:
     units: str
     count: int
     data: Any                # shape depends on kind
+    # --- Optional contract fields (2026-09-24). Defaulted so Envelope.build
+    # and every caller keep working unchanged; serialized only when set (see
+    # to_dict) so envelopes stay compact. ---
+    data_period: list | None = None      # [oldest, newest] ISO timestamps in data
+    coverage: dict | None = None         # e.g. {"countries": 193, "missing": [...]}
+    truncated: bool | None = None        # True when the payload was cut server-side
+    vintage: str | None = None           # publication vintage of the dataset
+    license_url: str | None = None       # canonical licence link
 
     @classmethod
     def build(cls, meta: LayerMeta, data: Any, fetched_at: str, expires_at: str) -> "Envelope":
@@ -173,12 +190,26 @@ class Envelope:
             data=data,
         )
 
+    # Optional fields dropped from serialization when None (compact envelopes,
+    # no schema noise for the 90+ layers that never set them).
+    _OPTIONAL_FIELDS = ("data_period", "coverage", "truncated", "vintage", "license_url")
+
     def to_dict(self) -> dict[str, Any]:
         # NOT dataclasses.asdict(): that recursively deep-copies the entire
         # payload graph (~hundreds of MB for bulk layers like ucdp_ged) on
         # every fetch. Shallow copy shares the data reference — downstream
         # only serializes it, never mutates it.
-        return dict(self.__dict__)
+        d = dict(self.__dict__)
+        # Keep `data` LAST in the serialized JSON: boot-time seeds (scheduler
+        # restart-amnesia, cache.seed_manifest) regex the first few KB of the
+        # file for metadata and must never have to scan past a multi-MB
+        # payload to find it.
+        data = d.pop("data")
+        for k in self._OPTIONAL_FIELDS:
+            if d.get(k) is None:
+                d.pop(k, None)
+        d["data"] = data
+        return d
 
 
 # ---------------------------------------------------------------------------

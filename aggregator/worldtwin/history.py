@@ -1141,10 +1141,13 @@ HISTORY_POLICY: dict[str, str] = {
 # not an accident.
 #
 # WHAT STOPS: no new snapshots, no new observation rows, for any layer.
-# WHAT KEEPS WORKING: every /api/history/* endpoint still serves the data
-#   already recorded (11 Jun – 9 Aug 2026). The dossier sparklines
-#   (maddison_history, vdem_democracy, clio_life_expectancy) and the data
-#   inspector still render — their series simply stop growing past today.
+# WHAT THE STORE HOLDS NOW: NOTHING. The data recorded 11 Jun – 9 Aug 2026
+#   was destroyed on 2026-08-09 — the tables were emptied to 0 rows in the
+#   same purge that set this default (verified 2026-09-24). The /api/history/*
+#   endpoints still answer, but they serve an empty store: no series, no
+#   snapshots, no sparklines. Nothing "keeps serving". The destroyed range
+#   is disclosed on /charter; the archive restarts 2026-09-24 with the
+#   counts ledger (cache.update_counts), not this store.
 # WHY: the store was writing ~39 GB/day into a 100 GB volume that reached
 #   100% full, and ~99.95% of those rows served nothing that is read.
 #
