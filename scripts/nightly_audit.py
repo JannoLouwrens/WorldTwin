@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
-"""WorldTwin nightly Trust Tier audit — emailed via Gmail API.
+"""WorldTwin nightly audit — assertions A–F over the delivery contract, emailed via Gmail.
 
-Runs as a system cron on the aggregator server. Pulls every cache file
-the dashboard depends on, scores each one as GREEN/YELLOW/RED based on
-freshness, cross-checks a few values against authoritative independent
-sources (Binance, USGS, NOAA, CoinGecko), validates the Council shape,
-and emails a single report to jannolouwrens@gmail.com via the Gmail API.
+Rewritten 2026-09-24 (REVIVAL_V1 Commit C): the hand-maintained 18-name cache
+allowlist and the LLM "council" section are gone. The audit now asserts the
+manifest contract (MASTER_PLAN invariants A–F) from STATIC FILES on disk, plus
+two deterministic cross-checks against independent live sources (USGS, NOAA)
+for layers that are still enabled. No LLM anywhere in the audit.
+
+  A. manifest.counts.total == len(manifest.layers)  (+ sources-dir cross-count, informational)
+  B. every stale/dead layer is named with stale_since / last_success_at
+  C. every representation over max_bytes (default 2 MB) is flagged
+  D. every /data/cache/v1/*.json has a manifest entry (orphans reported;
+     manifest.json / counts.json / _status.json / brief/ excluded)
+  E. counts.json has yesterday's entry for every layer whose state is ok
+     (skipped gracefully on day 1)
+  F. /data free > 30 GB, root free > 4 GB, /var/oled free > 1 GB, and the
+     newest file in /home/opc/worldtwin/weather/brief/ is under 72 h old
 
 OAuth2 refresh token lives in /home/opc/worldtwin/.gmail_oauth.json,
 created once by gmail_oauth_setup.py. The script mints a short-lived
@@ -16,42 +26,31 @@ No App Password, no SMTP — pure HTTPS.
 from __future__ import annotations
 import base64
 import json
+import shutil
 import sys
 import urllib.parse
 import urllib.request
 import urllib.error
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
 
 OAUTH_PATH = Path("/home/opc/worldtwin/.gmail_oauth.json")
-CACHE_BASE = "http://127.0.0.1/api/cache"     # served by Caddy on the same host
-USER_AGENT = "WorldTwin-NightlyAudit/1.0"
+USER_AGENT = "WorldTwin-NightlyAudit/2.0"
 TO_ADDR = "jannolouwrens@gmail.com"
 FROM_ADDR = None  # filled from oauth config (the account that consented)
 
-CACHES = [
-    ("gemini_narrative", "Council / Narrative"),
-    ("fred", "FRED macros"),
-    ("economy", "Crypto + forex"),
-    ("pulse_mode", "Pulse composite"),
-    ("quakes", "USGS quakes"),
-    ("portwatch_chokepoints", "PortWatch chokepoints"),
-    ("gdacs_events", "GDACS hazards"),
-    ("ucdp_ged", "UCDP-GED conflict"),
-    ("nhc_cyclones", "NHC cyclones"),
-    ("noaa_co2", "NOAA CO2"),
-    ("paleo_temperature", "Paleo temperature"),
-    ("imf_data", "IMF country data"),
-    ("world_bank", "World Bank WDI"),
-    ("country_relations", "Country relations"),
-    ("vdem_democracy", "V-Dem democracy"),
-    ("trade_annual", "Trade flows"),
-    ("who_don", "WHO outbreaks"),
-    ("country_resources", "Country resources"),
-]
+V1_DIR = Path("/data/cache/v1")
+MANIFEST_PATH = V1_DIR / "manifest.json"
+COUNTS_PATH = V1_DIR / "counts.json"
+BRIEF_DIR = Path("/home/opc/worldtwin/weather/brief")
+SOURCES_DIR = Path("/home/opc/worldtwin/aggregator/worldtwin/sources")
+DEFAULT_MAX_BYTES = 2 * 1024 * 1024
 
-# ---- HTTP helpers ----
+LIVE_STATES = {"ok", "live"}
+
+
+# ---- HTTP helpers (external cross-checks + Gmail only — never localhost) ----
 
 def http_json(url: str, timeout: int = 25, headers: dict | None = None) -> dict | None:
     h = {"User-Agent": USER_AGENT}
@@ -103,196 +102,305 @@ def http_post_json(url: str, payload: dict, headers: dict, timeout: int = 30) ->
         return 0, str(e)
 
 
-# ---- Audit logic ----
+# ---- static-file helpers ----
 
-def hours_since(iso_ts: str) -> float | None:
-    if not iso_ts:
-        return None
+def read_json_file(path: Path):
     try:
-        ts = iso_ts.replace("Z", "+00:00")
-        dt = datetime.fromisoformat(ts)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return (datetime.now(timezone.utc) - dt).total_seconds() / 3600.0
-    except (ValueError, TypeError):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return None
 
 
-def tier_for(hours: float | None) -> str:
-    if hours is None:
-        return "RED"
-    if hours < 6:
-        return "GREEN"
-    if hours < 48:
-        return "YELLOW"
-    return "RED"
+def norm_state(s) -> str:
+    s = str(s or "unknown").lower()
+    return "live" if s in LIVE_STATES else s
 
 
-def audit_caches() -> list[dict]:
-    rows = []
-    for cid, name in CACHES:
-        data = http_json(f"{CACHE_BASE}/{cid}.json")
-        if data is None:
-            rows.append({"id": cid, "name": name, "tier": "RED",
-                         "hours": None, "note": "fetch failed"})
-            continue
-        h = hours_since(data.get("fetched"))
-        rows.append({
-            "id": cid, "name": name, "tier": tier_for(h),
-            "hours": h, "fetched": data.get("fetched"),
-            "note": "" if h is not None else "no fetched timestamp",
-        })
-    return rows
-
-
-def audit_council() -> dict:
-    data = http_json(f"{CACHE_BASE}/gemini_narrative.json") or {}
-    council = data.get("council")
-    if not isinstance(council, dict):
-        return {"present": False, "note": "council field missing or null"}
-    out = {"present": True, "synthesized": bool(council.get("_synthesized")),
-           "voices": {}, "warnings": []}
-    for v in ("general", "treasurer", "augur"):
-        body = council.get(v) or {}
-        cites = body.get("citations") or []
-        valid = []
-        for c in cites:
-            if isinstance(c, dict) and all(c.get(k) for k in
-                    ("label", "value", "source", "digest_path", "data_date")):
-                valid.append(c)
-        out["voices"][v] = {
-            "headline": body.get("headline", ""),
-            "cite_count": len(cites),
-            "valid_cite_count": len(valid),
-        }
-        if not body.get("reading"):
-            out["warnings"].append(f"{v}: empty reading")
-        if len(valid) < len(cites):
-            out["warnings"].append(f"{v}: {len(cites) - len(valid)} citation(s) missing required fields")
+def load_counts_ledger() -> dict:
+    """Tolerant reader → {layer_id: {date: count}}; {} on any problem."""
+    raw = read_json_file(COUNTS_PATH)
+    if not isinstance(raw, dict):
+        return {}
+    body = raw
+    for key in ("layers", "counts", "days"):
+        if isinstance(raw.get(key), dict):
+            body = raw[key]
+            break
+    import re
+    date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    out: dict = {}
+    keys = list(body.keys())
+    if keys and all(date_re.match(k) for k in keys):
+        for d, per in body.items():
+            if isinstance(per, dict):
+                for lid, n in per.items():
+                    if isinstance(n, (int, float)):
+                        out.setdefault(lid, {})[d] = n
+    else:
+        for lid, per in body.items():
+            if isinstance(per, dict):
+                for d, n in per.items():
+                    if date_re.match(str(d)) and isinstance(n, (int, float)):
+                        out.setdefault(lid, {})[str(d)] = n
     return out
 
 
-def audit_crosschecks() -> list[dict]:
-    results = []
+# ---- assertions ----
 
-    eco = http_json(f"{CACHE_BASE}/economy.json") or {}
-    cached_btc = next((c for c in (eco.get("crypto") or [])
-                       if (c.get("symbol") or "").lower() == "btc"), None)
-    cached_price = cached_btc.get("price_usd") if cached_btc else None
+def run_assertions() -> tuple[dict, list[str], list[str], list[str]]:
+    """Returns (counts_dict, failures, warnings, info_lines)."""
+    failures: list[str] = []
+    warnings: list[str] = []
+    info: list[str] = []
 
-    bin_data = http_json("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT")
-    bin_price = float(bin_data["lastPrice"]) if bin_data and bin_data.get("lastPrice") else None
+    manifest = read_json_file(MANIFEST_PATH)
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("layers"), list):
+        failures.append("MANIFEST MISSING — /data/cache/v1/manifest.json absent or unreadable; "
+                        "the delivery contract does not exist and every assertion below is moot")
+        return {}, failures, warnings, info
 
-    cg_data = http_json("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")
-    cg_price = (cg_data or {}).get("bitcoin", {}).get("usd")
+    layers = [l for l in manifest["layers"] if isinstance(l, dict) and l.get("id")]
+    by_id = {l["id"]: l for l in layers}
 
-    if cached_price and bin_price:
-        div = abs(cached_price - bin_price) / bin_price * 100
-        results.append({"label": "BTC USD vs Binance",
-                        "cached": f"${cached_price:,.0f}", "external": f"${bin_price:,.0f}",
-                        "divergence": f"{div:.2f}%", "ok": div < 2.0})
-    else:
-        results.append({"label": "BTC USD vs Binance", "ok": False,
-                        "note": f"cached={cached_price} binance={bin_price}"})
+    tally = {"live": 0, "stale": 0, "dead": 0, "retired": 0}
+    for l in layers:
+        st = norm_state(l.get("state"))
+        if st in tally:
+            tally[st] += 1
+    counts = dict(manifest.get("counts") or {})
+    counts.setdefault("total", len(layers))
+    counts.update({"computed_" + k: v for k, v in tally.items()})
+    info.append(f"manifest generated_at={manifest.get('generated_at')} · "
+                f"{tally['live']} live · {tally['stale']} stale · {tally['dead']} dead · "
+                f"{tally['retired']} retired of {len(layers)}")
 
-    if cached_price and cg_price:
-        div = abs(cached_price - cg_price) / cg_price * 100
-        results.append({"label": "BTC USD vs CoinGecko",
-                        "cached": f"${cached_price:,.0f}", "external": f"${cg_price:,.0f}",
-                        "divergence": f"{div:.2f}%", "ok": div < 2.0})
+    # A — counts.total equals the number of layer entries
+    total_claimed = (manifest.get("counts") or {}).get("total")
+    if total_claimed != len(layers):
+        failures.append(f"A: manifest.counts.total={total_claimed} != len(layers)={len(layers)}")
+    if SOURCES_DIR.is_dir():
+        n_sources = len([p for p in SOURCES_DIR.glob("*.py") if not p.name.startswith("_")])
+        if n_sources != len(layers):
+            info.append(f"A (informational): sources dir has {n_sources} plugin files vs "
+                        f"{len(layers)} manifest layers (helpers/multi-layer plugins make "
+                        f"an exact match non-mandatory)")
 
-    usgs = http_json("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson")
-    usgs_count = len((usgs or {}).get("features") or [])
-    cached_quakes = http_json(f"{CACHE_BASE}/quakes.json") or {}
-    cached_45 = [f for f in (cached_quakes.get("features") or [])
-                 if (f.get("properties", {}).get("mag") or 0) >= 4.5]
-    delta = abs(usgs_count - len(cached_45))
-    results.append({"label": "USGS quakes M4.5+ past day",
-                    "cached": str(len(cached_45)), "external": str(usgs_count),
-                    "divergence": f"{delta} events", "ok": delta <= 5})
+    # B — every stale/dead layer named, with stale_since and last_success_at
+    for l in layers:
+        st = norm_state(l.get("state"))
+        if st in ("stale", "dead"):
+            since = l.get("stale_since")
+            last = l.get("last_success_at")
+            warnings.append(f"B: [{st.upper():5}] {l['id']:24} stale_since={since} "
+                            f"last_success_at={last}")
+            if not since and not last:
+                failures.append(f"B: {l['id']} is {st} but carries neither stale_since "
+                                f"nor last_success_at — contract violation")
 
-    noaa = http_text("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_daily_mlo.csv")
-    last_ppm = None
-    if noaa:
-        for line in reversed(noaa.splitlines()):
-            line = line.strip()
-            if not line or line.startswith("#"):
+    # C — representations over max_bytes
+    for l in layers:
+        cap = l.get("max_bytes") or DEFAULT_MAX_BYTES
+        for rep in l.get("representations") or []:
+            if isinstance(rep, dict) and isinstance(rep.get("bytes"), (int, float)) \
+                    and rep["bytes"] > cap:
+                failures.append(f"C: {l['id']} rep '{rep.get('rel')}' is "
+                                f"{int(rep['bytes']):,} B > max_bytes {int(cap):,} B")
+
+    # D — every v1/*.json file has a manifest entry (orphan hunt)
+    exclude = {"manifest.json", "counts.json", "_status.json"}
+    data_dupes = 0
+    if V1_DIR.is_dir():
+        for p in sorted(V1_DIR.glob("*.json")):
+            if p.name in exclude:
                 continue
-            parts = [p.strip() for p in line.split(",")]
-            if len(parts) >= 5:
-                try:
-                    v = float(parts[4])
-                    if v > 0:
-                        last_ppm = v
-                        break
-                except ValueError:
-                    continue
-    cached_co2 = http_json(f"{CACHE_BASE}/noaa_co2.json") or {}
-    cached_ppm = (cached_co2.get("headline") or {}).get("current_co2_ppm")
-    if last_ppm and cached_ppm:
-        div = abs(last_ppm - cached_ppm)
-        results.append({"label": "NOAA CO2 ppm vs Mauna Loa CSV",
-                        "cached": f"{cached_ppm:.2f}", "external": f"{last_ppm:.2f}",
-                        "divergence": f"{div:.2f} ppm", "ok": div < 1.0})
+            stem = p.name[:-5]  # strip .json
+            for suffix in (".data", ".render"):
+                if stem.endswith(suffix):
+                    if suffix == ".data":
+                        data_dupes += 1
+                    stem = stem[: -len(suffix)]
+                    break
+            if stem not in by_id:
+                failures.append(f"D: orphan cache file with no manifest entry: {p.name}")
     else:
-        results.append({"label": "NOAA CO2 ppm", "ok": False,
-                        "note": f"cached={cached_ppm} external={last_ppm}"})
+        failures.append(f"D: {V1_DIR} does not exist")
+    if data_dupes:
+        warnings.append(f"D: {data_dupes} legacy .data.json duplicate(s) still present in v1/ "
+                        f"(scheduled for deletion in Commit C)")
+
+    # E — counts.json freshness per ok layer, scaled to refresh cadence
+    # (day-1 graceful; sub-daily layers need yesterday's entry, slower layers
+    # need any entry within ~2 refresh periods)
+    ledger = load_counts_ledger()
+    today_d = datetime.now(timezone.utc).date()
+    yesterday = (today_d - timedelta(days=1)).isoformat()
+    all_dates = {d for per in ledger.values() for d in per}
+    if not ledger or not any(d <= yesterday for d in all_dates):
+        info.append("E: counts.json has no closed day yet — day 1, skipped gracefully")
+    else:
+        for l in layers:
+            if norm_state(l.get("state")) != "live":
+                continue
+            refresh_s = l.get("refresh_s") or 600
+            if refresh_s <= 86400:
+                if yesterday not in ledger.get(l["id"], {}):
+                    failures.append(f"E: counts.json missing {yesterday} entry for ok layer "
+                                    f"{l['id']} (no-entry-never-zero means it did not fetch "
+                                    f"— or the ledger writer is broken)")
+            else:
+                window_days = max(int(2 * refresh_s // 86400), 2)
+                cutoff = (today_d - timedelta(days=window_days)).isoformat()
+                if not any(d >= cutoff for d in ledger.get(l["id"], {})):
+                    failures.append(f"E: counts.json has no entry in the last "
+                                    f"{window_days} d for ok layer {l['id']} "
+                                    f"(cadence {refresh_s} s ≈ every "
+                                    f"{refresh_s / 86400:.1f} d — it should have "
+                                    f"fetched at least once in that window)")
+
+    # F — disk floors + the brief actually publishing
+    for path, floor_gb, label in (("/data", 30, "/data"), ("/", 4, "root"),
+                                  ("/var/oled", 1, "/var/oled")):
+        try:
+            free_gb = shutil.disk_usage(path).free / 1e9
+            (info if free_gb > floor_gb else failures).append(
+                f"F: {label} free {free_gb:.1f} GB (floor {floor_gb} GB)"
+                + ("" if free_gb > floor_gb else " — BELOW FLOOR"))
+        except OSError as e:
+            failures.append(f"F: cannot stat {label}: {e}")
+    try:
+        # Only published dated pages count — _failures.log / .git / index.html
+        # must never satisfy the freshness check.
+        newest = max((p.stat().st_mtime for p in BRIEF_DIR.glob("????-??-??.html")
+                      if p.is_file()), default=None)
+    except OSError:
+        newest = None
+    if newest is None:
+        failures.append(f"F: no dated brief page has ever published under {BRIEF_DIR}")
+    else:
+        age_h = (datetime.now(timezone.utc).timestamp() - newest) / 3600
+        (info if age_h < 72 else failures).append(
+            f"F: newest dated brief page in weather/brief/ is {age_h:.1f} h old"
+            + ("" if age_h < 72 else " — OVER 72 h, the brief has stopped"))
+
+    return counts, failures, warnings, info
+
+
+# ---- cross-checks (enabled layers only; BTC/economy retired → dropped) ----
+
+def cross_checks() -> list[dict]:
+    results: list[dict] = []
+    manifest = read_json_file(MANIFEST_PATH) or {}
+    states = {l.get("id"): norm_state(l.get("state"))
+              for l in (manifest.get("layers") or []) if isinstance(l, dict)}
+
+    # USGS quakes M4.5+ past day — cached v1 envelope data[] vs live USGS feed
+    if states.get("quakes", "live") != "retired":
+        cached = read_json_file(V1_DIR / "quakes.json") or {}
+        now_ms = datetime.now(timezone.utc).timestamp() * 1000
+        cached_45 = [q for q in (cached.get("data") or [])
+                     if isinstance(q, dict)
+                     and isinstance(q.get("value"), (int, float)) and q["value"] >= 4.5
+                     and isinstance((q.get("props") or {}).get("time_ms"), (int, float))
+                     and now_ms - q["props"]["time_ms"] <= 86_400_000]
+        usgs = http_json("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson")
+        usgs_count = len((usgs or {}).get("features") or [])
+        if usgs is None:
+            results.append({"label": "USGS quakes M4.5+ past day", "ok": True,
+                            "note": "external feed unreachable — skipped, not failed"})
+        else:
+            delta = abs(usgs_count - len(cached_45))
+            results.append({"label": "USGS quakes M4.5+ past day",
+                            "cached": str(len(cached_45)), "external": str(usgs_count),
+                            "divergence": f"{delta} events", "ok": delta <= 5})
+
+    # NOAA CO2 ppm — cached v1 envelope vs Mauna Loa daily CSV
+    if states.get("noaa_co2", "live") != "retired":
+        cached_co2 = read_json_file(V1_DIR / "noaa_co2.json") or {}
+        head = ((cached_co2.get("data") or {}).get("headline")
+                if isinstance(cached_co2.get("data"), dict) else None) or {}
+        cached_ppm = head.get("current_co2_ppm")
+        noaa = http_text("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_daily_mlo.csv")
+        last_ppm = None
+        if noaa:
+            for line in reversed(noaa.splitlines()):
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 5:
+                    try:
+                        v = float(parts[4])
+                        if v > 0:
+                            last_ppm = v
+                            break
+                    except ValueError:
+                        continue
+        if last_ppm and isinstance(cached_ppm, (int, float)):
+            div = abs(last_ppm - cached_ppm)
+            results.append({"label": "NOAA CO2 ppm vs Mauna Loa CSV",
+                            "cached": f"{cached_ppm:.2f}", "external": f"{last_ppm:.2f}",
+                            "divergence": f"{div:.2f} ppm", "ok": div < 1.0})
+        else:
+            results.append({"label": "NOAA CO2 ppm", "ok": False,
+                            "note": f"cached={cached_ppm} external={last_ppm}"})
 
     return results
 
 
-def render_report(cache_rows: list[dict], council: dict, cross: list[dict]) -> tuple[str, str]:
+# ---- report ----
+
+def render_report(counts: dict, failures: list[str], warnings: list[str],
+                  info: list[str], cross: list[dict]) -> tuple[str, str]:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    g = sum(1 for r in cache_rows if r["tier"] == "GREEN")
-    y = sum(1 for r in cache_rows if r["tier"] == "YELLOW")
-    rd = sum(1 for r in cache_rows if r["tier"] == "RED")
-    n = len(cache_rows)
-
     cross_failures = [c for c in cross if not c.get("ok")]
-    council_problem = (not council.get("present")) or council.get("warnings")
+    n_fail = len(failures) + len(cross_failures)
 
-    if rd == 0 and not cross_failures and not council_problem:
-        subject = f"WorldTwin audit {today}: ALL GREEN ({g}/{n})"
-    elif rd > 0 or cross_failures or not council.get("present"):
-        subject = f"WorldTwin audit {today}: {rd} RED · {y} YELLOW · {g} GREEN"
-    else:
-        subject = f"WorldTwin audit {today}: {y} YELLOW · {g} GREEN"
+    live = counts.get("computed_live", counts.get("live", "?"))
+    stale = counts.get("computed_stale", counts.get("stale", "?"))
+    dead = counts.get("computed_dead", counts.get("dead", "?"))
+    retired = counts.get("computed_retired", counts.get("retired", "?"))
+    total = counts.get("total", "?")
+    counts_line = f"{live} live · {stale} stale · {dead} dead · {retired} retired of {total}"
 
-    lines = [f"WorldTwin Trust Tier Audit — {today} UTC", "=" * 60, "",
-             f"SUMMARY: {g} GREEN · {y} YELLOW · {rd} RED · {n} total caches", ""]
-    lines.append("CACHE FRESHNESS")
+    verdict = "PASS" if n_fail == 0 else f"{n_fail} FAILED"
+    subject = f"WorldTwin audit {today}: {counts_line} — {verdict}"
+
+    lines = [f"WorldTwin Manifest Audit — {today} UTC", "=" * 60, "",
+             f"COUNTS: {counts_line}", f"VERDICT: {verdict}", ""]
+
+    lines.append("ASSERTIONS A–F")
     lines.append("-" * 60)
-    for r in cache_rows:
-        h = r.get("hours")
-        h_str = f"{h:5.1f}h" if h is not None else "  ----"
-        note = f"  ({r['note']})" if r.get("note") else ""
-        lines.append(f"  [{r['tier']:6}] {r['name']:30} {h_str}{note}")
+    if failures:
+        for f in failures:
+            lines.append(f"  [FAIL] {f}")
+    else:
+        lines.append("  all assertions hold")
+    for w in warnings:
+        lines.append(f"  [note] {w}")
     lines.append("")
 
-    lines.append("COUNCIL SHAPE")
+    lines.append("CROSS-CHECKS (cached value vs independent live source)")
     lines.append("-" * 60)
-    if not council.get("present"):
-        lines.append("  RED — council field missing or null")
-    else:
-        lines.append(f"  Present · synthesized={council.get('synthesized')}")
-        for v, info in (council.get("voices") or {}).items():
-            lines.append(f"    {v:10} · {info['valid_cite_count']}/{info['cite_count']} valid citations · {info['headline'][:55]}")
-        for w in council.get("warnings") or []:
-            lines.append(f"  WARN: {w}")
-    lines.append("")
-
-    lines.append("CROSS-CHECKS (cache value vs independent live source)")
-    lines.append("-" * 60)
+    if not cross:
+        lines.append("  none applicable (source layers retired)")
     for c in cross:
         ok = "OK" if c.get("ok") else "DIVERGE"
         if "cached" in c:
-            lines.append(f"  [{ok:7}] {c['label']:32} cached={c['cached']:>10} external={c['external']:>10} delta={c['divergence']}")
+            lines.append(f"  [{ok:7}] {c['label']:32} cached={c['cached']:>10} "
+                         f"external={c['external']:>10} delta={c['divergence']}")
         else:
             lines.append(f"  [{ok:7}] {c['label']:32} {c.get('note', '')}")
     lines.append("")
 
-    lines.append(f"Live dashboard: http://129.151.191.74/weather/")
-    lines.append(f"Generated by /home/opc/worldtwin/scripts/nightly_audit.py")
+    lines.append("CONTEXT")
+    lines.append("-" * 60)
+    for i in info:
+        lines.append(f"  {i}")
+    lines.append("")
+
+    lines.append("Live site: https://worldtwin.duckdns.org/worldtwin/")
+    lines.append("Generated by /home/opc/worldtwin/scripts/nightly_audit.py")
     return subject, "\n".join(lines)
 
 
@@ -349,10 +457,9 @@ def gmail_send(subject: str, body: str) -> bool:
 
 def main() -> int:
     print(f"[audit] starting at {datetime.now(timezone.utc).isoformat()}")
-    cache_rows = audit_caches()
-    council = audit_council()
-    cross = audit_crosschecks()
-    subject, body = render_report(cache_rows, council, cross)
+    counts, failures, warnings, info = run_assertions()
+    cross = cross_checks()
+    subject, body = render_report(counts, failures, warnings, info, cross)
     print(body)
     print("")
     sent = gmail_send(subject, body)

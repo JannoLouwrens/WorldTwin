@@ -1259,6 +1259,37 @@ body[data-scrubbed-past="true"] .mmbar .mmbar-btn:not([data-time-aware="true"]) 
   <span class="meta">Live · 70+ sources · 800kBC→2026</span>
 </div>
 
+<!-- Record nav — Brief · Status · Charter · New globe. Appended into the
+     admiralty masthead once it mounts; falls back to a fixed plate if the
+     masthead never appears. Styling matches .tw-masthead-meta links. -->
+<script>
+(function(){
+  var LINKS = [['Brief','/worldtwin/brief/'],['Status','/worldtwin/status.html'],
+               ['Charter','/worldtwin/charter.html'],['New globe','/worldtwin/v2/']];
+  function row(){
+    var d = document.createElement('div');
+    d.className = 'tw-masthead-meta'; d.id = 'twRecordNav'; d.style.marginTop = '4px';
+    d.innerHTML = LINKS.map(function(l){
+      return '<a href="' + l[1] + '" style="color:#4cc2ff;text-decoration:none;letter-spacing:inherit">' + l[0] + '</a>';
+    }).join('');
+    return d;
+  }
+  var tries = 0, t = setInterval(function(){
+    if (document.getElementById('twRecordNav')) { clearInterval(t); return; }
+    var m = document.getElementById('twMasthead');
+    if (m) { clearInterval(t); m.appendChild(row()); return; }
+    if (++tries > 50) {
+      clearInterval(t);
+      var d = row();
+      d.style.cssText = 'position:fixed;top:16px;left:16px;z-index:110;display:flex;gap:10px;' +
+        'font-family:ui-monospace,monospace;font-size:9px;letter-spacing:0.32em;' +
+        'text-transform:uppercase;background:rgba(8,10,16,0.7);padding:8px 12px;margin-top:0';
+      document.body.appendChild(d);
+    }
+  }, 200);
+})();
+</script>
+
 <div class="mmbar" id="mmbar">
   <span class="mmbar-label">MAPMODE</span>
   <!-- Buttons populated by mapmode-bar.js -->

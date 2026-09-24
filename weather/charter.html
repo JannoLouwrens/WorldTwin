@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Charter — WorldTwin</title>
+<meta name="description" content="The five rules WorldTwin lives by, what is not in this version, the archive retention statement, and the permanent disclosure of the destroyed 2026 record.">
+<style>
+:root { --ink:#161310; --paper:#f8f5ef; --rule:#d9d2c3; --muted:#6b6459;
+        --accent:#1d4ed8; --warn:#92400e; --card:#fffdf7; }
+@media (prefers-color-scheme: dark) {
+  :root { --ink:#e8e4da; --paper:#15171c; --rule:#34373f; --muted:#9a958a;
+          --accent:#8ab0ff; --warn:#e0a458; --card:#1b1e25; }
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--paper); color:var(--ink); line-height:1.65;
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', Times, serif; }
+.wrap { max-width:720px; margin:0 auto; padding:40px 22px 80px; }
+header.mast { border-bottom:3px double var(--ink); padding-bottom:14px; margin-bottom:26px; }
+.kicker { font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace; font-size:11px;
+  letter-spacing:.22em; text-transform:uppercase; color:var(--warn); }
+h1 { font-size:38px; font-weight:700; letter-spacing:-.5px; line-height:1.1; margin-top:6px; }
+.promise { font-style:italic; color:var(--muted); margin-top:8px; font-size:18px; }
+h2 { font-family:ui-monospace,monospace; font-size:12px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--warn); margin:34px 0 10px; }
+ol.rules { padding-left:24px; counter-reset: rule; }
+ol.rules li { margin-bottom:14px; font-size:17px; }
+ol.rules b { display:inline; }
+.disclosure { border:2px solid var(--warn); background:var(--card); padding:16px 18px;
+  margin:26px 0; font-size:16px; }
+.disclosure .tag { font-family:ui-monospace,monospace; font-size:10.5px;
+  letter-spacing:.2em; text-transform:uppercase; color:var(--warn); display:block;
+  margin-bottom:8px; }
+ul.plain { padding-left:22px; }
+ul.plain li { margin-bottom:10px; font-size:16px; }
+p { margin-bottom:12px; font-size:16px; }
+a { color:var(--accent); }
+footer { margin-top:44px; border-top:3px double var(--ink); padding-top:16px;
+  font-size:12px; color:var(--muted); font-family:ui-monospace,monospace; line-height:1.9; }
+.mono { font-family:ui-monospace,monospace; }
+</style>
+</head>
+<body><div class="wrap">
+
+<header class="mast">
+  <div class="kicker">WorldTwin · Doctrine</div>
+  <h1>The Charter</h1>
+  <div class="promise">What the instruments said. Dated, sourced, and never quietly fixed.</div>
+</header>
+
+<h2>The five rules</h2>
+<ol class="rules">
+  <li><b>Every number carries its source and its timestamp.</b> No orphan claims.</li>
+  <li><b>No fabricated or interpolated data without explicit marking.</b> (Reconstructions
+   are labeled reconstructions.)</li>
+  <li><b>Gaps are shown, not hidden.</b> A silent source is displayed as silent.</li>
+  <li><b>The record is permanent.</b> What we showed on any date is replayable; corrections
+   add to history, they don't erase it.</li>
+  <li><b>Raw is one click away.</b> Any rendered value can be traced to the cached payload
+   and the upstream URL.</li>
+</ol>
+
+<div class="disclosure">
+  <span class="tag">Permanent disclosure · recorded 2026-09-24</span>
+  The observation and snapshot record covering 11 June – 9 August 2026 was destroyed on
+  9 August 2026 when the history store was emptied. No off-site copy existed. This archive
+  restarts on 24 September 2026. This notice is permanent, per rule 4.
+</div>
+
+<h2 id="not-in-this-version">Not in this version</h2>
+<ul class="plain">
+  <li><b>No generated narrative.</b> The model-written daily summary was retired on
+    2026-09-24. Every sentence in the <a href="/worldtwin/brief/">daily Brief</a> is
+    template-rendered directly from cached observations; no model writes any of it.</li>
+  <li><b>No replayable time machine.</b> The snapshot history that powered day-by-day
+    replay was destroyed on 2026-08-09 (see the disclosure above) and re-accumulation has
+    not yet been re-enabled. The Brief archive is the record that accrues from
+    2026-09-24 onward.</li>
+  <li><b>No verification of upstream sources.</b> This site relays instrument output with
+    provenance attached. It does not certify that any upstream reading is true — it
+    certifies where the reading came from and when.</li>
+  <li><b>Most of the original layers are retired.</b> Each retired layer carries a dated,
+    plain-English reason — the full ledger is on <a href="/worldtwin/status.html">the
+    status page</a>. Retirement is a decision, not a failure, and is displayed as such.</li>
+  <li><b>No off-site archive copy yet.</b> The Brief archive is committed daily to a local
+    git repository on this server; an off-site mirror requires an owner-held deploy key
+    and is flagged as pending until it exists.</li>
+</ul>
+
+<h2>Archive retention</h2>
+<p>Daily Briefs are retained <b>indefinitely and byte-stable</b>: the dated JSON is the
+citable record, its items are append-only, and corrections append with their own dates —
+they never overwrite (rule 4). Each day is committed to a git archive, so any
+after-the-fact edit to a past brief would be a visible diff, not a quiet fix.</p>
+<p>Observation snapshots, when the history store resumes, follow this graduated retention
+rule, published here as the stated window: every snapshot for 7 days; the newest per
+6 hours for 7–30 days; the newest per UTC day for 30 days–1 year; the newest per week for
+1–5 years; the newest per month beyond that.</p>
+
+<h2>Read the record</h2>
+<p><a href="/worldtwin/brief/">The Daily Brief</a> — one page per day, generated from the
+instrument caches, with an <a href="/worldtwin/brief/feed.xml">RSS feed</a>.<br>
+<a href="/worldtwin/status.html">Status</a> — the full source ledger with computed counts
+and dated reasons.</p>
+
+<footer>
+  the charter's five rules are quoted verbatim from VISION.md (2026-06-11) ·
+  <a href="/worldtwin/brief/">brief</a> · <a href="/worldtwin/status.html">status</a> ·
+  <a href="/worldtwin/v2/">globe</a> · <a href="/worldtwin/">legacy globe</a>
+</footer>
+
+</div></body></html>

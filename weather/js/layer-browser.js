@@ -129,6 +129,29 @@
   });
   window.LAYER_STATE = state;
 
+  // Retired-state knowledge — one fetch of the delivery contract, not 65 cache
+  // reads. A retired layer renders its dated reason inline with a DISABLED
+  // toggle (never a silent no-op): retirement is a decision, and the row says
+  // why. spacetrack_gp + webcams are hard-404 for licence reasons, so their
+  // reason is known even with no cache file and no manifest entry.
+  const RETIRED = {
+    spacetrack_gp: 'removed for licence compliance',
+    webcams: 'removed for licence compliance',
+  };
+  fetch('/api/cache/v1/manifest.json')
+    .then(r => (r.ok ? r.json() : null))
+    .then(man => {
+      if (!man || !Array.isArray(man.layers)) return;
+      man.layers.forEach(l => {
+        if (l && l.state === 'retired' && !RETIRED[l.id]) {
+          RETIRED[l.id] = String(l.reason || l.retired_reason || l.state_detail || 'retired')
+            .replace(/[<>]/g, '');
+        }
+      });
+      buildPanel();
+    })
+    .catch(() => {});
+
   let _browserOpen = false;
 
   function buildPanel() {
@@ -233,6 +256,24 @@
         </div>
         <div class="lb-cat-body">
           ${layers.map(l => {
+            // Retired layer → reason inline, toggle disabled (present, not
+            // absent). state forced off so no renderer fires on a tombstone.
+            const retired = RETIRED[l.id];
+            if (retired) {
+              state[l.id].on = false;
+              return `
+                <div class="lb-row lb-retired" data-id="${l.id}" style="opacity:0.55;cursor:default" title="Retired: ${retired}">
+                  <label class="lb-toggle">
+                    <input type="checkbox" disabled data-id="${l.id}">
+                    <span class="lb-swatch" style="background:transparent;border-color:${meta.color};opacity:0.4"></span>
+                  </label>
+                  <div class="lb-row-main">
+                    <div class="lb-row-name">${l.name}</div>
+                    <div class="lb-row-sub" style="color:var(--text-lo)">retired — ${retired}</div>
+                  </div>
+                </div>
+              `;
+            }
             // No renderer registered in window.LAYERS → toggling would silently
             // do nothing. Render as a disabled "data-panel only" row instead of
             // a live toggle so the user isn't lied to by a dead checkbox.
@@ -319,6 +360,10 @@
   }
 
   function applyLayer(id) {
+    if (RETIRED[id]) {   // retired: never render a tombstone, even via Show-all
+      state[id].on = false;
+      return;
+    }
     const entry = window.LAYERS && window.LAYERS[id];
     if (!entry) {
       // Layer not yet implemented in layers.js. Stub; just log.

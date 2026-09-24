@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://worldtwin.duckdns.org/worldtwin/</loc>
+    <changefreq>daily</changefreq>
+  </url>
+  <url>
+    <loc>https://worldtwin.duckdns.org/worldtwin/v2/</loc>
+    <changefreq>daily</changefreq>
+  </url>
+  <url>
+    <loc>https://worldtwin.duckdns.org/worldtwin/brief/</loc>
+    <changefreq>daily</changefreq>
+  </url>
+  <url>
+    <loc>https://worldtwin.duckdns.org/worldtwin/charter.html</loc>
+    <changefreq>yearly</changefreq>
+  </url>
+  <url>
+    <loc>https://worldtwin.duckdns.org/worldtwin/status.html</loc>
+    <changefreq>daily</changefreq>
+  </url>
+</urlset>

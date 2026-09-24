@@ -51,6 +51,7 @@
     },
     {
       "id": "country_relations",
+      "default": false,
       "name": "Country Blocs + Alliances",
       "category": "meta",
       "source": "Curated blocs + GDELT QuadClass",
@@ -69,6 +70,7 @@
     },
     {
       "id": "geoboundaries_adm1",
+      "default": false,
       "name": "ADM1 Province/State Boundaries",
       "category": "meta",
       "source": "geoBoundaries (William & Mary geoLab)",
@@ -87,6 +89,7 @@
     },
     {
       "id": "population",
+      "default": false,
       "name": "REST Countries (facts)",
       "category": "meta",
       "source": "REST Countries",
@@ -144,6 +147,7 @@
     },
     {
       "id": "disasters",
+      "default": false,
       "name": "Natural Disasters (EONET)",
       "category": "nature",
       "source": "NASA EONET",
@@ -220,6 +224,7 @@
     },
     {
       "id": "nhc_cyclones",
+      "default": false,
       "name": "Active Tropical Cyclones (NHC)",
       "category": "nature",
       "source": "NOAA NHC",
@@ -240,6 +245,7 @@
 
     {
       "id": "air_quality",
+      "default": false,
       "name": "Air Quality (45 major cities)",
       "category": "health",
       "source": "Open-Meteo CAMS",
@@ -278,6 +284,7 @@
     },
     {
       "id": "historical_borders",
+      "default": false,
       "name": "Historical Borders (123,000 BC → 2010)",
       "category": "meta",
       "source": "aourednik/historical-basemaps",
@@ -297,6 +304,7 @@
     },
     {
       "id": "historical_disasters",
+      "default": false,
       "name": "Historical Disasters (2150 BC → today)",
       "category": "nature",
       "source": "NOAA NCEI + Smithsonian GVP",
@@ -316,6 +324,7 @@
     },
     {
       "id": "maddison_history",
+      "default": false,
       "name": "Maddison GDP & Population (1 AD → 2018)",
       "category": "economy",
       "source": "Bolt & van Zanden 2020 (OWID mirror)",
@@ -335,6 +344,7 @@
     },
     {
       "id": "hyde_population",
+      "default": false,
       "name": "Population (10,000 BC → today)",
       "category": "economy",
       "source": "HYDE 3.3 + UN WPP via OWID",
@@ -354,6 +364,7 @@
     },
     {
       "id": "paleo_temperature",
+      "default": false,
       "name": "Global Temperature Anomaly (11,300 BP → today)",
       "category": "weather",
       "source": "Marcott 2013 + PAGES2k + HadCRUT5",
@@ -373,6 +384,7 @@
     },
     {
       "id": "country_culture",
+      "default": false,
       "name": "Country culture (religion + ethnicity)",
       "category": "meta",
       "source": "Wikidata SPARQL (P140, P172) + Pew/CIA fallback",
@@ -392,6 +404,7 @@
     },
     {
       "id": "openaq_stations",
+      "default": false,
       "name": "OpenAQ AQ Stations",
       "category": "health",
       "source": "OpenAQ v3",
@@ -411,6 +424,7 @@
     },
     {
       "id": "who_don",
+      "default": false,
       "name": "WHO Disease Outbreak News",
       "category": "health",
       "source": "WHO Disease Outbreak News",
@@ -431,6 +445,7 @@
 
     {
       "id": "wind_sample",
+      "default": false,
       "name": "Wind Field (Open-Meteo)",
       "category": "nature",
       "source": "Open-Meteo (ECMWF/GFS)",
@@ -450,6 +465,7 @@
     },
     {
       "id": "rainviewer",
+      "default": false,
       "name": "Weather Radar Tiles",
       "category": "nature",
       "source": "RainViewer",
@@ -508,6 +524,7 @@
     },
     {
       "id": "ships",
+      "default": false,
       "name": "Live Vessels (AIS)",
       "category": "transit",
       "source": "AISStream.io",
@@ -527,6 +544,7 @@
     },
     {
       "id": "iss",
+      "default": false,
       "name": "International Space Station",
       "category": "space",
       "source": "WhereTheISS.at + Open-Notify",
@@ -546,6 +564,7 @@
     },
     {
       "id": "satellites",
+      "default": false,
       "name": "Active Satellites (CelesTrak)",
       "category": "space",
       "source": "CelesTrak",
@@ -565,6 +584,7 @@
     },
     {
       "id": "spacetrack_gp",
+      "default": false,
       "name": "Space-Track Full Catalogue",
       "category": "space",
       "source": "Space-Track.org",
@@ -584,6 +604,7 @@
     },
     {
       "id": "nasa_donki",
+      "default": false,
       "name": "NASA DONKI Space Weather",
       "category": "space",
       "source": "NASA DONKI",
@@ -603,6 +624,7 @@
     },
     {
       "id": "nasa_neows",
+      "default": false,
       "name": "NASA NeoWs Asteroids (7-day)",
       "category": "space",
       "source": "NASA NeoWs",
@@ -622,6 +644,7 @@
     },
     {
       "id": "nasa_mars_photos",
+      "default": false,
       "name": "Mars Rover Latest Photos",
       "category": "space",
       "source": "NASA Mars Photos",
@@ -641,6 +664,7 @@
     },
     {
       "id": "nasa_epic_earth",
+      "default": false,
       "name": "NASA EPIC L1 Earth Images",
       "category": "space",
       "source": "NASA EPIC (DSCOVR)",
@@ -661,6 +685,7 @@
 
     {
       "id": "world_bank",
+      "default": false,
       "name": "World Bank Indicators (30 per country)",
       "category": "economy",
       "source": "World Bank API v2",
@@ -680,6 +705,7 @@
     },
     {
       "id": "imf_data",
+      "default": false,
       "name": "IMF DataMapper Core",
       "category": "economy",
       "source": "IMF DataMapper API",
@@ -718,6 +744,7 @@
     },
     {
       "id": "oecd_cli",
+      "default": false,
       "name": "OECD Composite Leading Indicators",
       "category": "economy",
       "source": "OECD SDMX",
@@ -737,6 +764,7 @@
     },
     {
       "id": "commodity_prices",
+      "default": false,
       "name": "Commodity Prices Live Ticker",
       "category": "economy",
       "source": "datahub.io + CoinGecko + Frankfurter",
@@ -756,6 +784,7 @@
     },
     {
       "id": "economy",
+      "default": false,
       "name": "Economy (Forex + Crypto)",
       "category": "economy",
       "source": "Frankfurter + CoinGecko",
@@ -775,6 +804,7 @@
     },
     {
       "id": "fao_food_prices",
+      "default": false,
       "name": "FAO Food Price Index",
       "category": "economy",
       "source": "FAO",
@@ -794,6 +824,7 @@
     },
     {
       "id": "eia_petroleum",
+      "default": false,
       "name": "EIA Petroleum Weekly",
       "category": "economy",
       "source": "US EIA Weekly Petroleum Status",
@@ -814,6 +845,7 @@
 
     {
       "id": "eia_930_grid",
+      "default": false,
       "name": "EIA-930 US Balancing Authorities",
       "category": "resources",
       "source": "US EIA Hourly Grid Monitor",
@@ -833,6 +865,7 @@
     },
     {
       "id": "eia_international",
+      "default": false,
       "name": "EIA International (per country)",
       "category": "resources",
       "source": "US EIA International",
@@ -852,6 +885,7 @@
     },
     {
       "id": "owid_energy",
+      "default": false,
       "name": "OWID Energy (100 indicators/country)",
       "category": "resources",
       "source": "Our World in Data",
@@ -871,6 +905,7 @@
     },
     {
       "id": "climatetrace_assets",
+      "default": false,
       "name": "ClimateTRACE Facility Emissions",
       "category": "resources",
       "source": "ClimateTRACE v6",
@@ -890,6 +925,7 @@
     },
     {
       "id": "wri_power_plants",
+      "default": false,
       "name": "WRI Global Power Plants",
       "category": "resources",
       "source": "WRI Global Power Plant DB",
@@ -909,6 +945,7 @@
     },
     {
       "id": "trade_annual",
+      "default": false,
       "name": "Annual Trade Flows (Comtrade)",
       "category": "resources",
       "source": "UN Comtrade annual HS4",
@@ -928,6 +965,7 @@
     },
     {
       "id": "trade_monthly",
+      "default": false,
       "name": "Monthly Trade Flows (Comtrade)",
       "category": "resources",
       "source": "UN Comtrade monthly HS4",
@@ -947,6 +985,7 @@
     },
     {
       "id": "country_resources",
+      "default": false,
       "name": "Country Resource Fact Sheets",
       "category": "resources",
       "source": "UN Comtrade + WRI",
@@ -966,6 +1005,7 @@
     },
     {
       "id": "country_deep_dive",
+      "default": false,
       "name": "Country Resource Deep Dive",
       "category": "resources",
       "source": "Aggregated (OWID+FEWS+WRI+ClimateTRACE)",
@@ -985,6 +1025,7 @@
     },
     {
       "id": "portwatch_ports",
+      "default": false,
       "name": "PortWatch Top Ports",
       "category": "resources",
       "source": "IMF PortWatch",
@@ -1004,6 +1045,7 @@
     },
     {
       "id": "portwatch_chokepoints",
+      "default": false,
       "name": "PortWatch Chokepoints",
       "category": "resources",
       "source": "IMF PortWatch AIS",
@@ -1023,6 +1065,7 @@
     },
     {
       "id": "gfw_events",
+      "default": false,
       "name": "Global Fishing Watch — Dark Fleet",
       "category": "transit",
       "source": "Global Fishing Watch v3",
@@ -1043,6 +1086,7 @@
 
     {
       "id": "ucdp_ged",
+      "default": false,
       "name": "UCDP Georeferenced Events (3y)",
       "category": "war",
       "source": "UCDP flat-file",
@@ -1062,6 +1106,7 @@
     },
     {
       "id": "conflict_events",
+      "default": false,
       "name": "GDELT Violent Events Real-time",
       "category": "war",
       "source": "GDELT Events 2.0 (EventRootCode 18/19/20)",
@@ -1081,6 +1126,7 @@
     },
     {
       "id": "conflicts",
+      "default": false,
       "name": "Conflict News (GDELT doc)",
       "category": "war",
       "source": "GDELT doc API",
@@ -1100,6 +1146,7 @@
     },
     {
       "id": "crises",
+      "default": false,
       "name": "Humanitarian Crises (HDX)",
       "category": "war",
       "source": "HDX CKAN",
@@ -1119,6 +1166,7 @@
     },
     {
       "id": "reliefweb",
+      "default": false,
       "name": "ReliefWeb (HDX-backed)",
       "category": "war",
       "source": "HDX CKAN",
@@ -1138,6 +1186,7 @@
     },
     {
       "id": "wikidata_battles",
+      "default": false,
       "name": "Notable Battles (Wikidata)",
       "category": "war",
       "source": "Wikidata SPARQL",
@@ -1157,6 +1206,7 @@
     },
     {
       "id": "relations",
+      "default": false,
       "name": "GDELT News Activity (QuadClass)",
       "category": "war",
       "source": "GDELT Events 2.0 QuadClass",
@@ -1177,6 +1227,7 @@
 
     {
       "id": "sports",
+      "default": false,
       "name": "Live Sports (ESPN)",
       "category": "sports",
       "source": "ESPN unofficial",
@@ -1196,6 +1247,7 @@
     },
     {
       "id": "gaming",
+      "default": false,
       "name": "Gaming (Steam + Twitch)",
       "category": "gaming",
       "source": "Steam Web API + Twitch Helix",
@@ -1215,6 +1267,7 @@
     },
     {
       "id": "youtube",
+      "default": false,
       "name": "YouTube Trending (by country)",
       "category": "social",
       "source": "YouTube Data API v3",
@@ -1234,6 +1287,7 @@
     },
     {
       "id": "trends",
+      "default": false,
       "name": "Wikipedia Trends",
       "category": "social",
       "source": "Wikimedia Pageviews",
@@ -1253,6 +1307,7 @@
     },
     {
       "id": "news",
+      "default": false,
       "name": "Breaking News (GDELT doc)",
       "category": "social",
       "source": "GDELT doc API",
@@ -1272,6 +1327,7 @@
     },
     {
       "id": "gdelt_gkg_themes",
+      "default": false,
       "name": "GDELT GKG Themes (hour)",
       "category": "social",
       "source": "GDELT GKG 2.1",
@@ -1291,6 +1347,7 @@
     },
     {
       "id": "radio",
+      "default": false,
       "name": "Radio Stations",
       "category": "social",
       "source": "Radio Browser (community)",
@@ -1310,6 +1367,7 @@
     },
     {
       "id": "webcams",
+      "default": false,
       "name": "Live Webcams (Windy)",
       "category": "infra",
       "source": "Windy Webcams",
@@ -1329,6 +1387,7 @@
     },
     {
       "id": "cables",
+      "default": false,
       "name": "Submarine Internet Cables",
       "category": "infra",
       "source": "TeleGeography",
@@ -1368,6 +1427,7 @@
 
     {
       "id": "pulse_mode",
+      "default": false,
       "name": "Pulse Mode (composite concern)",
       "category": "meta",
       "source": "Aggregated",
@@ -1387,6 +1447,7 @@
     },
     {
       "id": "global_events",
+      "default": false,
       "name": "Global Events Feed",
       "category": "meta",
       "source": "Aggregated 9 sources",
@@ -1406,6 +1467,7 @@
     },
     {
       "id": "gemini_narrative",
+      "default": false,
       "name": "WorldTwin Analyst (Gemini)",
       "category": "meta",
       "source": "Gemini 2.5 Flash",

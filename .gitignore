@@ -22,3 +22,7 @@ __pycache__/
 
 # v2 client build output — regenerate with `cd app && npm run build`
 weather/v2/
+
+# The brief archive is its own embedded git repo (scripts/archive_push.sh) —
+# it must not churn the parent tree with a commit per day.
+weather/brief/

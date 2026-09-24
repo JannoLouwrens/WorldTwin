@@ -102,7 +102,13 @@
     now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) + ' · ' +
     now.toISOString().slice(11,16) + ' UTC';
 
-  if (nar && nar.today) {
+  if (nar && nar.state === 'retired') {
+    // The narrative layer is a dated tombstone now — say so, and point at the
+    // template-generated daily Brief that replaced it.
+    document.getElementById('lede').innerHTML =
+      'The generated narrative was retired on 2026-09-24 — see the ' +
+      '<a href="/worldtwin/brief/" style="color:var(--accent)">daily Brief</a> instead.';
+  } else if (nar && nar.today) {
     document.getElementById('lede').textContent = nar.today;
     if (nar.biggest_risk) {
       document.getElementById('riskSec').style.display = '';

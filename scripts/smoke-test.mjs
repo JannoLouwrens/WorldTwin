@@ -48,10 +48,12 @@ async function main() {
   await page.evaluate(() => { try { localStorage.setItem('tw_onboarded', '1'); } catch (_) {} });
   await page.reload({ waitUntil: 'domcontentloaded' });
 
-  // Wait for briefing to populate
+  // Wait for briefing to populate. Threshold lowered 1000 → 300: the AI
+  // narrative was retired 2026-09-24 (tombstone), so the briefing renders
+  // fewer sections — that is the sentenced state, not a failure.
   await page.waitForFunction(() => {
     return window.viewer && document.getElementById('twBriefing')
-      && document.getElementById('twBriefing').innerHTML.length > 1000;
+      && document.getElementById('twBriefing').innerHTML.length > 300;
   }, { timeout: TIMEOUT });
 
   // Pull briefing data + any cached crypto/macros
@@ -63,14 +65,12 @@ async function main() {
       const num = parseFloat(txt.replace(/[^0-9.\-]/g, ''));
       if (Number.isFinite(num)) out.kpis.push({ label: txt.slice(0, 40), value: num });
     });
-    // Direct cache reads
-    const eco = window._cacheStore?.get?.('economy');
+    // Direct cache reads. economy (crypto/forex) is RETIRED 2026-09-24 —
+    // its cache is a tombstone, so no crypto extraction and no crypto checks.
     const fred = window._cacheStore?.get?.('fred')?.series || {};
     const ai = window._cacheStore?.get?.('gemini_narrative');
 
-    out.crypto = (eco?.crypto || []).slice(0, 5).map(c => ({
-      sym: c.symbol, price: c.price_usd, change_24h: c.change_24h,
-    }));
+    out.ai_retired = ai?.state === 'retired';
     out.fred_macros = {
       brent: fred.DCOILBRENTEU?.latest,
       wti: fred.DCOILWTICO?.latest,
@@ -80,7 +80,6 @@ async function main() {
     };
     out.ai_source = ai?.source;
     out.ai_today = (ai?.today || '').slice(0, 200);
-    out.ai_cross = (ai?.digest?.crypto || []).map(c => c.cross_check).filter(Boolean);
     return out;
   });
 
@@ -102,23 +101,16 @@ async function main() {
   check('Fed funds %',     'fed_funds_pct', data.fred_macros.fed_funds);
   check('US 10Y yield %',  'yield_pct',     data.fred_macros.us_10y);
 
-  console.log('--- Crypto change_24h ---');
-  for (const c of data.crypto) {
-    check(`${c.sym} 24h%`, 'change_24h_pct', c.change_24h);
-  }
+  // Crypto checks removed 2026-09-24: the economy layer (crypto/forex) is
+  // retired and its cache is a tombstone — nothing to plausibility-check.
 
   console.log('--- AI narrative ---');
-  console.log(`  source: ${data.ai_source}`);
-  console.log(`  today (1st 200 chars): ${data.ai_today}`);
-  if (data.ai_cross?.length) {
-    const disagree = data.ai_cross.filter(c => c.agrees === false);
-    if (disagree.length) {
-      console.warn(`  ⚠ ${disagree.length} crypto values diverge between CoinGecko and Binance`);
-    } else {
-      console.log(`  ✓ ${data.ai_cross.length} crypto cross-checks all agree`);
-    }
+  if (data.ai_retired) {
+    // Retired is the sentenced, expected state — not a failure.
+    console.log('  ✓ gemini_narrative is a retired tombstone (expected since 2026-09-24)');
   } else {
-    console.log('  (no cross_check data — Binance fetch may be in progress)');
+    console.log(`  source: ${data.ai_source}`);
+    console.log(`  today (1st 200 chars): ${data.ai_today}`);
   }
 
   await browser.close();
