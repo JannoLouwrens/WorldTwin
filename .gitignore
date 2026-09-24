@@ -26,3 +26,4 @@ weather/v2/
 # The brief archive is its own embedded git repo (scripts/archive_push.sh) —
 # it must not churn the parent tree with a commit per day.
 weather/brief/
+.maintenance
