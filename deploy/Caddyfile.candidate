@@ -1,0 +1,244 @@
+# Admin dashboard: removed direct :8080 exposure.
+# Access via http://<ip>/admin/* with basic auth (see :80 block below).
+
+:80 {
+    encode zstd gzip
+    # iPhone VPN: XRay VLESS-over-WebSocket. Rides port 80 (the only door the
+    # office firewall leaves open to this host), disguised as a normal
+    # website WebSocket. Streisand/Shadowrocket client on iOS.
+    handle /xr8k3vq2ws* {
+        reverse_proxy 172.17.0.1:8090
+    }
+
+    # WireGuard-over-WebSocket tunnel (wstunnel). Office firewall allows
+    # :80 to this host but drops UDP/51820 + 443-to-this-IP; this rides the
+    # VPN inside ordinary HTTP/WS on the permitted port. Host-side wstunnel
+    # listens on the docker gateway.
+    handle /wt7g2xk9tunnel* {
+        reverse_proxy 172.17.0.1:8080
+    }
+
+handle /worldtwin* {
+        root * /srv/weather
+        uri strip_prefix /worldtwin
+        file_server
+    }
+
+    # Back-compat: /weather/* still serves (and the address bar stays where the
+    # user typed). New canonical path is /worldtwin/*. Old links never 404.
+    handle /weather* {
+        root * /srv/weather
+        uri strip_prefix /weather
+        file_server
+    }
+
+    @weatherWizExact path /weatherwiz
+    redir @weatherWizExact /weatherwiz/ 301
+
+    handle_path /weatherwiz/* {
+        root * /srv/weatherwiz
+        file_server
+    }
+
+    handle /api/cache/* {
+        uri strip_prefix /api/cache
+        root * /srv/cache
+        encode zstd gzip
+        file_server {
+            precompressed gzip
+        }
+        header Access-Control-Allow-Origin *
+        header Cache-Control "public, max-age=60"
+    }
+
+    handle /api/* {
+        reverse_proxy aggregator:8090
+        header Access-Control-Allow-Origin *
+    }
+
+    handle /v1/cache/* {
+        uri strip_prefix /v1/cache
+        root * /srv/cache/v1
+        file_server
+        header Access-Control-Allow-Origin *
+        header Cache-Control "public, max-age=10"
+    }
+
+    handle /v1/* {
+        reverse_proxy aggregator:8090
+        header Access-Control-Allow-Origin *
+    }
+
+    handle /jj* {
+        basic_auth {
+            jj $2a$14$UegX/cYeFd.xt/1Kf50VTeNzY8KwNwwTUkSWzYYraShCXfXJO8Xv6
+        }
+        uri strip_prefix /jj
+        reverse_proxy jj-app:8091 {
+            header_up X-API-Key 5251469864e16ce9b1ea2a67cf9bd4d87c603241cf3cf146
+        }
+    }
+
+    handle /admin* {
+        basic_auth {
+            janno $2a$14$MO/koj3cTcyBHsXenwcx6e1yqy5sClwciwqaeISRIdkXyE0iD9QT6
+        }
+        reverse_proxy admin:8080
+    }
+
+    @waterExact path /water
+    redir @waterExact /water/ 301
+
+    handle_path /water/* {
+        reverse_proxy 172.19.0.1:8077
+    }
+
+    handle {
+        respond "OpenClaw Platform" 200
+    }
+}
+# ---------------------------------------------------------------------------
+# WorldTwin over HTTPS. Separate site block on purpose: the :80 block above
+# carries the tenant routes (admin, jj, company agents) and the VPN paths, and
+# nothing here touches it. Requests to the bare IP keep behaving exactly as
+# before; only this hostname gets TLS.
+#
+# Caddy fetches and renews the Let's Encrypt certificate itself (HTTP-01 over
+# port 80, which is already open) — no Cloudflare, no manual certbot.
+#
+# The frontend hardcodes absolute /worldtwin/* paths (app.js fetches
+# /worldtwin/config.json, brief.html deep-links /worldtwin/?layers=...), so the
+# path layout is kept identical here and the bare root just redirects in.
+# ---------------------------------------------------------------------------
+worldtwin.duckdns.org {
+    # Access log (WorldTwin host only — tenant/VPN traffic on :80 and
+    # finebubble stays unlogged by choice). /data is the caddy-data named
+    # volume (rw, holds the ACME store); logs rotate 20MiB x 6, 30 days.
+    # Privacy: client IPs masked to /24 (v4) / /48 (v6), Cookie and
+    # Authorization headers dropped. User-Agent deliberately survives —
+    # it is the subscriber measurement.
+    log {
+        output file /data/logs/worldtwin.json {
+            roll_size 20MiB
+            roll_keep 6
+            roll_keep_for 720h
+        }
+        format filter {
+            wrap json
+            fields {
+                request>remote_ip ip_mask {
+                    ipv4 24
+                    ipv6 48
+                }
+                request>headers>Cookie delete
+                request>headers>Authorization delete
+            }
+        }
+    }
+
+    encode zstd gzip
+
+    handle /api/cache/* {
+        uri strip_prefix /api/cache
+        root * /srv/cache
+        encode zstd gzip
+        file_server {
+            precompressed gzip
+        }
+        header Access-Control-Allow-Origin *
+        header Cache-Control "public, max-age=60"
+    }
+
+    handle /api/* {
+        reverse_proxy aggregator:8090
+        header Access-Control-Allow-Origin *
+    }
+
+    handle /v1/cache/* {
+        uri strip_prefix /v1/cache
+        root * /srv/cache/v1
+        file_server
+        header Access-Control-Allow-Origin *
+        header Cache-Control "public, max-age=10"
+    }
+
+    handle /v1/* {
+        reverse_proxy aggregator:8090
+        header Access-Control-Allow-Origin *
+    }
+
+    handle /worldtwin* {
+        root * /srv/weather
+        uri strip_prefix /worldtwin
+        file_server
+    }
+
+    @rootPath path / ""
+    redir @rootPath /worldtwin/ 302
+
+    # Crawlers fetch robots.txt/sitemap.xml ONLY at the host root (RFC 9309) —
+    # serve the shipped files from /srv/weather so they are discoverable.
+    handle /robots.txt {
+        root * /srv/weather
+        file_server
+    }
+    handle /sitemap.xml {
+        root * /srv/weather
+        file_server
+    }
+
+    handle {
+        # The `*` matcher token is REQUIRED: without it Caddy parses
+        # /worldtwin/ as an inline matcher and 302 as the redirect target,
+        # producing empty 200s for every unmatched path (verified live).
+        redir * /worldtwin/ 302
+    }
+}
+
+
+# HTTPS site (Let's Encrypt via the duckdns domain). Needed for MCP connectors:
+# Claude Cowork / claude.ai and Copilot Studio connect from their clouds and require valid TLS.
+finebubble.duckdns.org {
+    encode zstd gzip
+
+    # Demo company (Bergrivier Waters) — own container, own tokens, zero shared data.
+    handle /demo/mcp* {
+        uri strip_prefix /demo
+        reverse_proxy jj-demo:8091
+    }
+    handle_path /demo* {
+        basic_auth {
+            demo $2a$14$U2lsiYSl/Tf22GHYcer6E.HLNoYxB5gORZzJjHW0xoOWp/xbmy3Yy
+        }
+        reverse_proxy jj-demo:8091 {
+            header_up X-API-Key ff675c91b1d2c53c2f159e582649f2ba
+        }
+    }
+
+
+    # MCP endpoint for AI connectors — the shared token lives in the path/header, so no basic auth here.
+    handle /mcp* {
+        reverse_proxy jj-app:8091
+    }
+
+    # Same JJ app as on :80, same login.
+    handle /jj* {
+        basic_auth {
+            jj $2a$14$UegX/cYeFd.xt/1Kf50VTeNzY8KwNwwTUkSWzYYraShCXfXJO8Xv6
+        }
+        uri strip_prefix /jj
+        reverse_proxy jj-app:8091 {
+            header_up X-API-Key 5251469864e16ce9b1ea2a67cf9bd4d87c603241cf3cf146
+        }
+    }
+
+    # LRH chatbot (single-figure build of historical-chat, ~/lrh-chatbot). Login is Google/Supabase inside the app.
+    redir /lrh /lrh/ 308
+    handle_path /lrh/* {
+        reverse_proxy lrh-chatbot:8000
+    }
+
+    handle {
+        respond "ok" 200
+    }
+}

@@ -14,12 +14,29 @@
 set -euo pipefail
 
 LOG_TAG="[wt-wal-truncate]"
+
+# MAINTENANCE LOCK (added 2026-09-24): taken BEFORE the aggregator is
+# stopped so mem_watchdog.sh (cron, every 2 min) doesn't race us and
+# restart the container mid-truncate. The watchdog ignores locks older
+# than 90 min; our worst case is ~12 min. Removed on every exit path.
+LOCK=/home/opc/worldtwin/.maintenance
+touch "$LOCK"
+trap 'rm -f "$LOCK"' EXIT INT TERM
+
 echo "$(date -Iseconds) $LOG_TAG starting"
 
 # Snapshot WAL size before
 BEFORE=$(stat -c '%s' /data/history/history.sqlite-wal 2>/dev/null || echo 0)
 DB_BEFORE=$(stat -c '%s' /data/history/history.sqlite 2>/dev/null || echo 0)
 echo "$(date -Iseconds) $LOG_TAG before: db=${DB_BEFORE} wal=${BEFORE}"
+
+# EARLY EXIT (added 2026-09-24): the history store is frozen (nothing
+# writes to history.sqlite), so most Sundays the WAL is tiny or absent.
+# Restarting the aggregator to truncate nothing is pure downtime — skip.
+if [ "$BEFORE" -lt 1048576 ]; then
+  echo "$(date -Iseconds) $LOG_TAG WAL <1MB — nothing to truncate, skipping restart"
+  exit 0
+fi
 
 # Stop the aggregator
 cd /home/opc/worldtwin

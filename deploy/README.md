@@ -21,23 +21,22 @@ port 80, which is already open. No Cloudflare, no certbot, no cron.
 2. Inbound TCP 443 must be permitted in the OCI security list for this VM.
    Port 80 already is. Caddy is already listening on 443.
 
-   **Confirmed blocked as of 2026-08-01.** Applying this config issued the
-   certificate fine, but Let's Encrypt's TLS-ALPN-01 probe failed with
-   `129.151.191.74: Timeout during connect (likely firewall problem)` before
-   falling back to HTTP-01 over port 80, which succeeded. The host firewall is
-   not the cause — `iptables -t nat -S DOCKER` has identical DNAT rules for 80
-   and 443 — so the block is Oracle's cloud firewall.
+   **Verified OPEN as of 2026-09-24.** External probing from check-host.net
+   reached TCP 443 from 5/5 nodes, and Caddy's certificate log shows a
+   successful `tls-alpn-01` challenge on 2026-08-31 — which can only succeed
+   over an externally reachable 443. `https://worldtwin.duckdns.org/worldtwin/`
+   is fully reachable from the internet and the domain link is shareable.
 
-   Open it at: Console -> Networking -> Virtual Cloud Networks -> your VCN ->
-   Security Lists -> the subnet's list -> Add Ingress Rule:
-   Stateless *No*, Source CIDR `0.0.0.0/0`, IP Protocol *TCP*,
-   Destination Port Range `443`.
-
-   Until that is done the certificate is valid and HTTPS serves correctly on
-   the box, but is unreachable from the internet — and because Caddy adds a
-   host-scoped HTTP->HTTPS redirect, `http://worldtwin.duckdns.org` will 308
-   to an unreachable HTTPS URL. The bare IP is unaffected and keeps serving.
-   So do not share the domain link until 443 is open.
+   Dated history: TCP 443 **was** blocked by Oracle's cloud firewall as of
+   2026-08-01 (Let's Encrypt's TLS-ALPN-01 probe timed out with
+   `129.151.191.74: Timeout during connect (likely firewall problem)`, falling
+   back to HTTP-01 on port 80; host iptables DNAT rules for 80/443 were
+   identical, isolating the block to the OCI security list). The block was
+   lifted at the OCI security-list level some time between 2026-08-21 and
+   2026-08-31. If it ever reappears, the fix is: Console -> Networking ->
+   Virtual Cloud Networks -> your VCN -> Security Lists -> the subnet's list ->
+   Add Ingress Rule: Stateless *No*, Source CIDR `0.0.0.0/0`, IP Protocol
+   *TCP*, Destination Port Range `443`.
 
 ### Applying it
 

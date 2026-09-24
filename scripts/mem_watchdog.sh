@@ -8,6 +8,21 @@
 # Logs each check (silent on healthy, verbose on action).
 set -euo pipefail
 
+# MAINTENANCE LOCK (added 2026-09-24): scripts that stop the aggregator on
+# purpose (wal_truncate.sh) touch this file first, so our down-detection
+# below doesn't race them and restart mid-maintenance. The 90-minute expiry
+# is load-bearing: a forgotten lock must never permanently disable the only
+# thing that recovers the aggregator (wal_truncate worst case is ~12 min).
+LOCK=/home/opc/worldtwin/.maintenance
+if [ -e "$LOCK" ]; then
+  LOCK_AGE=$(( $(date +%s) - $(stat -c '%Y' "$LOCK" 2>/dev/null || echo 0) ))
+  if [ "$LOCK_AGE" -lt 5400 ]; then
+    echo "$(date -Iseconds) [wt-mem-watchdog] maintenance lock present (age ${LOCK_AGE}s < 5400s) — skipping this run"
+    exit 0
+  fi
+  echo "$(date -Iseconds) [wt-mem-watchdog] stale lock ignored (age ${LOCK_AGE}s >= 5400s) — continuing"
+fi
+
 LOG_TAG="[wt-mem-watchdog]"
 THRESHOLD_PCT=90   # restart when MemUsage% >= this (was 85 — too eager on a
                    # 3GB box; the boot WAL-truncate + round-2 fixes lowered
