@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import maplibregl, { type Map as MLMap, type StyleSpecification } from 'maplibre-gl'
-import { LAYERS } from '../layers/registry'
-import { makeShapeIcon } from '../lib/shapes'
+import { LAYERS, type LayerDef } from '../layers/registry'
+import { makeShapeIcon, type ShapeIconOpts } from '../lib/shapes'
+import type { FreshState } from '../lib/freshness'
 import type { LoadedLayer, Point } from '../lib/types'
 
 /** Keyless imagery. No Mapbox/MapTiler token to leak or rotate and no
@@ -115,21 +116,27 @@ function toFeatureCollection(points: Point[]): GeoJSON.FeatureCollection {
   }
 }
 
+type Role = 'focused' | 'context' | 'off'
+
 interface Props {
   loaded: Record<string, LoadedLayer>
+  /** Ordered by the toggle reducer: index 0 is the FOCUSED layer. */
   active: string[]
+  /** Per-layer TTL-multiple freshness. Stale layers render hollow at 0.55
+   *  opacity — displayed as silence, never hidden. */
+  states: Record<string, FreshState>
   onPick: (layerId: string, point: Point) => void
 }
 
-export function GlobeMap({ loaded, active, onPick }: Props) {
+export function GlobeMap({ loaded, active, states, onPick }: Props) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MLMap | null>(null)
   const ready = useRef(false)
   const resizeObs = useRef<ResizeObserver | null>(null)
   // Held in a ref so the map's event handlers always see current data without
   // being torn down and rebound on every render.
-  const latest = useRef({ loaded, active, onPick })
-  latest.current = { loaded, active, onPick }
+  const latest = useRef({ loaded, active, states, onPick })
+  latest.current = { loaded, active, states, onPick }
 
   useEffect(() => {
     if (!container.current || map.current) return
@@ -145,11 +152,13 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
       // straight under the Layers button with no room to sit beside it. The
       // credits are still shown — see <Credits/> — just laid out deliberately.
       attributionControl: false,
-      // Touch devices: let a one-finger drag rotate the globe rather than
-      // fighting the page, and keep pitch off — it buys nothing on a globe.
+      // Pitch buys nothing on a globe, and two-finger rotation makes a pinch
+      // zoom drift; a deliberate one-finger drag still pans the planet.
       pitchWithRotate: false,
       dragRotate: false,
     })
+    m.touchPitch.disable()
+    m.touchZoomRotate.disableRotation()
     map.current = m
 
     // Pinch and double-tap already zoom on touch, so the buttons are just
@@ -173,21 +182,53 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
     m.on('error', (e) => console.error('[map]', e.error?.message ?? e))
 
     m.on('load', () => {
-      for (const def of LAYERS) {
-        const name = `icon-${def.id}`
+      const addIcon = (name: string, def: LayerDef, opts?: ShapeIconOpts) => {
         if (!m.hasImage(name)) {
-          m.addImage(name, makeShapeIcon(def.shape, def.color), { pixelRatio: 2 })
+          m.addImage(name, makeShapeIcon(def.shape, def.color, def.iconPx ?? 22, 2, opts), { pixelRatio: 2 })
         }
-        m.addSource(def.id, { type: 'geojson', data: toFeatureCollection([]) })
+      }
 
-        // A soft halo beneath each mark. Against satellite imagery a flat dot
-        // disappears into terrain; the glow lifts it off the planet and gives
-        // the layer's hue somewhere to read from at a glance. Cheap — one
-        // blurred circle per point, drawn under the shape.
+      for (const def of LAYERS) {
+        // Bins layers draw as plain circles — a density field has no icon.
+        if (!def.slice) {
+          addIcon(`icon-${def.id}`, def)
+          // The hollow variant is the stale mark: stroke-only, never hidden.
+          addIcon(`icon-${def.id}-stale`, def, { hollow: true })
+          if (def.rings) {
+            for (const k of [1, 2, 3]) {
+              addIcon(`icon-${def.id}-r${k}`, def, { rings: k })
+              addIcon(`icon-${def.id}-r${k}-stale`, def, { rings: k, hollow: true })
+            }
+          }
+        }
+
+        // MapLibre's geojson defaults (maxzoom 18, buffer 128px) make
+        // geojson-vt eagerly subdivide every point layer and duplicate edge
+        // points for zero visual benefit at our zoom ceiling.
+        m.addSource(def.id, {
+          type: 'geojson',
+          data: toFeatureCollection([]),
+          maxzoom: 6,
+          buffer: 0,
+          tolerance: 1,
+        })
+      }
+
+      // Layer order is paint order, and it is built in PASSES, not per layer:
+      // every glow first, then density fields, then context dots, then every
+      // symbol. Interleaving glows with symbols let one layer's blurred
+      // circles paint OVER another layer's shapes, undermining the entire
+      // shape-encoding scheme.
+
+      // Pass 1 — glows. A soft halo beneath each focused mark; against
+      // satellite imagery a flat dot disappears into terrain.
+      for (const def of LAYERS) {
+        if (def.slice) continue
         m.addLayer({
           id: `${def.id}-glow`,
           type: 'circle',
           source: def.id,
+          layout: { visibility: 'none' },
           paint: {
             'circle-color': def.color,
             'circle-radius': ['*', ['get', 'px'], 0.85],
@@ -195,29 +236,80 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
             'circle-opacity': 0.45,
           },
         })
+      }
 
+      // Pass 2 — density fields (render-slice bins), circles sized by the
+      // cos-weighted value baked into each feature.
+      for (const def of LAYERS) {
+        if (!def.slice) continue
+        m.addLayer({
+          id: def.id,
+          type: 'circle',
+          source: def.id,
+          layout: { visibility: 'none' },
+          paint: {
+            'circle-color': def.color,
+            'circle-radius': ['*', ['get', 'px'], 0.5],
+            'circle-opacity': 0.8,
+            'circle-stroke-color': def.color,
+            'circle-stroke-width': 0,
+            'circle-stroke-opacity': 0.55,
+          },
+        })
+      }
+
+      // Pass 3 — the context stratum: 5px dots in the family hue at 0.55
+      // opacity. No shape, no glow, no label — but still tappable.
+      for (const def of LAYERS) {
+        m.addLayer({
+          id: `${def.id}-context`,
+          type: 'circle',
+          source: def.id,
+          layout: { visibility: 'none' },
+          paint: {
+            'circle-color': def.color,
+            'circle-radius': 2.5,
+            'circle-opacity': 0.55,
+            'circle-stroke-color': def.color,
+            'circle-stroke-width': 0,
+            'circle-stroke-opacity': 0.55,
+          },
+        })
+      }
+
+      // Pass 4 — symbols, always above every glow and every dot.
+      for (const def of LAYERS) {
+        if (def.slice) continue
         m.addLayer({
           id: def.id,
           type: 'symbol',
           source: def.id,
           layout: {
-            'icon-image': name,
+            // Baked per feature: ring variants (GDACS alert level) and the
+            // hollow stale variant swap the image, not the layer.
+            'icon-image': ['get', 'icon'],
             'icon-size': ['get', 'scale'],
             'icon-allow-overlap': true,
             'icon-ignore-placement': true,
+            visibility: 'none',
           },
         })
-
-        m.on('click', def.id, (e) => {
-          const f = e.features?.[0]
-          if (!f) return
-          const idx = f.properties?.idx as number
-          const pt = latest.current.loaded[def.id]?.points[idx]
-          if (pt) latest.current.onPick(def.id, pt)
-        })
-        m.on('mouseenter', def.id, () => (m.getCanvas().style.cursor = 'pointer'))
-        m.on('mouseleave', def.id, () => (m.getCanvas().style.cursor = ''))
       }
+
+      for (const def of LAYERS) {
+        for (const layerId of [def.id, `${def.id}-context`]) {
+          m.on('click', layerId, (e) => {
+            const f = e.features?.[0]
+            if (!f) return
+            const idx = f.properties?.idx as number
+            const pt = latest.current.loaded[def.id]?.points[idx]
+            if (pt) latest.current.onPick(def.id, pt)
+          })
+          m.on('mouseenter', layerId, () => (m.getCanvas().style.cursor = 'pointer'))
+          m.on('mouseleave', layerId, () => (m.getCanvas().style.cursor = ''))
+        }
+      }
+
       ready.current = true
       sync()
     })
@@ -235,28 +327,53 @@ export function GlobeMap({ loaded, active, onPick }: Props) {
   function sync() {
     const m = map.current
     if (!m || !ready.current) return
+    const { loaded: data, active: on, states: fresh } = latest.current
+    const focusedId = on[0] ?? null
+
     for (const def of LAYERS) {
       const src = m.getSource(def.id) as maplibregl.GeoJSONSource | undefined
       if (!src) continue
-      const isOn = latest.current.active.includes(def.id)
-      const layer = latest.current.loaded[def.id]
-      const points = isOn && layer ? layer.points : []
+
+      const role: Role = def.id === focusedId ? 'focused' : on.includes(def.id) ? 'context' : 'off'
+      const layer = data[def.id]
+      const points = role !== 'off' && layer ? layer.points : []
+      const stale = (fresh[def.id] ?? 'fresh') === 'stale'
+      const iconPx = def.iconPx ?? 22
 
       const fc = toFeatureCollection(points)
-      // Mark size is baked per-feature so magnitude reads directly off the map.
+      // Mark size is baked per-feature so magnitude reads directly off the map;
+      // the icon name is baked too (ring/stale variants are images, not layers).
       fc.features.forEach((f, i) => {
         const p = points[i]
         const px = def.sizeBy ? def.sizeBy(p) : def.size
-        f.properties = { ...f.properties, scale: px / 22, px }
+        const rings = def.rings ? Math.max(1, Math.min(3, def.rings(p))) : 0
+        const icon = `icon-${def.id}${rings ? `-r${rings}` : ''}${stale ? '-stale' : ''}`
+        f.properties = { ...f.properties, px, scale: px / iconPx, icon }
       })
       src.setData(fc)
-      const vis = isOn ? 'visible' : 'none'
-      m.setLayoutProperty(def.id, 'visibility', vis)
-      m.setLayoutProperty(`${def.id}-glow`, 'visibility', vis)
+
+      const vis = (visible: boolean) => (visible ? 'visible' : 'none')
+      m.setLayoutProperty(def.id, 'visibility', vis(role === 'focused'))
+      m.setLayoutProperty(`${def.id}-context`, 'visibility', vis(role === 'context'))
+
+      if (def.slice) {
+        // Density circles: hollow stroke-only at 0.55 when the layer is stale.
+        m.setPaintProperty(def.id, 'circle-opacity', stale ? 0 : 0.8)
+        m.setPaintProperty(def.id, 'circle-stroke-width', stale ? 1.2 : 0)
+      } else {
+        // Glow only under a live focused layer — a stale layer must read as
+        // silence, and a halo reads as activity.
+        m.setLayoutProperty(`${def.id}-glow`, 'visibility', vis(role === 'focused' && !stale))
+        m.setPaintProperty(def.id, 'icon-opacity', stale ? 0.55 : 1)
+      }
+
+      // Context dots go hollow when stale — reduced, never removed.
+      m.setPaintProperty(`${def.id}-context`, 'circle-opacity', stale ? 0 : 0.55)
+      m.setPaintProperty(`${def.id}-context`, 'circle-stroke-width', stale ? 1.2 : 0)
     }
   }
 
-  useEffect(sync, [loaded, active])
+  useEffect(sync, [loaded, active, states])
 
   // Sized by normal flow (h-full/w-full) rather than absolute insets, so the
   // container keeps its dimensions regardless of what MapLibre's own stylesheet

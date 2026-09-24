@@ -1,59 +1,90 @@
 import { relTime } from '../lib/api'
-import type { Health } from '../lib/types'
+import { worstState, type FreshState } from '../lib/freshness'
+import type { ManifestCounts } from '../lib/types'
 
 interface Props {
-  health: Health | null
+  /** TTL-multiple freshness of each currently-RENDERED layer, computed from
+   *  the layers' own envelopes — never from an aggregate endpoint. */
+  states: Record<string, FreshState>
+  /** manifest.counts when the manifest exists; null degrades the counter. */
+  counts: ManifestCounts | null
+  /** Fallback N derived from /api/health while manifest.json 404s. The total
+   *  is OMITTED then — a hardcoded denominator is a lie waiting to happen. */
+  healthReporting: number | null
   /** True once a health fetch has failed — the API is unreachable. */
   offline: boolean
   /** Newest fetch time we can prove from the cache files themselves. */
-  cachedAt: string | null
+  newestFetched: string | null
+}
+
+const DOT: Record<string, string> = {
+  fresh: 'bg-[var(--color-status-good)]',
+  late: 'bg-[var(--color-status-warning)]',
+  stale: 'bg-[var(--color-status-critical)]',
+  offline: 'bg-[var(--color-status-critical)]',
+  loading: 'bg-[var(--color-hairline)]',
 }
 
 /**
- * The honesty bar.
+ * The honesty bar: a freshness badge and the source counter.
  *
- * The previous client returned early when /api/health failed, which left the
- * last good timestamp frozen on screen — so during the six-day July outage the
- * globe read "moments ago" over week-old data. Here an unreachable API is a
- * *state we render*, dated from the cache payload itself, and staleness is
- * counted across all sources rather than taken from the single freshest one.
+ * The badge is the WORST TTL-multiple state among the layers actually on
+ * screen (fresh ≤1×, late 1–3×, stale >3×, 6h floor), computed from each
+ * loaded envelope's own fetched_at/expires_at. Never from /api/health — that
+ * is backend memory seeded from disk mtimes at scheduler start, and a layer
+ * that has not fetched since restart simply vanishes from it.
+ *
+ * The counter is the most persuasive honesty signal available: a number that
+ * goes DOWN when things break, read from manifest.counts. Sources that
+ * stopped reporting are named, with the reason, on the status page.
  */
-export function Freshness({ health, offline, cachedAt }: Props) {
-  let text: string
-  let detail: string
-  let tone: 'live' | 'stale' | 'offline'
+export function Freshness({ states, counts, healthReporting, offline, newestFetched }: Props) {
+  const worst = worstState(Object.values(states))
+  const tone = worst ?? (offline ? 'offline' : 'loading')
+  const text =
+    worst != null ? `${worst} · ${relTime(newestFetched)}` : offline ? 'offline' : 'loading…'
+  const detail =
+    (worst != null
+      ? 'Worst state among the layers on screen, each measured against its own refresh interval.'
+      : 'No layer rendered yet.') + (offline ? ' Live API unreachable — showing data cached on the server.' : '')
 
-  if (offline || !health) {
-    tone = 'offline'
-    text = cachedAt ? `cached · ${relTime(cachedAt)}` : 'offline'
-    detail = 'Live API unreachable — showing data cached on the server'
-  } else {
-    const entries = Object.values(health.layers).filter((l) => l.last_fetch)
-    const dayAgo = Date.now() - 86_400_000
-    const stale = entries.filter((l) => new Date(l.last_fetch!).getTime() < dayAgo).length
-    const newest = entries.reduce((acc, l) => Math.max(acc, new Date(l.last_fetch!).getTime()), 0)
-    tone = stale > entries.length / 2 ? 'stale' : 'live'
-    text = `updated ${relTime(new Date(newest).toISOString())}`
-    detail =
-      stale > 0
-        ? `${stale} of ${entries.length} sources haven't updated in over a day`
-        : `all ${entries.length} sources updated within the day`
-  }
-
-  const dot =
-    tone === 'live'
-      ? 'bg-[var(--color-status-good)]'
-      : tone === 'stale'
-        ? 'bg-[var(--color-status-warning)]'
-        : 'bg-[var(--color-status-critical)]'
+  const reporting = counts
+    ? `${counts.live} / ${counts.total}`
+    : healthReporting != null
+      ? String(healthReporting)
+      : null
 
   return (
-    <div
-      title={detail}
-      className="flex items-center gap-2 rounded-full border border-[var(--color-hairline)] bg-[var(--color-surface)]/80 px-3 py-1.5 backdrop-blur"
-    >
-      <span className={`size-1.5 shrink-0 rounded-full ${dot}`} aria-hidden />
-      <span className="font-mono text-[11px] tracking-wide text-[var(--color-ink-muted)]">{text}</span>
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        {reporting && (
+          <a
+            href="/worldtwin/status.html"
+            title="Sources that stopped reporting are named, with the reason — see the list."
+            className="flex items-center gap-2 rounded-full border border-[var(--color-hairline)] bg-[var(--color-surface)]/80 px-3 py-1.5 backdrop-blur hover:bg-[var(--color-surface-raised)]"
+          >
+            <span className="font-mono text-[11px] tracking-wide text-[var(--color-ink-muted)]">
+              <span className="tabular-nums">{reporting}</span> sources reporting
+            </span>
+          </a>
+        )}
+        <div
+          title={detail}
+          className="flex items-center gap-2 rounded-full border border-[var(--color-hairline)] bg-[var(--color-surface)]/80 px-3 py-1.5 backdrop-blur"
+        >
+          <span className={`size-1.5 shrink-0 rounded-full ${DOT[tone]}`} aria-hidden />
+          <span className="font-mono text-[11px] tracking-wide tabular-nums text-[var(--color-ink-muted)]">{text}</span>
+        </div>
+      </div>
+      {reporting && (
+        <p className="hidden max-w-64 text-right text-[10px] leading-snug text-[var(--color-ink-faint)] sm:block">
+          Sources that stopped reporting are named, with the reason —{' '}
+          <a href="/worldtwin/status.html" className="underline hover:text-[var(--color-ink-muted)]">
+            see the list
+          </a>
+          .
+        </p>
+      )}
     </div>
   )
 }

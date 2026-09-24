@@ -1,31 +1,23 @@
-import type { Envelope, Health, LoadedLayer, Point } from './types'
+import type { Envelope, Health, LoadedLayer, Manifest, Point } from './types'
 
 /** Served from the same origin as the aggregator, so relative paths work in
  *  both the dev proxy and production. */
-const CACHE = '/api/cache/v1'
+export const CACHE = '/api/cache/v1'
 
-/** Layers whose payload is far too large to hand a phone whole. The cap is
- *  applied after sorting by `value` so what survives is the significant end,
- *  and the UI states the number it dropped rather than implying full coverage.
- *  (fires alone is 85k points / 14.8 MB raw.) */
-const RENDER_CAP: Record<string, number> = {
-  fires: 4000,
-  flights: 3000,
-  volcanoes: 1500,
-}
+const layerCache = new Map<string, Promise<LoadedLayer>>()
 
-const cache = new Map<string, Promise<LoadedLayer>>()
-
-function isPoint(v: unknown): v is Point {
+export function isPoint(v: unknown): v is Point {
   if (typeof v !== 'object' || v === null) return false
   const p = v as Record<string, unknown>
   return typeof p.lat === 'number' && typeof p.lon === 'number' && Number.isFinite(p.lat) && Number.isFinite(p.lon)
 }
 
 /** Pull the point list out of an envelope. Most layers put a flat array in
- *  `data`; a few wrap it in an object (gdacs_events uses `data.events`). Rather
- *  than special-casing each one, find the first array of point-shaped things. */
-function extractPoints(data: unknown): Point[] {
+ *  `data`; a few wrap it in an object. This finds the first array of
+ *  point-shaped things — fine for single-collection payloads, UNSAFE for
+ *  multi-collection ones (cloudflare_radar), which declare an explicit
+ *  extractor in the registry instead. */
+export function extractPoints(data: unknown): Point[] {
   if (Array.isArray(data)) return data.filter(isPoint)
   if (typeof data === 'object' && data !== null) {
     for (const value of Object.values(data as Record<string, unknown>)) {
@@ -38,38 +30,74 @@ function extractPoints(data: unknown): Point[] {
   return []
 }
 
-export async function loadLayer(id: string): Promise<LoadedLayer> {
-  const existing = cache.get(id)
+/** A tombstone is a layer retired ON PURPOSE — state 'retired', empty data,
+ *  and a stated reason. Returns the reason, or null for a live envelope. */
+export function tombstoneReason(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null) return null
+  const p = payload as Record<string, unknown>
+  if (p.state !== 'retired') return null
+  const reason = p.retired_reason ?? p.reason
+  return typeof reason === 'string' && reason ? reason : 'retired by the operator'
+}
+
+/** One place turns an envelope into what the UI holds, so tombstones are
+ *  treated identically no matter which loader met them: empty points, the
+ *  reason kept for the sheet row. Never hides, never pretends. */
+export function envelopeToLoaded(env: Envelope, extract?: (data: unknown) => Point[]): LoadedLayer {
+  const base = {
+    source: env.source ?? '',
+    sourceUrl: env.source_url ?? '',
+    fetchedAt: env.fetched_at ?? null,
+    expiresAt: env.expires_at ?? null,
+  }
+  const reason = tombstoneReason(env)
+  if (reason) return { ...base, points: [], count: 0, retired: { reason } }
+  const points = (extract ?? extractPoints)(env.data)
+  return { ...base, points, count: env.count ?? points.length }
+}
+
+/** Load a layer's full payload. No render cap and no client-side truncation:
+ *  layers too large to ship whole come through lib/renderSlice as an
+ *  area-weighted density grid instead of a silently-sampled point list. */
+export async function loadLayer(id: string, extract?: (data: unknown) => Point[]): Promise<LoadedLayer> {
+  const existing = layerCache.get(id)
   if (existing) return existing
 
   const promise = (async (): Promise<LoadedLayer> => {
-    const res = await fetch(`${CACHE}/${id}.json`, { cache: 'no-store' })
+    // No `cache: 'no-store'`: Caddy emits correct ETag/Last-Modified, so a
+    // returning visitor gets a ~200-byte 304 instead of megabytes.
+    const res = await fetch(`${CACHE}/${id}.json`)
     if (!res.ok) throw new Error(`${id}: HTTP ${res.status}`)
     const env = (await res.json()) as Envelope
-
-    let points = extractPoints(env.data)
-    const total = points.length
-    const cap = RENDER_CAP[id]
-    let truncatedFrom: number | undefined
-
-    if (cap && total > cap) {
-      points = [...points].sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, cap)
-      truncatedFrom = total
-    }
-
-    return {
-      points,
-      source: env.source,
-      sourceUrl: env.source_url,
-      fetchedAt: env.fetched_at,
-      count: env.count ?? total,
-      truncatedFrom,
-    }
+    return envelopeToLoaded(env, extract)
   })()
 
-  cache.set(id, promise)
+  layerCache.set(id, promise)
   // A failed load must not be cached forever, or the layer can never recover.
-  promise.catch(() => cache.delete(id))
+  promise.catch(() => layerCache.delete(id))
+  return promise
+}
+
+let manifestPromise: Promise<Manifest> | null = null
+
+/** The pipeline's ledger. 404 is an EXPECTED state (pre-deploy window) — every
+ *  consumer must degrade: the counter falls back to /api/health-derived
+ *  counts, the render-slice loader falls back to envelope metadata. */
+export function loadManifest(refresh = false): Promise<Manifest> {
+  if (!refresh && manifestPromise) return manifestPromise
+  const promise = (async (): Promise<Manifest> => {
+    const res = await fetch(`${CACHE}/manifest.json`)
+    if (!res.ok) throw new Error(`manifest: HTTP ${res.status}`)
+    const m = (await res.json()) as Manifest
+    if (typeof m !== 'object' || m === null || typeof m.counts !== 'object' || !Array.isArray(m.layers)) {
+      throw new Error('manifest: unexpected shape')
+    }
+    return m
+  })()
+  manifestPromise = promise
+  promise.catch(() => {
+    if (manifestPromise === promise) manifestPromise = null
+  })
   return promise
 }
 
