@@ -14,6 +14,9 @@
 //
 // Exit 0 if the page renders clean, 1 on any console error, page error, failed
 // request, or missing UI. Screenshots land in scripts/screenshots/.
+// Browsers live on /data, not root — root sits ~83% full and a ~1 GB
+// browser download there once filled the disk on a box hosting paying tenants.
+process.env.PLAYWRIGHT_BROWSERS_PATH ||= '/data/caches/ms-playwright'
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'

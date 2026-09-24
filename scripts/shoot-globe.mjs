@@ -10,6 +10,9 @@
 //
 //   Xvfb :99 -screen 0 1600x1200x24 &
 //   DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe node scripts/shoot-globe.mjs
+// Browsers live on /data, not root — root sits ~83% full and a ~1 GB
+// browser download there once filled the disk on a box hosting paying tenants.
+process.env.PLAYWRIGHT_BROWSERS_PATH ||= '/data/caches/ms-playwright'
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
