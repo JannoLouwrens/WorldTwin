@@ -34,15 +34,27 @@ LAYER = LayerMeta(
 )
 
 
+# The API now REQUIRES exactly one eventtype per request (verified 2026-09-24:
+# bare URL -> 400 {"message":"Eventtype is required."}; multi-type -> 400).
+EVENT_TYPES = ("EQ", "TC", "FL", "VO", "DR", "WF")
+
+
 async def fetch(client: httpx.AsyncClient):
     try:
-        r = await client.get(
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
-            timeout=45,
-        )
-        r.raise_for_status()
-        data = r.json()
-        features = data.get("features", [])
+        # All six requests must succeed or fetch() returns None (keep the old
+        # cache; failure surfaces via computed staleness) — no silently
+        # smaller feed. raise_for_status inside the loop feeds the outer
+        # except, so one failed type fails the whole fetch.
+        features = []
+        for ev in EVENT_TYPES:
+            r = await client.get(
+                "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
+                params={"eventtype": ev},
+                timeout=45,
+            )
+            r.raise_for_status()
+            data = r.json()
+            features.extend(data.get("features", []))
 
         events = []
         by_type: dict[str, int] = {}

@@ -35,7 +35,7 @@ LAYER = LayerMeta(
     kind="points",
     source="GDELT Events 2.0 (EventRootCode 18/19/20)",
     source_url="http://data.gdeltproject.org/gdeltv2/",
-    license="Free (GDELT)",
+    license="GDELT Terms (free, citation required)",
     refresh_s=1800,             # every 30 min (enough for news-paced data)
     initial_delay_s=75,          # avoid hitting GDELT the moment relations worker starts
     units="event (count)",
@@ -45,6 +45,8 @@ LAYER = LayerMeta(
         "geocoded coordinates. Updates every 30 minutes. "
         "Source URLs point to the original news article."
     ),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: 'severity' was media mention count wearing a casualty name; returns at stage 10 as media_attention.",
 )
 
 # GDELT publishes every 15 minutes

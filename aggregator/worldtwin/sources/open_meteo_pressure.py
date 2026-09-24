@@ -23,6 +23,8 @@ LAYER = LayerMeta(
     initial_delay_s=55,
     description="Global 15x9 grid of surface pressure (hPa).",
     requires_key=False,
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: 100% redundant — byte-identical coords; surface_pressure and cloud_cover already ride in temperature_field.",
 )
 
 

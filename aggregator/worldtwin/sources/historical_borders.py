@@ -73,6 +73,8 @@ LAYER = LayerMeta(
         "(CC-BY-SA). The frontend snaps to the nearest snapshot at-or-before "
         "the current scrubber year."
     ),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: fetched a 25.65 MB gz monolith to paint one year; returns at stage 9 split into 53 per-snapshot files.",
 )
 
 

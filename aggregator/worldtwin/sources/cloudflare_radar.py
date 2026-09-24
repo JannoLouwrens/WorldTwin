@@ -23,10 +23,10 @@ LAYER = LayerMeta(
     kind="points",
     source="Cloudflare Radar",
     source_url="https://radar.cloudflare.com/",
-    license="Free with attribution",
-    refresh_s=1800,
+    license="CC BY-NC 4.0",
+    refresh_s=21600,  # outage annotations land ~2×/week, curated — 30-min polling was waste
     initial_delay_s=150,
-    description="Internet outages, DDoS attacks, and BGP route changes as seen by Cloudflare's global network.",
+    description="Internet outage annotations as seen by Cloudflare's global network (DDoS split off — no location semantics).",
     requires_key=True,
     key_env="CLOUDFLARE_RADAR_TOKEN",
     enabled=bool(CLOUDFLARE_RADAR_TOKEN),
@@ -138,34 +138,10 @@ async def fetch(client: httpx.AsyncClient):
         out["error"] = str(e)
         out["count"] = 0
 
-    # DDoS attacks — top attack targets last 24h
-    try:
-        r = await client.get(
-            "https://api.cloudflare.com/client/v4/radar/attacks/layer3/top/locations/target",
-            params={"dateRange": "7d", "limit": 100},    # widened: 7 days, top 100
-            timeout=30,
-            headers=headers,
-        )
-        if r.status_code == 200:
-            data = r.json()
-            top = (data.get("result") or {}).get("top_0", [])
-            ddos = []
-            for t in top[:10]:
-                iso2 = t.get("originCountryAlpha2") or t.get("targetCountryAlpha2", "")
-                coords = ISO2_TO_COORDS.get(iso2)
-                if not coords:
-                    continue
-                ddos.append({
-                    "country_code": iso2,
-                    "country_name": t.get("targetCountryName") or t.get("originCountryName", ""),
-                    "lat": coords[0],
-                    "lon": coords[1],
-                    "value_pct": t.get("value", 0),
-                })
-            out["ddos_targets"] = ddos
-    except Exception:
-        pass
-
+    # DDoS split off entirely (MASTER_PLAN §4): "share-of-total %" has no
+    # location semantics — plotting the top target countries as points was
+    # geography theatre. The served payload now exposes outages only; a
+    # consumer reading data["outages"] by name never sees DDoS centroids.
     return out
 
 

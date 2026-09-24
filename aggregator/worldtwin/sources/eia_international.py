@@ -28,7 +28,8 @@ LAYER = LayerMeta(
     description="Per-country crude oil, natural gas, coal, and electricity production + consumption + reserves.",
     requires_key=True,
     key_env="EIA_API_KEY",
-    enabled=bool(EIA_API_KEY),
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: ~70% duplicative with owid_energy, and its crude-oil consumption series was silently dead.",
 )
 
 # EIA v2 international uses facets[productId][] and facets[activityId][] syntax

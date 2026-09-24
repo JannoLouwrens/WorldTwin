@@ -26,6 +26,8 @@ LAYER = LayerMeta(
     initial_delay_s=180,  # wait for other plugins to populate first
     description="Per-country intelligence: snapshot, trends, risks, peers, dependencies, alerts.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: promoted later at stage 9 — its _sanity_warnings self-reporting is the charter working as designed.",
 )
 
 CACHE_DIR = os.environ.get("CACHE_DIR", "/cache")

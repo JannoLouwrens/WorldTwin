@@ -61,7 +61,7 @@ LAYER = LayerMeta(
     kind="raw",
     source="Marcott 2013 + PAGES2k + HadCRUT5",
     source_url="https://www.metoffice.gov.uk/hadobs/hadcrut5/",
-    license="OGL / public domain",
+    license="Mixed: HadCRUT5 is UK OGL v3; Marcott/PAGES2k values are hand-entered approximations",
     refresh_s=86400 * 7,
     initial_delay_s=120,
     units="°C anomaly vs 1961-1990",
@@ -71,6 +71,8 @@ LAYER = LayerMeta(
         "Era reconstruction (200-1850 AD), and HadCRUT5 instrumental (1850 → "
         "present). All anomalies relative to 1961-1990 baseline."
     ),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: 40 of 214 points are hand-typed literals, one labelled 'Approximation'; returns at stage 9 with real NCEI series.",
 )
 
 

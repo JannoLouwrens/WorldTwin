@@ -17,6 +17,8 @@ LAYER = LayerMeta(
     refresh_s=600,
     initial_delay_s=8,
     description="Active wildfires, storms, volcanoes, floods, and other natural events tracked by NASA.",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: hardcoded limit served 5,000 of 19,221 events; returns at stage 9 with the cap removed and hourly cadence.",
 )
 
 

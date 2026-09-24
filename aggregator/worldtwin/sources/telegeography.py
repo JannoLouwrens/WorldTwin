@@ -15,6 +15,8 @@ LAYER = LayerMeta(
     refresh_s=86400,
     initial_delay_s=24,
     description="All major operational submarine internet cables.",
+    enabled=False,
+    retired_reason="Deferred candidate 2026-09-24: CC BY-NC-SA attribution was stripped on re-serve; returns only with attribution carried.",
 )
 
 

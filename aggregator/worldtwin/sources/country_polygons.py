@@ -24,6 +24,7 @@ LAYER = LayerMeta(
     license="CC0 (public domain)",
     refresh_s=86400 * 7,
     initial_delay_s=40,
+    max_bytes=3_000_000,  # static polygon set is legitimately ~2.4 MB
     description=(
         "242 country polygons from Natural Earth 1:50m. Every feature has "
         "iso3, name, population, continent stamped in properties. This is THE "

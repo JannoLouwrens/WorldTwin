@@ -33,6 +33,8 @@ LAYER = LayerMeta(
         "Per-country life expectancy at birth, 1770→2023. Pre-1900 figures "
         "are scholarly reconstructions (Clio-Infra, Riley)."
     ),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: clean source outside the locked v1 set; returns at stage 9.",
 )
 
 

@@ -34,6 +34,8 @@ LAYER = LayerMeta(
         "lat/lon, emissions, and a Mapbox satellite thumbnail."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: hardcoded year=2024 and republished a third-party Mapbox token in thumbnails; returns cleaned and stratified.",
 )
 
 # The main sectors we want on the globe, ordered by visibility priority

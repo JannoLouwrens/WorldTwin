@@ -27,6 +27,8 @@ LAYER = LayerMeta(
         "Each battle links back to its Wikipedia article."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: a too-narrow date filter returned 29 events; returns reframed as notable named battles with articles.",
 )
 
 

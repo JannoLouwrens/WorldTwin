@@ -70,7 +70,7 @@ LAYER = LayerMeta(
     kind="raw",
     source="GDELT Events 2.0 (QuadClass-based)",
     source_url="http://data.gdeltproject.org/gdeltv2/",
-    license="GDELT Terms (free, attribution required)",
+    license="GDELT Terms (free, citation required)",
     refresh_s=3600,
     initial_delay_s=60,
     units="cooperation/conflict ratio (-1..+1)",
@@ -83,6 +83,8 @@ LAYER = LayerMeta(
         "pair level to support that claim — but it is a reliable measure "
         "of what kind of news is being written about each country."
     ),
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: fetched the same GDELT export zips as conflict_events — 2,300 req/day and 105 MB/day of duplication.",
 )
 
 # ---------- GDELT file layout ----------

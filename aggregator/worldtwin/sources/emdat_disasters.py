@@ -47,6 +47,8 @@ LAYER = LayerMeta(
         "deaths, affected, damage USD per disaster type per year since 1900."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: type-column mis-parse filled 'types' with 238 country names and nulled deaths; returns at stage 9 with named columns.",
 )
 
 

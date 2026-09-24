@@ -27,7 +27,8 @@ LAYER = LayerMeta(
     description="Hourly generation/demand/interchange for every US balancing authority.",
     requires_key=True,
     key_env="EIA_API_KEY",
-    enabled=bool(EIA_API_KEY),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: 59 of 74 respondents plotted at 0,0 for lack of coordinates; returns with baked balancing-authority coords.",
 )
 
 # Curated BA centroids for map rendering

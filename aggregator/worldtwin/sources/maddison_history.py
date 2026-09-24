@@ -93,6 +93,8 @@ LAYER = LayerMeta(
         "Italy, Egypt, ...) and 1500–1820 for most modern states. Real GDPpc "
         "in 2011 international dollars."
     ),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: reads a repo archived 2025-04-14 pinned to MPD 2020 — it can never update; returns on the OWID grapher CSV.",
 )
 
 

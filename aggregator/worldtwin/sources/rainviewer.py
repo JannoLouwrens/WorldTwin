@@ -11,10 +11,12 @@ LAYER = LayerMeta(
     kind="tiles",
     source="RainViewer",
     source_url="https://api.rainviewer.com/public/weather-maps.json",
-    license="Free",
+    license="personal/educational only",
     refresh_s=300,
     initial_delay_s=18,
     description="Global precipitation radar tile index (past and forecast frames).",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: licence is personal/educational only, and tiles blank above zoom 6 exactly where a storm is.",
 )
 
 

@@ -22,6 +22,8 @@ LAYER = LayerMeta(
     description="Top 500 public webcams worldwide.",
     requires_key=True,
     key_env="WINDY_KEY",
+    enabled=False,
+    retired_reason="Removed 2026-09-24: Windy API terms breach — unpublished; the cache hard-404s.",
 )
 
 

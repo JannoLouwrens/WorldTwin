@@ -15,12 +15,14 @@ LAYER = LayerMeta(
     kind="points",
     source="IMF PortWatch",
     source_url="https://portwatch.imf.org/",
-    license="CC BY 4.0",
+    license="IMF ToU",
     refresh_s=43200,
     initial_delay_s=180,
     units="ships",
     description="Top ports worldwide with latest daily vessel calls by type.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: all 800 ports carry Web Mercator metres in lat/lon and all traffic reads zero; four one-line fixes at un-retire.",
 )
 
 

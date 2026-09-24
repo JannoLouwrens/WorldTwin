@@ -20,6 +20,8 @@ LAYER = LayerMeta(
     initial_delay_s=65,
     description="Global 15x9 grid of relative humidity (%) and dew point.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: 99% redundant — same 135 coords, and relative_humidity_2m already rides in temperature_field.",
 )
 
 async def fetch(client: httpx.AsyncClient):

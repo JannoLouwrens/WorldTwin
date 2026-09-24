@@ -32,6 +32,8 @@ LAYER = LayerMeta(
     description="Live ship positions worldwide via AISStream WebSocket feed. Max 500 vessels cached.",
     requires_key=True,
     key_env="AISSTREAM_KEY",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: world-bbox websocket pulled 4.7 GB/day; returns at un-retire with chokepoint boxes.",
 )
 
 # In-memory ship state: {mmsi: {lat, lon, name, sog, cog, status, updated}}

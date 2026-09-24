@@ -13,10 +13,12 @@ LAYER = LayerMeta(
     kind="points",
     source="GDELT Project",
     source_url="https://api.gdeltproject.org/api/v2/doc/doc",
-    license="CC0",
+    license="GDELT Terms (free, citation required)",
     refresh_s=300,
     initial_delay_s=45,
     description="Recent global breaking news articles.",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: 0 of 250 articles carry coordinates yet the layer claimed kind=points; returns as kind=raw at 900 s.",
 )
 
 

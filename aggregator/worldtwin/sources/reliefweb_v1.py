@@ -27,6 +27,8 @@ LAYER = LayerMeta(
         "an approved appname which WorldTwin does not have; ReliefWeb v1 is decommissioned."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: API v1 is HTTP 410; the layer drew 964 catalogue rows as country dots at 756 MB/day. ReliefWeb v2 replaces it.",
 )
 
 

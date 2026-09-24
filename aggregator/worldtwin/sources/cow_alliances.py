@@ -44,6 +44,8 @@ LAYER = LayerMeta(
         "Cold War alignments correctly when the user scrubs back."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: a hardcoded dict labelled as COW data, with a hardcoded end-year of 2026; returns relabelled as curated.",
 )
 
 

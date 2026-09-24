@@ -45,6 +45,8 @@ LAYER = LayerMeta(
         "Powers a time-aware 'democracy' mapmode that scrubs back to the French "
         "Revolution era. Pre-1900 scores are scholarly reconstructions."
     ),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: metadata asserts 'V-Dem v14' while OWID serves whatever is current; returns reading the version from the data.",
 )
 
 

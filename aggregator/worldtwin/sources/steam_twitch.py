@@ -51,6 +51,8 @@ LAYER = LayerMeta(
     refresh_s=600,
     initial_delay_s=32,
     description="Top Steam games by concurrent players + Twitch live streams aggregated by language region.",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: mapped a stream's language to a city — fabricated geography.",
 )
 
 

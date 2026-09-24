@@ -27,6 +27,8 @@ LAYER = LayerMeta(
     initial_delay_s=120,
     description="Ongoing global disease outbreaks with WHO verification.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Deferred candidate 2026-09-24: served 2025-02 as the current outbreak; returns on the orderby-desc query verified live.",
 )
 
 

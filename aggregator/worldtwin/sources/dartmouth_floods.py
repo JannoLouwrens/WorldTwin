@@ -26,7 +26,8 @@ LAYER = LayerMeta(
     initial_delay_s=30,
     description="Global flood events from the last 90 days with location, cause, deaths, and severity.",
     requires_key=False,
-    enabled=False,  # 2026-04-25 disabled: upstream URL returns 404 consistently. Re-enable when Dartmouth restores feed.
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: FloodArchive.txt was removed upstream (404, not an outage); GDACS covers the flood gap.",
 )
 
 

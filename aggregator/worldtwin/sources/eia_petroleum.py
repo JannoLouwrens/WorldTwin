@@ -27,7 +27,8 @@ LAYER = LayerMeta(
     description="US crude oil stocks, SPR level, gasoline/distillate stocks, refinery utilization.",
     requires_key=True,
     key_env="EIA_API_KEY",
-    enabled=bool(EIA_API_KEY),
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: FRED already carries the same weekly US petroleum series.",
 )
 
 # EIA petroleum series IDs for the weekly dataset

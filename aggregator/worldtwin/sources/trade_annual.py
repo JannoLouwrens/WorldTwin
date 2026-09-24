@@ -44,7 +44,9 @@ LAYER = LayerMeta(
         "Auto-detects the freshest available year. Covers 51 commodities "
         "across 8 categories for the top 37 importers."
     ),
-    requires_key=False,  # preview tier works
+    requires_key=False,  # preview tier works,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: ran keyless with COMTRADE_KEY present and unused, capped at 50 records; returns annual with the key.",
 )
 
 

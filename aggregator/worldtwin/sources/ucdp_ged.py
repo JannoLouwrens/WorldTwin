@@ -32,6 +32,8 @@ LAYER = LayerMeta(
         "Last 3 years only, filtered to clarity=1, sorted by fatalities."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: rendered 3,000 events from Nov-Dec 2024 under a present-tense name; returns at stage 9 on ged261.",
 )
 
 UCDP_URLS = [

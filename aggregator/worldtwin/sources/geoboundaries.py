@@ -32,6 +32,8 @@ LAYER = LayerMeta(
         "backbone for per-province energy/water/threat overlays."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: Canada alone is 26 MB raw for 13 provinces; returns at stage 9 split per country and simplified ~5%.",
 )
 
 

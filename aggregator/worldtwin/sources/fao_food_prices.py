@@ -24,6 +24,8 @@ LAYER = LayerMeta(
     initial_delay_s=385,
     description="FAO monthly world food price index (cereals, oils, dairy, meat, sugar) — recession/food-security signal.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: the month-stamped URL 404s and falls through to a frozen 2018 file at HTTP 200; returns with filename scraping.",
 )
 
 

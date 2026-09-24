@@ -67,7 +67,8 @@ LAYER = LayerMeta(
     description="Top 5 trending videos for ~30 major countries, geotagged at the country capital.",
     requires_key=True,
     key_env="YOUTUBE_API_KEY",
-    enabled=bool(YOUTUBE_KEY),
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: fabricated coordinates, and YouTube ToS caps stored API data at 30 days — a term we were not honouring.",
 )
 
 

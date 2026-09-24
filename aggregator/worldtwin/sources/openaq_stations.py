@@ -28,7 +28,8 @@ LAYER = LayerMeta(
     description="~12,000 air quality monitoring stations globally with live PM2.5/PM10/NO2/SO2/CO/O3 measurements.",
     requires_key=True,
     key_env="OPENAQ_API_KEY",
-    enabled=bool(OPENAQ_API_KEY),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: fetched station metadata, zero readings, under a description claiming measurements; returns renamed as the network.",
 )
 
 

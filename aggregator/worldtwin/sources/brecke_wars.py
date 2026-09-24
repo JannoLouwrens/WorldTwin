@@ -45,6 +45,8 @@ LAYER = LayerMeta(
         "scholarly reconstructions with wide uncertainty."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: the honesty exemplar; returns at stage 9 with '~80' corrected to 63 and as-of dates on hardcoded ongoing wars.",
 )
 
 

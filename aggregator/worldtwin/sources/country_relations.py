@@ -44,7 +44,7 @@ LAYER = LayerMeta(
     kind="raw",
     source="Curated blocs + GDELT QuadClass",
     source_url="internal",
-    license="Public data + CC BY 4.0 (GDELT)",
+    license="Public data + GDELT Terms (citation required)",
     refresh_s=21600,  # 6 hours — alliances don't change often
     initial_delay_s=55,
     description=(
@@ -53,6 +53,8 @@ LAYER = LayerMeta(
         "highlights when hovering a country."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: mixed inferred GDELT ratios with asserted bloc edges indistinguishably; returns with the two labelled apart.",
 )
 
 

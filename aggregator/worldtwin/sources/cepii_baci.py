@@ -57,6 +57,7 @@ LAYER = LayerMeta(
     # caused the Jul 26 OOM restart storm that took the aggregator down.
     # Re-enable only after rewriting _download_and_extract to stream to disk.
     enabled=False,
+    retired_reason="Tombstoned: never returned a row, and a 5.9 GB single-year expansion caused the six-day July outage; IMF IMTS replaces it.",
 )
 
 BACI_URL = "https://www.cepii.fr/DATA_DOWNLOAD/baci/data/BACI_HS22_V202601.zip"

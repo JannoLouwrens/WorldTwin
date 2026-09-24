@@ -36,6 +36,8 @@ LAYER = LayerMeta(
         "deep prehistory transitioning to annual after 1950. Pre-1950 figures "
         "come from HYDE 3.3 (Klein Goldewijk et al.); modern figures from UN WPP."
     ),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: clean source outside the locked v1 set; returns at stage 9 as a choropleth mode.",
 )
 
 

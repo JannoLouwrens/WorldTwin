@@ -31,6 +31,8 @@ LAYER = LayerMeta(
         "location. Used for the Resources mode power layer."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: upstream frozen since 2021 yet polled weekly at 12 MB; returns labelled as the 2020 vintage with stratified fuels.",
 )
 
 # Canonical fuel categories (mapped to colours on the frontend)

@@ -41,7 +41,8 @@ LAYER = LayerMeta(
     ),
     requires_key=True,
     key_env="UCDP_TOKEN",
-    enabled=bool(UCDP_TOKEN),
+    enabled=False,
+    retired_reason="Deferred candidate 2026-09-24: v1 set is locked; returns on GED Candidate 26.01.26.06 with the 180-day StartDate bug removed.",
 )
 
 

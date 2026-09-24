@@ -29,6 +29,8 @@ LAYER = LayerMeta(
         "Saffir-Simpson category."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Deferred candidate 2026-09-24: v1 set is locked; first in line at un-retire with the movementDir fix and JTWC RSS.",
 )
 
 

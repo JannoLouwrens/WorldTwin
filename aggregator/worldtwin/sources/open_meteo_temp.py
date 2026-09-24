@@ -23,6 +23,8 @@ LAYER = LayerMeta(
     initial_delay_s=45,
     description="Global 15×9 grid of surface temperature (2m) and apparent temp.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: Open-Meteo free tier is non-commercial; on un-retire absorbs wind and dew point at 3600 s.",
 )
 
 LAT_MIN, LAT_MAX = -72, 72

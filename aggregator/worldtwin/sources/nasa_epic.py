@@ -25,6 +25,8 @@ LAYER = LayerMeta(
     refresh_s=10800,
     initial_delay_s=110,
     description="Latest full-disk Earth images from DSCOVR at Sun-Earth L1. Sub-solar point per image.",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: the model plugin, out only because the v1 set is locked; its mark_error idiom is the pattern to copy at un-retire.",
 )
 
 

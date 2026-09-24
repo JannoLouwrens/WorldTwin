@@ -21,6 +21,8 @@ LAYER = LayerMeta(
     refresh_s=1800,
     initial_delay_s=10,
     description="Active humanitarian datasets and crisis events.",
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: rendered CKAN catalogue metadata as crises at 274 MB/day; INFORM Severity replaces it at stage 10.",
 )
 
 

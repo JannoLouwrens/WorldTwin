@@ -25,7 +25,7 @@ LAYER = LayerMeta(
     kind="points",
     source="GDELT Global Knowledge Graph 2.1",
     source_url="http://data.gdeltproject.org/gdeltv2/",
-    license="CC BY 4.0",
+    license="GDELT Terms (free, citation required)",
     refresh_s=900,  # 15 min — matches GDELT cadence
     initial_delay_s=120,
     description=(
@@ -34,6 +34,8 @@ LAYER = LayerMeta(
         "the Events table misses."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: the default csv field limit crashed ~8% of fetches; returns with the limit raised and a 30-min cadence.",
 )
 
 # Whitelist the themes we care about surfacing on the globe

@@ -23,6 +23,8 @@ LAYER = LayerMeta(
     initial_delay_s=345,
     description="Monthly composite leading indicators for OECD members. CLI <100 and falling = recession risk.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: served USA 1976-1990 non-monotonic data as a recession signal with ok=true; FRED carries the CLI series.",
 )
 
 

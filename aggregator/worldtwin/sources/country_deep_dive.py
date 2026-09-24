@@ -41,6 +41,8 @@ LAYER = LayerMeta(
         "water stress, ClimateTRACE facility emissions."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: hardcoded 63 of ~180 countries with no coverage note; returns at stage 9 with the full Aqueduct table.",
 )
 
 

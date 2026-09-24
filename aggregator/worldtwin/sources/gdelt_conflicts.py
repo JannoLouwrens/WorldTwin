@@ -13,10 +13,12 @@ LAYER = LayerMeta(
     kind="points",
     source="GDELT Project",
     source_url="https://api.gdeltproject.org/api/v2/doc/doc",
-    license="CC0",
+    license="GDELT Terms (free, citation required)",
     refresh_s=300,
     initial_delay_s=15,
     description="Recent news articles about armed conflict, military action, or bombing.",
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: all 150 points sat at lat 0/lon 0, unmappable; duplicated news, and the DOC API 429s two of three calls.",
 )
 
 

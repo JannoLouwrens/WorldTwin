@@ -53,6 +53,8 @@ LAYER = LayerMeta(
     refresh_s=300,
     initial_delay_s=34,
     description="Live scores and schedules from football, soccer, basketball, F1, tennis, cricket and more.",
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: no licence — ESPN's unofficial API rides on upstream rights contracts we cannot carry.",
 )
 
 

@@ -36,6 +36,8 @@ LAYER = LayerMeta(
     initial_delay_s=16,
     units="US AQI",
     description="Real-time air quality at 45 major world cities from Open-Meteo CAMS.",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: non-commercial Open-Meteo tier; a bare except silently dropped 8 of 45 cities. Returns batched into one call.",
 )
 
 

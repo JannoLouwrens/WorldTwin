@@ -49,6 +49,7 @@ LAYER = LayerMeta(
     requires_key=True,
     key_env="(denied by ACLED policy)",
     enabled=False,
+    retired_reason="Tombstoned: ACLED EULA §3.1 forbids dashboard redistribution — protests/riots are a declared gap.",
 )
 
 

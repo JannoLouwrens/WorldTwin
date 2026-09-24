@@ -27,7 +27,8 @@ LAYER = LayerMeta(
     description="Live 7-day window of close approaches PLUS the full paginated NEO catalogue (up to 4000 asteroids per fetch).",
     requires_key=True,
     key_env="NASA_API_KEY",
-    enabled=bool(NASA_API_KEY),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: re-downloaded the same 4,000 NEOs daily through a 200-page walk; returns on the JPL SBDB close-approach API.",
 )
 
 

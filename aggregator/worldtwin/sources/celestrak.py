@@ -26,6 +26,8 @@ LAYER = LayerMeta(
     initial_delay_s=20,
     units="orbital elements (TLE)",
     description="TLE orbital elements for space stations, GPS, geostationary, Starlink, and visible satellites. Clients propagate positions using SGP4.",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: CelesTrak firewalled this IP after we pulled the full Starlink group to discard 97%; delisting comes first.",
 )
 
 

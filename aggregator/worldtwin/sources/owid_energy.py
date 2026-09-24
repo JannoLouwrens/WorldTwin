@@ -33,6 +33,8 @@ LAYER = LayerMeta(
         "CountryCard energy panel."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: a 538 KB gz monolith; returns at stage 9 split into latest-year and history files.",
 )
 
 # The columns we care about for the country fact sheet

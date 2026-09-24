@@ -23,6 +23,8 @@ LAYER = LayerMeta(
     initial_delay_s=285,
     description="IMF WEO forecasts: GDP per capita PPP, inflation, current account, unemployment, debt, investment.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: www.imf.org 403s Oracle IPs; returns at stage 9 rewritten against api.imf.org SDMX (verified 200 from this box).",
 )
 
 

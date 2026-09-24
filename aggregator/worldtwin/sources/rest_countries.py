@@ -15,6 +15,8 @@ LAYER = LayerMeta(
     refresh_s=86400,
     initial_delay_s=28,
     description="Every country with population, area, capital, languages, and flag.",
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: restcountries v3.1 dead 70 days with no staleness surfaced; replaced by vendored mledoze + World Bank SP.POP.TOTL.",
 )
 
 

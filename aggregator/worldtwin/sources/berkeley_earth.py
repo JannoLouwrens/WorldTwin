@@ -19,6 +19,8 @@ LAYER = LayerMeta(
     initial_delay_s=130,
     description="Monthly global mean surface temperature anomaly relative to 1951-1980 baseline.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: NC-licensed annual summary frozen at 2024 while reporting ok; replacement is NASA GISTEMP v4 (public domain).",
 )
 
 

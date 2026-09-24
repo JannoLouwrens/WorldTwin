@@ -51,6 +51,8 @@ LAYER = LayerMeta(
         "Significant earthquakes (2150 BC+), tsunamis (2100 BC+) and Holocene "
         "volcanic eruptions (10,000 BC+). Filterable by year via the time scrubber."
     ),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: healthy public-domain catalogue held out of the locked v1 set; core again at stage 9 once the scrubber ships.",
 )
 
 

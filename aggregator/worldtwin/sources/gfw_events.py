@@ -33,7 +33,8 @@ LAYER = LayerMeta(
     description="Dark fleet (AIS gap) events + fishing encounters + port visits from GFW satellite AIS.",
     requires_key=True,
     key_env="GFW_TOKEN",
-    enabled=bool(GFW_TOKEN),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: nested gap fields read as 0 hours and count 30,000 was truncation, not a total; returns at stage 10, credited to GFW.",
 )
 
 

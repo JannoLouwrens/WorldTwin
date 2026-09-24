@@ -51,6 +51,8 @@ LAYER = LayerMeta(
         "Replaces the broken Open-Meteo humidity/pressure/temperature grids."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: shipped a 25 MB cache including an all-null hourly field; returns with a now-4d window and the dead field dropped.",
 )
 
 # Lattice — 5° spacing covers Earth in 73 lon × 37 lat = 2701 points.

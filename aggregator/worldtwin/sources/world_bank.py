@@ -31,6 +31,8 @@ LAYER = LayerMeta(
     initial_delay_s=265,
     description="102 World Bank indicators per country with 64-year history (economic, trade, fiscal, labour, demographic, health, education, infrastructure, energy, environment, security, governance, innovation). Per-indicator series enable timeline scrubbing.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: returns at stage 9 with the discontinued Doing Business indicator deleted and the payload split per-indicator.",
 )
 
 

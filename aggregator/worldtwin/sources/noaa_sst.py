@@ -10,16 +10,18 @@ from ..registry import register
 
 LAYER = LayerMeta(
     id="noaa_sst",
-    name="Sea Surface Temperature (expanded)",
+    name="Sea Surface Temperature (ECMWF via Open-Meteo)",
     category="weather",
     kind="points",
-    source="Open-Meteo Marine API",
+    source="ECMWF wave/ocean models via Open-Meteo Marine API",
     source_url="https://open-meteo.com/en/docs/marine-weather-api",
-    license="CC BY 4.0",
+    license="Open-Meteo free tier (non-commercial); data CC BY 4.0",
     refresh_s=43200,
     initial_delay_s=80,
     description="Sea surface temperature + wave height sampled at ~200 ocean points worldwide.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: the id is a provenance lie — data is ECMWF via Open-Meteo, not NOAA; replacement is NOAA Coral Reef Watch 5 km (PD).",
 )
 
 # Dense ocean grid avoiding major land masses

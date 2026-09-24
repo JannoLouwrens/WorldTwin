@@ -12,35 +12,29 @@ LAYER = LayerMeta(
     source="Smithsonian GVP",
     source_url="https://webservices.volcano.si.edu/geoserver/GVP-VOTW/wfs",
     license="Smithsonian (public)",
-    refresh_s=86400,
+    refresh_s=604800,  # static Holocene catalogue — weekly is plenty
     initial_delay_s=22,
     description="Global volcanism database — Holocene and active volcanoes worldwide.",
 )
 
 
 async def fetch(client: httpx.AsyncClient):
-    try:
-        r = await client.get(
-            LAYER.source_url,
-            params={
-                "service": "WFS",
-                "version": "2.0.0",
-                "request": "GetFeature",
-                "typeName": "GVP-VOTW:Smithsonian_VOTW_Holocene_Volcanoes",
-                "outputFormat": "application/json",
-            },
-            timeout=60,
-        )
-        r.raise_for_status()
-        geo = r.json()
-    except Exception:
-        # Fallback to USGS VHP aggregated endpoint
-        r = await client.get(
-            "https://volcanoes.usgs.gov/vsc/api/volcanoApi/volcanoesGVP",
-            timeout=60,
-        )
-        r.raise_for_status()
-        return None  # Skip if we can't get normalized data
+    # No fallback: the old except-branch fetched a USGS endpoint and then
+    # returned None regardless, masking every WFS failure as a silent skip.
+    # Let exceptions propagate so the scheduler records a real error.
+    r = await client.get(
+        LAYER.source_url,
+        params={
+            "service": "WFS",
+            "version": "2.0.0",
+            "request": "GetFeature",
+            "typeName": "GVP-VOTW:Smithsonian_VOTW_Holocene_Volcanoes",
+            "outputFormat": "application/json",
+        },
+        timeout=60,
+    )
+    r.raise_for_status()
+    geo = r.json()
 
     points = []
     for f in geo.get("features", []):

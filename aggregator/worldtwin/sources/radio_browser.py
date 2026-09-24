@@ -21,6 +21,8 @@ LAYER = LayerMeta(
     refresh_s=86400,
     initial_delay_s=26,
     description="Top 500 internet radio stations with geographic location data.",
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: ordered by clickcount — a popularity chart, not a census.",
 )
 
 

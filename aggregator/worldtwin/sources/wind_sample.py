@@ -34,6 +34,8 @@ LAYER = LayerMeta(
     units="m/s, degrees",
     description="Global wind field (speed + direction @ 10m) sampled on an 18×10 lat/lon grid.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: wind variables fold into temperature_field's Open-Meteo batch at zero quota cost.",
 )
 
 

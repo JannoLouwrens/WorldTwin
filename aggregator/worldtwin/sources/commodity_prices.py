@@ -28,6 +28,8 @@ LAYER = LayerMeta(
         "crypto market cap from CoinGecko, and USD DXY from Frankfurter."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: every series duplicates FRED or economy; gold served a monthly CSV polled hourly.",
 )
 
 

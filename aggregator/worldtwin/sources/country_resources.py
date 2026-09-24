@@ -102,6 +102,8 @@ LAYER = LayerMeta(
         "Covers every Comtrade reporter with a known centroid."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: the Comtrade licence claim is the least-verified in the set; returns once the terms are verified.",
 )
 
 # WRI Power Plant DB — loaded once, reused across refreshes

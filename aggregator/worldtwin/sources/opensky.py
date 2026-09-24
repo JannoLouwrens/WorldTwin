@@ -72,7 +72,7 @@ async def _fetch_routes(client: httpx.AsyncClient, callsigns: list[str]) -> None
                 json={"planes": [{"callsign": c, "lat": 0, "lng": 0} for c in batch]},
                 timeout=20,
             )
-            if r.status_code != 200:
+            if r.status_code not in (200, 201):  # routeset answers 201 — != 200 discarded every route
                 continue
             results = r.json()
             for entry in results:

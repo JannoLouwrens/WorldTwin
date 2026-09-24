@@ -85,7 +85,8 @@ LAYER = LayerMeta(
     ),
     requires_key=True,
     key_env="SPACE_TRACK_USER+SPACE_TRACK_PASS",
-    enabled=bool(SPACE_TRACK_USER and SPACE_TRACK_PASS) and not DISABLED,
+    enabled=False,
+    retired_reason="Removed 2026-09-24: Space-Track account suspended and redistribution breaches the user agreement; the cache hard-404s.",
 )
 
 

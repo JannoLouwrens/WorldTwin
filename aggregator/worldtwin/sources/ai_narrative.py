@@ -38,7 +38,8 @@ LAYER = LayerMeta(
     description="Three-paragraph world summary, grounded in 15+ measured caches; numeric claims must cite the digest.",
     requires_key=True,
     key_env="OPENROUTER_API_KEY",
-    enabled=bool(OPENROUTER_API_KEY or GEMINI_API_KEY),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: no generated content is served anywhere — LLM narrative is off the product per the charter.",
 )
 
 

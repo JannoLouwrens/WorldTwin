@@ -43,6 +43,8 @@ LAYER = LayerMeta(
         "Used to detect trend divergence vs annual baseline."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: 864 requests/day for 174 flows that lag 4-7 months upstream.",
 )
 
 

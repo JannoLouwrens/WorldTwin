@@ -17,6 +17,8 @@ LAYER = LayerMeta(
     refresh_s=3600,
     initial_delay_s=38,
     description="Top 50 most-read Wikipedia articles worldwide from the previous day.",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: polled an immutable previous-day file 24 times a day; returns labelled 'English Wikipedia' at 6 h.",
 )
 
 

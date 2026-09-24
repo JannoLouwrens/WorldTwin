@@ -48,6 +48,8 @@ LAYER = LayerMeta(
         "Powers the top-of-screen ticker and the Pulse mode."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: drew synthetic GKG coordinates; the PortWatch half returns at un-retire without them.",
 )
 
 

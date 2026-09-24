@@ -26,6 +26,8 @@ LAYER = LayerMeta(
     refresh_s=86400,
     initial_delay_s=95,
     description="Latest sol photos from Curiosity and Perseverance. Rendered only on the Mars planet view.",
+    enabled=False,
+    retired_reason="Dropped 2026-09-24: off-charter — v2 has no planet selector, so Mars photos were already unreachable.",
 )
 
 # Feeds behind mars.nasa.gov's raw-image galleries. Curiosity (msl) is only

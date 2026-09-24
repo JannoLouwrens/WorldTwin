@@ -34,7 +34,8 @@ LAYER = LayerMeta(
     description="European grid: generation by fuel type, total load, day-ahead prices for 20 countries.",
     requires_key=True,
     key_env="ENTSOE_API_KEY",
-    enabled=bool(ENTSOE_API_KEY),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: wrong bidding-zone codes left 6 of 19 prices at zero and the licence is ToU, not CC; returns fixed.",
 )
 
 BASE_URL = "https://web-api.tp.entsoe.eu/api"

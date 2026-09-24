@@ -51,7 +51,7 @@ LAYER = LayerMeta(
     kind="points",
     source="IMF PortWatch (derived from AIS)",
     source_url="https://portwatch.imf.org/",
-    license="CC BY 4.0",
+    license="IMF ToU",
     refresh_s=86400,  # daily
     initial_delay_s=50,
     units="ships / DWT",
@@ -61,6 +61,8 @@ LAYER = LayerMeta(
         "AIS-derived by the IMF Research Department. Ships and DWT capacity."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Deferred candidate 2026-09-24: 7 of 28 chokepoint names don't exist upstream and 7 real ones were dropped; returns after the name audit.",
 )
 
 

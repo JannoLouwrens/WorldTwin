@@ -15,6 +15,8 @@ LAYER = LayerMeta(
     refresh_s=300,
     initial_delay_s=36,
     description="Live forex rates (30+ currencies) and top 25 crypto by market cap.",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: polled once-a-day ECB reference rates 288 times daily; returns split into crypto (300 s) and forex (6 h).",
 )
 
 

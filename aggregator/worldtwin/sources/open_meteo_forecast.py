@@ -54,6 +54,8 @@ LAYER = LayerMeta(
         "with nasa_power for past + future coverage. Refresh every 3h."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: non-commercial Open-Meteo tier; correctly throttled but outside the locked v1 set.",
 )
 
 # Open-Meteo free tier caps at 10k calls/day. A 10° lattice = 612 calls/fetch,

@@ -16,6 +16,8 @@ LAYER = LayerMeta(
     initial_delay_s=0,
     units="altitude (km)",
     description="Live position of the ISS plus current crew manifest.",
+    enabled=False,
+    retired_reason="Retired 2026-09-24: polled a hobby endpoint every 10 s for one dot and listed Expedition 71 crew from mid-2024 as current.",
 )
 
 

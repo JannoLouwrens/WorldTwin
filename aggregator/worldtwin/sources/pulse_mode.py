@@ -45,6 +45,8 @@ LAYER = LayerMeta(
         "Powers the apocalypse-radar Pulse mode."
     ),
     requires_key=False,
+    enabled=False,
+    retired_reason="Tombstoned: a WorldTwin-authored composite with invented weights; any revival adopts INFORM Risk by name and version, dimensions split.",
 )
 
 

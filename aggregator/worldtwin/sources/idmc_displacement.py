@@ -16,11 +16,13 @@ LAYER = LayerMeta(
     kind="points",
     source="IDMC via HDX (Google Sheets export)",
     source_url="https://www.internal-displacement.org/",
-    license="CC BY-NC-SA 3.0 IGO",
+    license="CC BY-IGO",
     refresh_s=86400,
     initial_delay_s=100,
     description="Internally displaced persons events worldwide — conflict + disaster displacement with geocoded coordinates.",
     requires_key=False,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: returns at stage 10 on the HDX IDU per-country CSVs, which carry real coordinates and precision flags.",
 )
 
 HDX_CSV_URL = "https://data.humdata.org/dataset/459fc96c-f196-44c1-a0a5-1b5a7b3592dd/resource/0fb4e415-abdb-481a-a3c6-8821e79919be/download/internal-displacements-new-displacements-idps.csv"

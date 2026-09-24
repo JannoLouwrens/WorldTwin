@@ -49,7 +49,8 @@ LAYER = LayerMeta(
         "Primary religion and ethnic group per country with ISO3 keying. "
         "Powers religion/ethnicity choropleth mapmodes."
     ),
-    enabled=True,
+    enabled=False,
+    retired_reason="Retired 2026-09-24: covered 127 of ~195 countries without saying so and sent a fake UA; returns with the missing third marked unknown.",
 )
 
 

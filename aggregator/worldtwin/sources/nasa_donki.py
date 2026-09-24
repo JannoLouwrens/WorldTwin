@@ -34,7 +34,8 @@ LAYER = LayerMeta(
     description="CME, solar flares, GST, SEP, radiation belt, interplanetary shock, high-speed stream — FULL DONKI archive 2010 → present, paginated in 6-month chunks.",
     requires_key=True,
     key_env="NASA_API_KEY",
-    enabled=bool(NASA_API_KEY),
+    enabled=False,
+    retired_reason="Retired 2026-09-24: not a map layer — every event was plotted at 0,0; returns on the keyless kauai DONKI endpoints.",
 )
 
 EVENT_TYPES = [
