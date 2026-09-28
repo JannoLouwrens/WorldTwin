@@ -278,9 +278,9 @@ export default function App() {
         aria-hidden
       />
 
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="pointer-events-auto rounded-full border border-[var(--color-hairline)] bg-[var(--color-surface)]/80 px-3 py-1.5 backdrop-blur">
-          <span className="text-sm font-medium tracking-tight">WorldTwin</span>
+          <span className="text-sm font-medium tracking-tight text-[var(--color-ink)]">WorldTwin</span>
         </div>
         <div className="pointer-events-auto flex items-start gap-2">
           <button
