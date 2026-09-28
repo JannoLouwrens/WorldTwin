@@ -316,12 +316,15 @@ export function GlobeMap({ loaded, active, states, onPick, initialCam, onCamera,
         // Bins layers draw as plain circles — a density field has no icon —
         // and line layers have no icon at all.
         if (!def.slice && def.kind !== 'lines') {
-          addIcon(`icon-${def.id}`, def)
+          // Modelled/reconstructed layers get the §7 provenance mark (60% fill
+          // + dashed ring) as their LIVE icon; stale still wins and goes hollow.
+          const modelled = def.how === 'modelled' || def.how === 'reconstructed'
+          addIcon(`icon-${def.id}`, def, modelled ? { modelled: true } : undefined)
           // The hollow variant is the stale mark: stroke-only, never hidden.
           addIcon(`icon-${def.id}-stale`, def, { hollow: true })
           if (def.rings) {
             for (const k of [1, 2, 3]) {
-              addIcon(`icon-${def.id}-r${k}`, def, { rings: k })
+              addIcon(`icon-${def.id}-r${k}`, def, { rings: k, modelled })
               addIcon(`icon-${def.id}-r${k}-stale`, def, { rings: k, hollow: true })
             }
           }

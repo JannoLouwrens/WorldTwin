@@ -84,6 +84,11 @@ export function DetailCard({ pick, loaded, onClose }: Props) {
               </a>
             </>
           )}
+          {info.coverage && (
+            // Payload's own coverage note ("Europe only — CAMS") — rides every
+            // surface that shows the data, so a blank region reads as a gap.
+            <span className="block">coverage: {info.coverage}</span>
+          )}
         </p>
       )}
     </div>

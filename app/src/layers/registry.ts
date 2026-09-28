@@ -1,5 +1,5 @@
 import { FAMILY_HUE, LAYER_FAMILY, type Family } from './families'
-import { isPoint } from '../lib/api'
+import { extractPoints, isPoint } from '../lib/api'
 import type { Shape } from '../lib/shapes'
 import type { Point } from '../lib/types'
 
@@ -87,6 +87,100 @@ export function gdacsAlertWord(p: Point): string {
 }
 
 const GDACS_RINGS: Record<string, number> = { Green: 1, Orange: 2, Red: 3 }
+
+/** First finite number among `fields`, in precedence order. */
+function firstNumeric(rec: Record<string, unknown>, fields: readonly string[]): number | null {
+  for (const f of fields) {
+    const v = rec[f]
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+  }
+  return null
+}
+
+/** Fold every scalar the payload put on the point itself into `props`, so the
+ *  detail card shows all readings no matter which field names the pipeline
+ *  settled on. lat/lon/props stay structural; existing props win. */
+function scalarsToProps(p: Point): Record<string, unknown> {
+  const raw = p as unknown as Record<string, unknown>
+  const props: Record<string, unknown> = { ...(p.props ?? {}) }
+  for (const [k, v] of Object.entries(raw)) {
+    if (k === 'lat' || k === 'lon' || k === 'props') continue
+    if ((typeof v === 'number' && Number.isFinite(v)) || (typeof v === 'string' && v !== '')) {
+      if (!(k in props)) props[k] = v
+    }
+  }
+  return props
+}
+
+function cityLabel(p: Point, props: Record<string, unknown>): string | undefined {
+  const c = props.city ?? props.name ?? p.label
+  return typeof c === 'string' && c ? c : undefined
+}
+
+/** air_quality: the value field name is not settled upstream (European AQI vs
+ *  US AQI vs raw PM2.5), so take the FIRST numeric in a stated precedence
+ *  order rather than betting on one name, and carry every numeric reading
+ *  into props for the detail card. */
+const AQ_FIELDS = ['european_aqi', 'us_aqi', 'pm2_5', 'aqi', 'value'] as const
+const AQ_FIELD_LABEL: Record<(typeof AQ_FIELDS)[number], string> = {
+  european_aqi: 'European AQI',
+  us_aqi: 'US AQI',
+  pm2_5: 'PM2.5 µg/m³',
+  aqi: 'AQI',
+  value: 'AQI',
+}
+
+function extractAirQuality(data: unknown): Point[] {
+  return extractPoints(data).map((p) => {
+    const props = scalarsToProps(p)
+    return { ...p, props, label: cityLabel(p, props), value: firstNumeric(props, AQ_FIELDS) }
+  })
+}
+
+/** The headline names WHICH scale the number is on — an honesty requirement
+ *  when the field itself is not fixed upstream. */
+function formatAirQuality(p: Point): string {
+  const props = p.props ?? {}
+  for (const f of AQ_FIELDS) {
+    const v = props[f]
+    if (typeof v === 'number' && Number.isFinite(v)) return `${AQ_FIELD_LABEL[f]} ${Math.round(v)}`
+  }
+  return 'no reading'
+}
+
+/** pollen: value = the DOMINANT species' grains/m³. Tolerant of the two
+ *  shapes the pipeline may emit — `dominant` as a species string beside a
+ *  `dominant_value`/`dominant_grains` number, or `dominant` as a
+ *  {species, value} object — falling back to the max per-species number. */
+function extractPollen(data: unknown): Point[] {
+  return extractPoints(data).map((p) => {
+    const raw = p as unknown as Record<string, unknown>
+    const props = scalarsToProps(p)
+    const dom = raw.dominant ?? props.dominant
+    if (typeof dom === 'object' && dom !== null) {
+      const d = dom as Record<string, unknown>
+      if (typeof d.species === 'string' && d.species) props.dominant = d.species
+      const dv = firstNumeric(d, ['value', 'grains', 'grains_m3'])
+      if (dv !== null && !('dominant_value' in props)) props.dominant_value = dv
+    }
+    let value = firstNumeric(props, ['dominant_value', 'dominant_grains', 'grains_m3', 'value'])
+    if (value === null) {
+      // Last resort: the largest per-species concentration on the point.
+      for (const v of Object.values(props)) {
+        if (typeof v === 'number' && Number.isFinite(v) && (value === null || v > value)) value = v
+      }
+    }
+    return { ...p, props, label: cityLabel(p, props), value }
+  })
+}
+
+function formatPollen(p: Point): string {
+  const species = p.props?.dominant
+  const name = typeof species === 'string' && species ? species : null
+  if (p.value == null) return name ?? 'no reading'
+  const amount = `${Math.round(p.value).toLocaleString()} grains/m³`
+  return name ? `${name} · ${amount}` : amount
+}
 
 export const LAYERS: LayerDef[] = [
   {
@@ -230,6 +324,39 @@ export const LAYERS: LayerDef[] = [
     windowLabel: 'current',
     how: 'reported',
     format: (p) => String(p.label ?? p.props?.disease ?? p.props?.title ?? 'Outbreak'),
+  },
+  {
+    id: 'air_quality',
+    label: 'Air quality',
+    blurb: 'Air quality in ~45 world cities — model-blended estimates (CAMS), not station readings. Sized by AQI.',
+    ...fam('air_quality'),
+    shape: 'circle',
+    on: false,
+    size: 12,
+    noun: 'city air-quality estimates',
+    windowLabel: 'now',
+    // Model-blended reanalysis, not a monitor on a pole — wears the §7
+    // modelled mark (60% fill + dashed ring) and the word on the plane/table.
+    how: 'modelled',
+    sizeBy: (p) => 8 + Math.min(14, Math.sqrt(Math.max(0, p.value ?? 0)) * 1.5),
+    format: formatAirQuality,
+    extract: extractAirQuality,
+  },
+  {
+    id: 'pollen',
+    label: 'Pollen',
+    blurb: 'Airborne pollen over European cities — CAMS model output, Europe only. No mark elsewhere means no coverage, not clean air.',
+    ...fam('pollen'),
+    shape: 'triangle',
+    on: false,
+    size: 12,
+    noun: 'city pollen estimates',
+    windowLabel: 'now',
+    // CAMS is a model. The payload's own `coverage` note ("Europe only —
+    // CAMS") rides the sheet row and detail card via LoadedLayer.coverage.
+    how: 'modelled',
+    format: formatPollen,
+    extract: extractPollen,
   },
 ]
 

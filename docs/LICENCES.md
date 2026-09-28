@@ -6,11 +6,16 @@ licence string is the source of truth; this table is its rendering. Regenerate w
 licence string changes — the programmatic licence gate keys on the corrected `license` field
 and must refuse to promote any source whose licence string is not verified here.*
 
-**92 layers · 14 enabled · 76 retired (tombstoned) · 2 removed (hard 404)**
-**Flags: 12 NC (non-commercial) · 9 SA (share-alike / ODbL) — flagged mechanically from the licence string.**
+**93 layers · 16 enabled · 75 retired (tombstoned) · 2 removed (hard 404)**
+**Flags: 13 NC (non-commercial) · 9 SA (share-alike / ODbL) — flagged mechanically from the licence string.**
 
 *2026-09-28: cables, portwatch_chokepoints, who_don admitted per MASTER_PLAN §4. who_don's licence
 corrected from "WHO Open" to CC BY-NC-SA 3.0 IGO (WHO website content licence) in the plugin string.*
+
+*2026-09-28 (later): air_quality un-retired per MASTER_PLAN §4 (batched into one multi-coordinate
+call, bare `except: pass` removed); its licence string corrected from "Free for non-commercial use"
+to the Open-Meteo non-commercial tier wording. New layer `pollen` admitted (Open-Meteo CAMS pollen,
+modelled, Europe-only — CAMS European domain; served payload carries a coverage note).*
 
 Corrections applied 2026-09-24: GDELT declared consistently as citation-required bespoke terms
 (never CC0) across conflicts / news / conflict_events / gdelt_gkg_themes / relations (+
@@ -33,7 +38,7 @@ single wrong label replaced with its actual mixed provenance.
 | usgs_volcano_hans | USGS Elevated Volcanoes (HANS) | nature | US Public Domain |  |  | **ENABLED** |
 | volcanoes | World Volcanoes | nature | Smithsonian (public) |  |  | **ENABLED** |
 | acled | ACLED Conflict Events | war | ACLED EULA — map visualization not permitted (clause 3.1) |  |  | retired (tombstone) |
-| air_quality | Air Quality (major cities) | health | Free for non-commercial use | **NC** |  | retired (tombstone) |
+| air_quality | Air Quality (major cities) | health | Open-Meteo free tier (non-commercial); data CC BY 4.0 | **NC** |  | **ENABLED** (admitted 2026-09-28) |
 | berkeley_earth | Berkeley Earth — Temperature Anomaly | weather | CC BY-NC 4.0 | **NC** |  | retired (tombstone) |
 | brecke_wars | Major Wars (1400→present) | meta | Free academic use |  |  | retired (tombstone) |
 | cables | Submarine Internet Cables | infra | CC BY-NC-SA 3.0 — attribution embedded in served payload | **NC** | **SA** | **ENABLED** (admitted 2026-09-28) |
@@ -86,6 +91,7 @@ single wrong label replaced with its actual mixed provenance.
 | openaq_stations | OpenAQ — Air Quality Stations | health | CC BY 4.0 |  |  | retired (tombstone) |
 | owid_energy | Energy Indicators by Country (OWID) | resources | CC-BY 4.0 |  |  | retired (tombstone) |
 | paleo_temperature | Global Temperature Anomaly (11,300 BP → today) | weather | Mixed: HadCRUT5 is UK OGL v3; Marcott/PAGES2k values are hand-entered approximations |  |  | retired (tombstone) |
+| pollen | Pollen (Europe — CAMS) | health | Open-Meteo free tier (non-commercial); data CC BY 4.0 | **NC** |  | **ENABLED** (admitted 2026-09-28; modelled, CAMS European domain — Europe only, payload carries a coverage note) |
 | population | Countries & Population | meta | Public |  |  | retired (tombstone) |
 | portwatch_chokepoints | PortWatch Chokepoints (IMF/AIS) | resources | IMF ToU |  |  | **ENABLED** (admitted 2026-09-28) |
 | portwatch_ports | Live Port Traffic (PortWatch/IMF) | resources | IMF ToU |  |  | retired (tombstone) |
@@ -116,7 +122,7 @@ single wrong label replaced with its actual mixed provenance.
 
 ## Notes
 
-- Encumbered layers inside the enabled 14: cloudflare_radar (CC BY-NC 4.0, NC), flights (ODbL, SA), cables (CC BY-NC-SA 3.0, NC+SA — attribution embedded in the served payload), who_don (CC BY-NC-SA 3.0 IGO, NC+SA). All have free alternatives or removal paths named in MASTER_PLAN §3–4 if monetisation is ever revisited.
+- Encumbered layers inside the enabled 16: cloudflare_radar (CC BY-NC 4.0, NC), flights (ODbL, SA), cables (CC BY-NC-SA 3.0, NC+SA — attribution embedded in the served payload), who_don (CC BY-NC-SA 3.0 IGO, NC+SA), air_quality and pollen (Open-Meteo free tier, NC). All have free alternatives or removal paths named in MASTER_PLAN §3–4 if monetisation is ever revisited.
 - ShareAlike propagates into derived artifacts: any render slice or feed built on an SA source
   must carry the licence notice and attribution (MASTER_PLAN §4).
 - spacetrack_gp and webcams are legal removals: no tombstone is served — their cache paths 404.

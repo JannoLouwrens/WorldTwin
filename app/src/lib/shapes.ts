@@ -9,6 +9,11 @@ export interface ShapeIconOpts {
    *  fails as a categorical set by design — level must never be carried by
    *  colour alone. The literal word appears in the detail card. */
   rings?: number
+  /** MODELLED / RECONSTRUCTED provenance mark (MASTER_PLAN §7): 60% fill +
+   *  1 px dashed ring, so model output never wears the solid mark of a
+   *  measurement. The literal word still rides the plane footer and table
+   *  caption — the mark is the redundant channel, not the only one. */
+  modelled?: boolean
 }
 
 /** Draw a mark as a canvas image for MapLibre's `addImage`.
@@ -65,12 +70,25 @@ export function makeShapeIcon(shape: Shape, color: string, px = 22, ratio = 2, o
     ctx.strokeStyle = color
     ctx.stroke()
   } else {
+    if (opts.modelled) ctx.globalAlpha = 0.6
     ctx.fillStyle = color
     ctx.fill()
+    ctx.globalAlpha = 1
     // Surface ring: keeps overlapping marks legible instead of merging into a blob.
     ctx.lineWidth = 2 * ratio
     ctx.strokeStyle = 'rgba(13, 17, 23, 0.85)'
     ctx.stroke()
+    if (opts.modelled) {
+      // The dashed ring half of the modelled treatment. Dashes distinguish it
+      // from the solid level rings, which remain a count encoding.
+      ctx.setLineDash([2.8 * ratio, 2.2 * ratio])
+      ctx.lineWidth = 1 * ratio
+      ctx.strokeStyle = color
+      ctx.beginPath()
+      ctx.arc(c, c, r + 1.8 * ratio, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
   }
 
   // Level rings — count, not colour, carries the level.

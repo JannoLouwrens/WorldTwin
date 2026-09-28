@@ -1,6 +1,11 @@
-"""Open-Meteo Air Quality — major world cities."""
-import asyncio
+"""Open-Meteo Air Quality — major world cities.
 
+Un-retired 2026-09-28 through the MASTER_PLAN §4 gate: the 45 per-city
+requests are batched into ONE multi-coordinate call (idiom from
+open_meteo_temp.py), and the bare `except: pass` that silently dropped
+8 cities is gone — a city with no data is now logged and skipped visibly,
+and a failed fetch keeps the previous cache instead of shipping a subset.
+"""
 import httpx
 
 from ..models import LayerMeta, point
@@ -31,60 +36,75 @@ LAYER = LayerMeta(
     kind="points",
     source="Open-Meteo CAMS",
     source_url="https://air-quality-api.open-meteo.com/v1/air-quality",
-    license="Free for non-commercial use",
+    license="Open-Meteo free tier (non-commercial); data CC BY 4.0",
     refresh_s=1800,
     initial_delay_s=16,
+    max_staleness_s=21600,  # source updates hourly; 6 h is generous
     units="US AQI",
     description="Real-time air quality at 45 major world cities from Open-Meteo CAMS.",
-    enabled=False,
-    retired_reason="Retired 2026-09-24: non-commercial Open-Meteo tier; a bare except silently dropped 8 of 45 cities. Returns batched into one call.",
+    enabled=True,
+    provenance="modelled",  # CAMS is a model product, not station measurements
 )
 
 
 async def fetch(client: httpx.AsyncClient):
-    sem = asyncio.Semaphore(10)
-    results_legacy = []
-    results_v1 = []
+    # BATCHED: one multi-coordinate request for every city instead of 45
+    # parallel calls (MASTER_PLAN §4 weather/air_quality; idiom from
+    # open_meteo_temp.py). On any transport/HTTP failure the whole fetch
+    # returns None so the previous cache is kept — never a silent subset.
+    try:
+        r = await client.get(
+            LAYER.source_url,
+            params={
+                "latitude": ",".join(str(la) for _, la, _ in CITIES),
+                "longitude": ",".join(str(lo) for _, _, lo in CITIES),
+                "current": "us_aqi,pm2_5,pm10,nitrogen_dioxide,ozone,sulphur_dioxide,carbon_monoxide",
+            },
+            timeout=60,
+        )
+        if r.status_code != 200:
+            print(f"[air_quality] HTTP {r.status_code} — keeping previous cache")
+            return None
+        body = r.json()
+    except Exception as e:
+        print(f"[air_quality] error: {e} — keeping previous cache")
+        return None
 
-    async def fetch_one(name: str, lat: float, lon: float):
-        async with sem:
-            try:
-                r = await client.get(
-                    LAYER.source_url,
-                    params={
-                        "latitude": lat, "longitude": lon,
-                        "current": "us_aqi,pm2_5,pm10,nitrogen_dioxide,ozone,sulphur_dioxide,carbon_monoxide",
-                    },
-                    timeout=20,
-                )
-                if r.status_code != 200:
-                    return
-                cur = r.json().get("current", {})
-                aqi = cur.get("us_aqi")
-                if aqi is None:
-                    return
-                legacy = {
-                    "name": name, "lat": lat, "lon": lon,
-                    "aqi": aqi,
-                    "pm25": cur.get("pm2_5"),
-                    "pm10": cur.get("pm10"),
-                    "no2": cur.get("nitrogen_dioxide"),
-                    "o3": cur.get("ozone"),
-                    "so2": cur.get("sulphur_dioxide"),
-                    "co": cur.get("carbon_monoxide"),
-                }
-                results_legacy.append(legacy)
-                results_v1.append(point(
-                    lat=lat, lon=lon,
-                    id=name.lower().replace(" ", "_"),
-                    value=aqi,
-                    label=f"{name}: AQI {aqi}",
-                    **{k: legacy[k] for k in ("pm25", "pm10", "no2", "o3", "so2", "co")},
-                ))
-            except Exception:
-                pass
+    rows = body if isinstance(body, list) else [body]
+    if len(rows) != len(CITIES):
+        print(f"[air_quality] {len(rows)} rows for {len(CITIES)} cities "
+              "— response misaligned, keeping previous cache")
+        return None
 
-    await asyncio.gather(*[fetch_one(n, la, lo) for (n, la, lo) in CITIES])
+    results_legacy, results_v1, missing = [], [], []
+    for (name, lat, lon), row in zip(CITIES, rows):
+        cur = (row or {}).get("current") or {}
+        aqi = cur.get("us_aqi")
+        if aqi is None:
+            missing.append(name)  # skipped VISIBLY — was a bare `except: pass`
+            continue
+        legacy = {
+            "name": name, "lat": lat, "lon": lon,
+            "aqi": aqi,
+            "pm25": cur.get("pm2_5"),
+            "pm10": cur.get("pm10"),
+            "no2": cur.get("nitrogen_dioxide"),
+            "o3": cur.get("ozone"),
+            "so2": cur.get("sulphur_dioxide"),
+            "co": cur.get("carbon_monoxide"),
+        }
+        results_legacy.append(legacy)
+        results_v1.append(point(
+            lat=lat, lon=lon,
+            id=name.lower().replace(" ", "_"),
+            value=aqi,
+            label=f"{name}: AQI {aqi}",
+            **{k: legacy[k] for k in ("pm25", "pm10", "no2", "o3", "so2", "co")},
+        ))
+
+    if missing:
+        print(f"[air_quality] no us_aqi for {len(missing)}/{len(CITIES)} "
+              f"cities: {', '.join(missing)}")
     return results_v1, results_legacy
 
 

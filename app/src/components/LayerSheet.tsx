@@ -139,6 +139,14 @@ export function LayerSheet({ open, onClose, active, onToggle, loaded, loading, f
                         )}
                       </span>
                     )}
+                    {info?.coverage && (
+                      // Coverage note from the payload itself ("Europe only —
+                      // CAMS"): absence outside the covered region is a gap,
+                      // never a zero, and the row must say so.
+                      <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[var(--color-ink-muted)]">
+                        coverage: {info.coverage}
+                      </span>
+                    )}
                     {info?.attribution && (
                       // Licence-mandated credit (cables: CC BY-NC-SA) — carried
                       // verbatim from the payload. Dropping it is a violation.

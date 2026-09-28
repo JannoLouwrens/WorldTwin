@@ -53,4 +53,6 @@ export const LAYER_FAMILY: Record<string, Family> = {
   cloudflare_radar: 'HUMAN',
   portwatch_chokepoints: 'HUMAN',
   who_don: 'HUMAN',
+  air_quality: 'HUMAN',
+  pollen: 'HUMAN',
 }

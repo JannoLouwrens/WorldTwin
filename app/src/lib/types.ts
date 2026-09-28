@@ -20,6 +20,10 @@ export interface Envelope<T = unknown> {
   /** Upstream-required credit line (e.g. CC BY-NC-SA sources). When present
    *  it MUST be carried onto every surface that shows the data. */
   attribution?: string
+  /** Spatial-coverage note ("Europe only — CAMS"). When present it MUST be
+   *  shown wherever the layer is listed, so absence outside the covered
+   *  region is never read as zero. */
+  coverage?: string
 }
 
 /** The point shape every geographic layer uses. */
@@ -100,6 +104,10 @@ export interface LoadedLayer {
   lines?: GeoJSON.FeatureCollection
   /** Licence-mandated credit line, carried verbatim from the payload. */
   attribution?: string
+  /** Coverage note carried verbatim from the payload ("Europe only — CAMS").
+   *  Rendered on the sheet row and the detail card — no data outside the
+   *  covered region is a GAP, not a zero. */
+  coverage?: string
   /** Kept so every mark can state its provenance — the charter's whole point. */
   source: string
   sourceUrl: string

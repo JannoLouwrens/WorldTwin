@@ -44,6 +44,12 @@ export function tombstoneReason(payload: unknown): string | null {
  *  treated identically no matter which loader met them: empty points, the
  *  reason kept for the sheet row. Never hides, never pretends. */
 export function envelopeToLoaded(env: Envelope, extract?: (data: unknown) => Point[]): LoadedLayer {
+  // Coverage note ("Europe only — CAMS") — accepted at the envelope root or
+  // inside `data`, whichever the pipeline emits. Carried so absence outside
+  // the covered region reads as a gap, never as zero.
+  const nestedCoverage =
+    typeof env.data === 'object' && env.data !== null ? (env.data as { coverage?: unknown }).coverage : undefined
+  const coverage = [env.coverage, nestedCoverage].find((c): c is string => typeof c === 'string' && c !== '')
   const base = {
     source: env.source ?? '',
     sourceUrl: env.source_url ?? '',
@@ -51,6 +57,7 @@ export function envelopeToLoaded(env: Envelope, extract?: (data: unknown) => Poi
     expiresAt: env.expires_at ?? null,
     // Licence-mandated credit rides with the data wherever it goes.
     ...(typeof env.attribution === 'string' && env.attribution ? { attribution: env.attribution } : {}),
+    ...(coverage ? { coverage } : {}),
   }
   const reason = tombstoneReason(env)
   if (reason) return { ...base, points: [], count: 0, retired: { reason } }
