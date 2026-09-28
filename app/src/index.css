@@ -79,6 +79,35 @@ body {
   filter: invert(1) opacity(0.65);
 }
 
+/* Starfield. The map style has NO background layer — the canvas composites
+ * transparently over this div: a fixed radial gradient plus three tiled layers
+ * of dot "stars" at different densities. Zero JS, zero GPU, zero bytes of
+ * texture. (three.js would cost 79 KB gz to draw dots.) */
+.starfield {
+  background-image:
+    radial-gradient(1px 1px at 27px 43px, rgba(240, 243, 246, 0.5) 0, rgba(240, 243, 246, 0.5) 1px, transparent 1.5px),
+    radial-gradient(1px 1px at 133px 187px, rgba(240, 243, 246, 0.32) 0, rgba(240, 243, 246, 0.32) 1px, transparent 1.5px),
+    radial-gradient(1.5px 1.5px at 311px 97px, rgba(200, 218, 240, 0.42) 0, rgba(200, 218, 240, 0.42) 1px, transparent 2px),
+    radial-gradient(ellipse 120% 85% at 50% 42%, #0a101d 0%, #05070b 55%, #020409 100%);
+  background-size:
+    220px 220px,
+    340px 340px,
+    460px 460px,
+    100% 100%;
+  background-repeat: repeat, repeat, repeat, no-repeat;
+}
+
+/* Reduced motion: transitions collapse to a 120 ms fade-register and nothing
+ * pulses. Camera motion is handled in code (jumpTo instead of easeTo). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 120ms !important;
+    animation: none !important;
+  }
+}
+
 @keyframes pulse-ring {
   0% {
     transform: scale(0.9);

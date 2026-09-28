@@ -43,8 +43,11 @@ async def fetch(client: httpx.AsyncClient):
     try:
         # All six requests must succeed or fetch() returns None (keep the old
         # cache; failure surfaces via computed staleness) — no silently
-        # smaller feed. raise_for_status inside the loop feeds the outer
-        # except, so one failed type fails the whole fetch.
+        # smaller feed. EXCEPTION: the API returns 404 for a type with zero
+        # current events (observed 2026-09-24..28: VO 404'd for four days
+        # while Earth had no volcano alerts, then 200'd when one appeared).
+        # A per-type 404 is a valid empty list, not a failure; anything else
+        # non-2xx feeds the outer except and fails the whole fetch.
         features = []
         for ev in EVENT_TYPES:
             r = await client.get(
@@ -52,6 +55,8 @@ async def fetch(client: httpx.AsyncClient):
                 params={"eventtype": ev},
                 timeout=45,
             )
+            if r.status_code == 404:
+                continue  # no current events of this type
             r.raise_for_status()
             data = r.json()
             features.extend(data.get("features", []))

@@ -252,11 +252,22 @@ def run_assertions() -> tuple[dict, list[str], list[str], list[str]]:
                 window_days = max(int(2 * refresh_s // 86400), 2)
                 cutoff = (today_d - timedelta(days=window_days)).isoformat()
                 if not any(d >= cutoff for d in ledger.get(l["id"], {})):
-                    failures.append(f"E: counts.json has no entry in the last "
-                                    f"{window_days} d for ok layer {l['id']} "
-                                    f"(cadence {refresh_s} s ≈ every "
-                                    f"{refresh_s / 86400:.1f} d — it should have "
-                                    f"fetched at least once in that window)")
+                    # Bootstrap grace: the ledger only exists since the revival
+                    # deploy. A weekly layer whose cache was fresh at deploy
+                    # legitimately has no entry until its first scheduled fetch
+                    # — that is the restart-amnesia gate working, not a break.
+                    ledger_start = min(all_dates) if all_dates else None
+                    if ledger_start and ledger_start >= cutoff:
+                        info.append(f"E: {l['id']} has no ledger entry yet, but the "
+                                    f"ledger itself only began {ledger_start} — inside "
+                                    f"the {window_days} d cadence window; bootstrap, "
+                                    f"not a failure")
+                    else:
+                        failures.append(f"E: counts.json has no entry in the last "
+                                        f"{window_days} d for ok layer {l['id']} "
+                                        f"(cadence {refresh_s} s ≈ every "
+                                        f"{refresh_s / 86400:.1f} d — it should have "
+                                        f"fetched at least once in that window)")
 
     # F — disk floors + the brief actually publishing
     for path, floor_gb, label in (("/data", 30, "/data"), ("/", 4, "root"),

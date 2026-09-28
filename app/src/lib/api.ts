@@ -1,4 +1,4 @@
-import type { Envelope, Health, LoadedLayer, Manifest, Point } from './types'
+import type { CountsLedger, Envelope, Health, LoadedLayer, Manifest, Point } from './types'
 
 /** Served from the same origin as the aggregator, so relative paths work in
  *  both the dev proxy and production. */
@@ -49,6 +49,8 @@ export function envelopeToLoaded(env: Envelope, extract?: (data: unknown) => Poi
     sourceUrl: env.source_url ?? '',
     fetchedAt: env.fetched_at ?? null,
     expiresAt: env.expires_at ?? null,
+    // Licence-mandated credit rides with the data wherever it goes.
+    ...(typeof env.attribution === 'string' && env.attribution ? { attribution: env.attribution } : {}),
   }
   const reason = tombstoneReason(env)
   if (reason) return { ...base, points: [], count: 0, retired: { reason } }
@@ -76,6 +78,69 @@ export async function loadLayer(id: string, extract?: (data: unknown) => Point[]
   // A failed load must not be cached forever, or the layer can never recover.
   promise.catch(() => layerCache.delete(id))
   return promise
+}
+
+function asFeatureCollection(v: unknown): GeoJSON.FeatureCollection | null {
+  if (typeof v !== 'object' || v === null) return null
+  const fc = v as { type?: unknown; features?: unknown }
+  return fc.type === 'FeatureCollection' && Array.isArray(fc.features) ? (v as GeoJSON.FeatureCollection) : null
+}
+
+/** Load a kind=lines layer (submarine cables). The payload is an envelope
+ *  whose `data` is a GeoJSON FeatureCollection of LineStrings — accepted at
+ *  `data`, `data.geojson`, or as a bare FeatureCollection. Tombstones render
+ *  as retired rows like every other layer; anything else unrecognized is a
+ *  NAMED failure on the sheet, never a silent empty globe. */
+export async function loadLines(id: string, url: string): Promise<LoadedLayer> {
+  const existing = layerCache.get(id)
+  if (existing) return existing
+
+  const promise = (async (): Promise<LoadedLayer> => {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`${id}: HTTP ${res.status}`)
+    const body: unknown = await res.json()
+    if (tombstoneReason(body)) return envelopeToLoaded(body as Envelope)
+
+    const env = (typeof body === 'object' && body !== null ? body : {}) as Partial<Envelope>
+    const data = env.data as { geojson?: unknown; attribution?: unknown } | unknown
+    const fc =
+      asFeatureCollection(env.data) ??
+      asFeatureCollection((data as { geojson?: unknown })?.geojson) ??
+      asFeatureCollection(body)
+    if (!fc) throw new Error(`${id}: no GeoJSON FeatureCollection in payload`)
+
+    const nestedAttr = (data as { attribution?: unknown })?.attribution
+    const attribution =
+      typeof env.attribution === 'string' && env.attribution
+        ? env.attribution
+        : typeof nestedAttr === 'string' && nestedAttr
+          ? nestedAttr
+          : undefined
+    return {
+      points: [],
+      lines: fc,
+      source: env.source ?? '',
+      sourceUrl: env.source_url ?? '',
+      fetchedAt: env.fetched_at ?? null,
+      expiresAt: env.expires_at ?? null,
+      count: env.count ?? fc.features.length,
+      ...(attribution ? { attribution } : {}),
+    }
+  })()
+
+  layerCache.set(id, promise)
+  promise.catch(() => layerCache.delete(id))
+  return promise
+}
+
+/** The per-day count ledger behind the sparkline. 404 is an expected state —
+ *  the plane prints "no record yet" rather than a fake flat line. */
+export async function loadCounts(): Promise<CountsLedger> {
+  const res = await fetch(`${CACHE}/counts.json`)
+  if (!res.ok) throw new Error(`counts: HTTP ${res.status}`)
+  const c = (await res.json()) as CountsLedger
+  if (typeof c !== 'object' || c === null || Array.isArray(c)) throw new Error('counts: unexpected shape')
+  return c
 }
 
 let manifestPromise: Promise<Manifest> | null = null

@@ -6,8 +6,11 @@ licence string is the source of truth; this table is its rendering. Regenerate w
 licence string changes — the programmatic licence gate keys on the corrected `license` field
 and must refuse to promote any source whose licence string is not verified here.*
 
-**92 layers · 11 enabled · 79 retired (tombstoned) · 2 removed (hard 404)**
-**Flags: 11 NC (non-commercial) · 8 SA (share-alike / ODbL) — flagged mechanically from the licence string.**
+**92 layers · 14 enabled · 76 retired (tombstoned) · 2 removed (hard 404)**
+**Flags: 12 NC (non-commercial) · 9 SA (share-alike / ODbL) — flagged mechanically from the licence string.**
+
+*2026-09-28: cables, portwatch_chokepoints, who_don admitted per MASTER_PLAN §4. who_don's licence
+corrected from "WHO Open" to CC BY-NC-SA 3.0 IGO (WHO website content licence) in the plugin string.*
 
 Corrections applied 2026-09-24: GDELT declared consistently as citation-required bespoke terms
 (never CC0) across conflicts / news / conflict_events / gdelt_gkg_themes / relations (+
@@ -33,7 +36,7 @@ single wrong label replaced with its actual mixed provenance.
 | air_quality | Air Quality (major cities) | health | Free for non-commercial use | **NC** |  | retired (tombstone) |
 | berkeley_earth | Berkeley Earth — Temperature Anomaly | weather | CC BY-NC 4.0 | **NC** |  | retired (tombstone) |
 | brecke_wars | Major Wars (1400→present) | meta | Free academic use |  |  | retired (tombstone) |
-| cables | Submarine Internet Cables | infra | CC BY-NC-SA 3.0 | **NC** | **SA** | retired (tombstone) |
+| cables | Submarine Internet Cables | infra | CC BY-NC-SA 3.0 — attribution embedded in served payload | **NC** | **SA** | **ENABLED** (admitted 2026-09-28) |
 | cepii_baci | CEPII BACI Bilateral Trade Matrix (1995-2024) | resources | Etalab 2.0 (open) |  |  | retired (tombstone) |
 | climatetrace_assets | Global Facility Emissions (ClimateTRACE) | resources | CC BY 4.0 |  |  | retired (tombstone) |
 | clio_life_expectancy | Life expectancy 1770→2023 (Clio-Infra + UN WPP) | meta | CC-BY 4.0 |  |  | retired (tombstone) |
@@ -84,7 +87,7 @@ single wrong label replaced with its actual mixed provenance.
 | owid_energy | Energy Indicators by Country (OWID) | resources | CC-BY 4.0 |  |  | retired (tombstone) |
 | paleo_temperature | Global Temperature Anomaly (11,300 BP → today) | weather | Mixed: HadCRUT5 is UK OGL v3; Marcott/PAGES2k values are hand-entered approximations |  |  | retired (tombstone) |
 | population | Countries & Population | meta | Public |  |  | retired (tombstone) |
-| portwatch_chokepoints | PortWatch Chokepoints (IMF/AIS) | resources | IMF ToU |  |  | retired (tombstone) |
+| portwatch_chokepoints | PortWatch Chokepoints (IMF/AIS) | resources | IMF ToU |  |  | **ENABLED** (admitted 2026-09-28) |
 | portwatch_ports | Live Port Traffic (PortWatch/IMF) | resources | IMF ToU |  |  | retired (tombstone) |
 | pressure_field | Surface Pressure — Global Grid | weather | CC BY 4.0 |  |  | retired (tombstone) |
 | pulse_mode | Pulse Mode — directional change radar | meta | Aggregated |  |  | retired (tombstone) |
@@ -102,7 +105,7 @@ single wrong label replaced with its actual mixed provenance.
 | ucdp | UCDP Conflict Events | war | UCDP open data (attribution required) |  |  | retired (tombstone) |
 | ucdp_ged | UCDP Georeferenced Events | war | CC BY 4.0 |  |  | retired (tombstone) |
 | vdem_democracy | Electoral Democracy Index (V-Dem 1789→2025) | meta | CC-BY 4.0 |  |  | retired (tombstone) |
-| who_don | WHO Disease Outbreak News | health | WHO Open |  |  | retired (tombstone) |
+| who_don | WHO Disease Outbreak News | health | CC BY-NC-SA 3.0 IGO | **NC** | **SA** | **ENABLED** (admitted 2026-09-28) |
 | wikidata_battles | Notable Battles (Wikidata) | war | CC0 / CC-BY-SA |  | **SA** | retired (tombstone) |
 | wind_sample | Wind Field (Open-Meteo) | nature | CC BY 4.0 |  |  | retired (tombstone) |
 | world_bank | World Bank Indicators (102 per country, 1960-2024 history) | resources | CC BY 4.0 |  |  | retired (tombstone) |
@@ -113,7 +116,7 @@ single wrong label replaced with its actual mixed provenance.
 
 ## Notes
 
-- NC layers inside the enabled 11: cloudflare_radar. cloudflare_radar (CC BY-NC 4.0) and flights (ODbL, SA) are the only encumbered enabled layers; both have free alternatives named in MASTER_PLAN §3 if monetisation is ever revisited.
+- Encumbered layers inside the enabled 14: cloudflare_radar (CC BY-NC 4.0, NC), flights (ODbL, SA), cables (CC BY-NC-SA 3.0, NC+SA — attribution embedded in the served payload), who_don (CC BY-NC-SA 3.0 IGO, NC+SA). All have free alternatives or removal paths named in MASTER_PLAN §3–4 if monetisation is ever revisited.
 - ShareAlike propagates into derived artifacts: any render slice or feed built on an SA source
   must carry the licence notice and attribution (MASTER_PLAN §4).
 - spacetrack_gp and webcams are legal removals: no tombstone is served — their cache paths 404.

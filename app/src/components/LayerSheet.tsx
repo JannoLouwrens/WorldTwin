@@ -10,7 +10,7 @@ import type { LoadedLayer } from '../lib/types'
  *  with the fill, which collapsed the triangle into a sliver. Since shape — not
  *  a fourth hue — is what distinguishes layers past the third, this mark has to
  *  be unambiguous. */
-function Swatch({ shape, color, filled }: { shape: Shape; color: string; filled: boolean }) {
+export function Swatch({ shape, color, filled }: { shape: Shape; color: string; filled: boolean }) {
   const paint = filled ? { fill: color } : { fill: 'none', stroke: color, strokeWidth: 1.6 }
   return (
     <svg viewBox="0 0 12 12" className="mt-1 size-3 shrink-0 overflow-visible" aria-hidden>
@@ -137,6 +137,13 @@ export function LayerSheet({ open, onClose, active, onToggle, loaded, loading, f
                             <span className={STATE_COLOR[state]}>{state}</span>
                           </>
                         )}
+                      </span>
+                    )}
+                    {info?.attribution && (
+                      // Licence-mandated credit (cables: CC BY-NC-SA) — carried
+                      // verbatim from the payload. Dropping it is a violation.
+                      <span className="mt-0.5 block font-mono text-[10px] leading-snug text-[var(--color-ink-faint)]">
+                        {info.attribution}
                       </span>
                     )}
                     {info?.bins && (

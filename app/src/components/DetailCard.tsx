@@ -35,7 +35,7 @@ export function DetailCard({ pick, loaded, onClose }: Props) {
   const url = (pick.point.props?.usgs_url ?? pick.point.props?.url ?? info?.sourceUrl) as string | undefined
 
   return (
-    <div className="pointer-events-auto fixed inset-x-3 bottom-3 z-40 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-surface-raised)]/95 p-4 backdrop-blur sm:left-auto sm:right-4 sm:w-96">
+    <div className="pointer-events-auto fixed inset-x-3 bottom-[252px] z-40 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-surface-raised)]/95 p-4 backdrop-blur sm:left-auto sm:right-4 sm:w-96 lg:bottom-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">

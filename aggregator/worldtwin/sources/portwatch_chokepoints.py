@@ -12,6 +12,12 @@ from ..models import LayerMeta
 from ..registry import register
 
 # Approximate centroids of the 28 PortWatch chokepoints (for map rendering).
+# 2026-09-28 name audit against the upstream ArcGIS layer
+# (returnDistinctValues on `portname`, exactly 28 values): dropped 7 names
+# that do not exist upstream (La Perouse Strait, Cook Strait, Bass Strait,
+# Florida Strait, Skagerrak, Oresund, English Channel — Dover Strait already
+# covers the Channel), added the 7 real ones that were silently dropped
+# (Balabac, Bering, Bohai, Kerch, Magellan, Mindoro, Oresund Strait).
 CHOKEPOINT_COORDS = {
     "Suez Canal":                   (30.07, 32.55),
     "Panama Canal":                 (9.08, -79.68),
@@ -30,17 +36,17 @@ CHOKEPOINT_COORDS = {
     "Taiwan Strait":                (24.50, 119.00),
     "Korea Strait":                 (34.50, 129.00),
     "Tsugaru Strait":               (41.50, 140.50),
-    "La Perouse Strait":            (45.80, 142.00),
     "Torres Strait":                (-10.50, 142.50),
-    "Cook Strait":                  (-41.25, 174.50),
-    "Bass Strait":                  (-39.75, 146.25),
     "Yucatan Channel":              (21.60, -85.50),
-    "Florida Strait":               (24.50, -81.00),
     "Windward Passage":             (20.00, -73.80),
     "Mona Passage":                 (18.30, -67.80),
-    "Skagerrak":                    (57.80, 8.70),
-    "Oresund":                      (55.70, 12.80),
-    "English Channel":              (50.20, -1.00),
+    "Oresund Strait":               (55.70, 12.80),
+    "Balabac Strait":               (7.60, 116.95),
+    "Bering Strait":                (65.75, -168.95),
+    "Bohai Strait":                 (38.35, 121.10),
+    "Kerch Strait":                 (45.25, 36.55),
+    "Magellan Strait":              (-53.50, -70.90),
+    "Mindoro Strait":               (12.70, 120.50),
 }
 
 
@@ -54,6 +60,7 @@ LAYER = LayerMeta(
     license="IMF ToU",
     refresh_s=86400,  # daily
     initial_delay_s=50,
+    max_staleness_s=7 * 86400,  # IMF refreshes weekly from AIS
     units="ships / DWT",
     description=(
         "28 global shipping chokepoints with daily vessel-type breakdowns "
@@ -61,45 +68,40 @@ LAYER = LayerMeta(
         "AIS-derived by the IMF Research Department. Ships and DWT capacity."
     ),
     requires_key=False,
-    enabled=False,
-    retired_reason="Deferred candidate 2026-09-24: 7 of 28 chokepoint names don't exist upstream and 7 real ones were dropped; returns after the name audit.",
+    enabled=True,
 )
 
 
 async def fetch(client: httpx.AsyncClient):
     try:
-        # Pull the FULL daily chokepoint history — paginate ArcGIS REST.
-        # 28 chokepoints × ~365 days × N years. Cap at 100k records per fetch.
-        all_feats = []
-        offset = 0
-        page_size = 2000
-        for _ in range(50):
-            r = await client.get(
-                "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query",
-                params={
-                    "where": "1=1",
-                    "outFields": "*",
-                    "orderByFields": "date DESC",
-                    "resultRecordCount": page_size,
-                    "resultOffset": offset,
-                    "f": "json",
-                },
-                timeout=90,
-            )
-            if r.status_code != 200:
-                break
-            feats = r.json().get("features", [])
-            if not feats:
-                break
-            all_feats.extend(feats)
-            if len(feats) < page_size:
-                break
-            offset += page_size
-
+        # ONE page of 1000, newest first. page_size 1000 per MASTER_PLAN §4
+        # (asking for 2000 made the server return a silently truncated 752).
+        # Measured 2026-09-28: at 1000 the upstream pagination actually
+        # WORKS, and the old 50-iteration loop pulled 50 pages = 50,000 rows
+        # per daily fetch. One page = the latest ~35 days across all 28
+        # chokepoints — the whole point of this layer is the latest day, and
+        # a single page keeps it the best info-per-byte layer (~12 KB gz).
+        page_size = 1000
+        r = await client.get(
+            "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/Daily_Chokepoints_Data/FeatureServer/0/query",
+            params={
+                "where": "1=1",
+                "outFields": "*",
+                "orderByFields": "date DESC",
+                "resultRecordCount": page_size,
+                "f": "json",
+            },
+            timeout=90,
+        )
+        if r.status_code != 200:
+            return None
+        all_feats = r.json().get("features", [])
         if not all_feats:
             return None
 
-        latest_date_ms = max(f["attributes"].get("date", 0) for f in all_feats)
+        # `date` arrives as an ISO 'YYYY-MM-DD' string (not epoch ms);
+        # lexicographic max is chronological. `or ""` guards mixed-type max.
+        latest_date_ms = max(f["attributes"].get("date") or "" for f in all_feats)
         latest_rows = [f["attributes"] for f in all_feats if f["attributes"].get("date") == latest_date_ms]
 
         chokepoints: list[dict[str, Any]] = []

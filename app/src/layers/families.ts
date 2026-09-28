@@ -49,5 +49,8 @@ export const LAYER_FAMILY: Record<string, Family> = {
   gdacs_events: 'EARTH',
   volcanoes: 'EARTH',
   flights: 'MOTION',
+  cables: 'MOTION',
   cloudflare_radar: 'HUMAN',
+  portwatch_chokepoints: 'HUMAN',
+  who_don: 'HUMAN',
 }

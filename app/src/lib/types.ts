@@ -17,6 +17,9 @@ export interface Envelope<T = unknown> {
    *  purpose, with a stated reason, and `data` is empty. */
   state?: string
   retired_reason?: string
+  /** Upstream-required credit line (e.g. CC BY-NC-SA sources). When present
+   *  it MUST be carried onto every surface that shows the data. */
+  attribution?: string
 }
 
 /** The point shape every geographic layer uses. */
@@ -85,9 +88,18 @@ export interface BinsMeta {
   selection: string
 }
 
+/** /api/cache/v1/counts.json — the replayable record: per layer, per UTC day,
+ *  the count that layer reported. Days with no entry are GAPS — rendered as
+ *  gaps, never as zero. */
+export type CountsLedger = Record<string, Record<string, number>>
+
 /** What the UI knows about a layer once it has been loaded. */
 export interface LoadedLayer {
   points: Point[]
+  /** kind=lines layers carry their geometry here instead of `points`. */
+  lines?: GeoJSON.FeatureCollection
+  /** Licence-mandated credit line, carried verbatim from the payload. */
+  attribution?: string
   /** Kept so every mark can state its provenance — the charter's whole point. */
   source: string
   sourceUrl: string

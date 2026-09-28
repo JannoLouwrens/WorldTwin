@@ -22,32 +22,34 @@ LAYER = LayerMeta(
     kind="points",
     source="World Health Organization — Disease Outbreak News",
     source_url="https://www.who.int/feeds/entity/csr/don/en/rss.xml",
-    license="WHO Open",
+    license="CC BY-NC-SA 3.0 IGO",
     refresh_s=21600,  # 6h
     initial_delay_s=120,
+    max_staleness_s=30 * 86400,  # WHO posts DONs on an irregular cadence
     description="Ongoing global disease outbreaks with WHO verification.",
     requires_key=False,
-    enabled=False,
-    retired_reason="Deferred candidate 2026-09-24: served 2025-02 as the current outbreak; returns on the orderby-desc query verified live.",
+    enabled=True,
 )
 
 
 async def fetch(client: httpx.AsyncClient):
     try:
+        # PRIMARY: the JSON API, explicitly ordered newest-first. Without
+        # $orderby the API serves oldest-first from 1997, so the layer
+        # presented 2025-02 as "current" outbreak news (MASTER_PLAN §4
+        # health/who_don; verified 2026-09-28: top item is the 2026-09-25
+        # Ebola/Bundibugyo DRC entry).
         r = await client.get(
-            "https://www.who.int/feeds/entity/csr/don/en/rss.xml",
+            "https://www.who.int/api/news/diseaseoutbreaknews",
+            params={
+                "$orderby": "PublicationDateAndTime desc",
+                "$top": "50",
+                "$format": "json",
+            },
             timeout=45,
             headers={"User-Agent": "WorldTwin/1.0"},
         )
-        if r.status_code != 200:
-            # Fallback: HTML page scrape of /emergencies/disease-outbreak-news
-            r = await client.get(
-                "https://www.who.int/api/news/diseaseoutbreaknews",
-                timeout=45,
-                headers={"User-Agent": "WorldTwin/1.0"},
-            )
-            if r.status_code != 200:
-                return None
+        if r.status_code == 200:
             data = r.json()
             items = data.get("value") or data.get("items") or []
             outbreaks = []
@@ -78,7 +80,14 @@ async def fetch(client: httpx.AsyncClient):
                 "outbreaks": outbreaks,
             }
 
-        # RSS path
+        # FALLBACK: legacy RSS feed (undated ordering, may lag the API).
+        r = await client.get(
+            "https://www.who.int/feeds/entity/csr/don/en/rss.xml",
+            timeout=45,
+            headers={"User-Agent": "WorldTwin/1.0"},
+        )
+        if r.status_code != 200:
+            return None
         root = ET.fromstring(r.text)
         items = root.findall(".//item")
         outbreaks = []
@@ -87,16 +96,8 @@ async def fetch(client: httpx.AsyncClient):
             link = (item.findtext("link") or "").strip()
             desc = (item.findtext("description") or "").strip()
             date = (item.findtext("pubDate") or "").strip()
-            country_iso3 = ""
-            coords = None
-            # Scan the text for a country name match
-            title_lower = title.lower()
-            for m49, rec in cc.COUNTRY_COORDS.items():
-                lat, lon, iso3, name = rec
-                if name and name.lower() in title_lower:
-                    coords = (lat, lon)
-                    country_iso3 = iso3
-                    break
+            country_iso3 = _infer_country(title)
+            coords = cc.coords_for_iso3(country_iso3) if country_iso3 else None
             outbreaks.append({
                 "title": title,
                 "description": re.sub(r"<[^>]+>", "", desc)[:400],
@@ -121,16 +122,51 @@ async def fetch(client: httpx.AsyncClient):
         return None
 
 
+# WHO titles use formal UN names; COUNTRY_COORDS uses short names ("DR
+# Congo", "UAE") that never appear in them. Aliases below map the formal
+# spellings WHO actually prints. Matching is LONGEST-WINS across aliases and
+# the table together — "Democratic Republic of the Congo" contains both
+# "Congo" and "Republic of the Congo" as substrings, and a first-match scan
+# geocoded the 2026 DRC Ebola outbreak to COG (observed 2026-09-28).
+_WHO_NAME_ALIASES = {
+    "democratic republic of the congo": "COD",
+    "republic of the congo": "COG",
+    "united republic of tanzania": "TZA",
+    "united arab emirates": "ARE",
+    "united states of america": "USA",
+    "united kingdom of great britain and northern ireland": "GBR",
+    "syrian arab republic": "SYR",
+    "iran (islamic republic of)": "IRN",
+    "islamic republic of iran": "IRN",
+    "lao people's democratic republic": "LAO",
+    "republic of korea": "KOR",
+    "democratic people's republic of korea": "PRK",
+    "viet nam": "VNM",
+    "russian federation": "RUS",
+    "côte d'ivoire": "CIV",
+    "cote d'ivoire": "CIV",
+    "bolivia (plurinational state of)": "BOL",
+    "venezuela (bolivarian republic of)": "VEN",
+    "republic of moldova": "MDA",
+    "türkiye": "TUR",
+    "czechia": "CZE",
+}
+
+
 def _infer_country(text: str) -> str:
-    """Naive: scan text for a country name, return ISO3."""
+    """Scan text for a country name, return ISO3. Longest match wins."""
     if not text:
         return ""
     text_lower = text.lower()
+    best_iso3, best_len = "", 0
+    for alias, iso3 in _WHO_NAME_ALIASES.items():
+        if len(alias) > best_len and alias in text_lower:
+            best_iso3, best_len = iso3, len(alias)
     for m49, rec in cc.COUNTRY_COORDS.items():
         lat, lon, iso3, name = rec
-        if name and name.lower() in text_lower:
-            return iso3
-    return ""
+        if name and len(name) > best_len and name.lower() in text_lower:
+            best_iso3, best_len = iso3, len(name)
+    return best_iso3
 
 
 register(LAYER, fetch)

@@ -8,6 +8,23 @@ export interface LayerDef {
   label: string
   /** One line, plain language — what you are actually looking at. */
   blurb: string
+  /** Geometry kind. Default 'points'; 'lines' layers carry a GeoJSON
+   *  FeatureCollection of LineStrings and draw as line layers — no icons,
+   *  no glow, no density pass. */
+  kind?: 'points' | 'lines'
+  /** Payload URL when the layer is NOT served from the standard v1 cache
+   *  path (cables lives at /api/cache/cables.json). */
+  url?: string
+  /** Line paint for kind=lines. */
+  lineWidth?: number
+  lineOpacity?: number
+  /** THE CLAIM's noun — "59 earthquakes", "27,486 fire detections". */
+  noun?: string
+  /** THE CLAIM's window — "last 24 h", "live", "catalogue". */
+  windowLabel?: string
+  /** HOW, one of the charter's five words. Rides the plane footer and the
+   *  table caption; machine-written is never rendered on the globe. */
+  how?: 'measured' | 'reported' | 'modelled' | 'reconstructed' | 'machine-written'
   /** MOTION / EARTH / HUMAN. The hue belongs to the family, never the layer;
    *  the toggle reducer allows at most one context layer per family. */
   family: Family
@@ -80,6 +97,9 @@ export const LAYERS: LayerDef[] = [
     shape: 'circle',
     on: true,
     size: 14,
+    noun: 'earthquakes',
+    windowLabel: 'last 24 h',
+    how: 'measured',
     sizeBy: (p) => 8 + Math.max(0, (p.value ?? 0) - 2) * 5,
     format: (p) => (p.value != null ? `M${p.value.toFixed(1)}` : '—'),
   },
@@ -92,6 +112,9 @@ export const LAYERS: LayerDef[] = [
     on: true,
     size: 20,
     iconPx: 30,
+    noun: 'active disaster alerts',
+    windowLabel: 'now',
+    how: 'reported',
     rings: (p) => GDACS_RINGS[gdacsAlertWord(p)] ?? 1,
     format: (p) => {
       const type = p.props?.type_name
@@ -107,6 +130,9 @@ export const LAYERS: LayerDef[] = [
     shape: 'triangle',
     on: true,
     size: 13,
+    noun: 'Holocene volcanoes',
+    windowLabel: 'catalogue',
+    how: 'reported',
     format: (p) => String(p.props?.type ?? 'Volcano'),
   },
   {
@@ -118,6 +144,9 @@ export const LAYERS: LayerDef[] = [
     on: false,
     slice: true,
     size: 6,
+    noun: 'fire detections',
+    windowLabel: 'last 24 h',
+    how: 'measured',
     // `value` is the bin's cos(lat)-weighted density normalized 0–1 by the
     // slice loader; area on screen tracks the weighted value.
     sizeBy: (p) => 4 + 12 * Math.sqrt(Math.max(0, Math.min(1, p.value ?? 0))),
@@ -134,6 +163,9 @@ export const LAYERS: LayerDef[] = [
     shape: 'square',
     on: false,
     size: 7,
+    noun: 'aircraft broadcasting',
+    windowLabel: 'live',
+    how: 'measured',
     format: (p) => String(p.props?.callsign ?? p.label ?? 'aircraft'),
   },
   {
@@ -144,9 +176,67 @@ export const LAYERS: LayerDef[] = [
     shape: 'square',
     on: false,
     size: 14,
+    noun: 'internet outages',
+    windowLabel: 'now',
+    how: 'reported',
     format: (p) => String(p.props?.country_name ?? p.label ?? 'Outage'),
     extract: extractOutages,
+  },
+  {
+    id: 'cables',
+    label: 'Submarine cables',
+    blurb: 'The submarine fibre-optic cables that carry the internet between continents (TeleGeography).',
+    ...fam('cables'),
+    kind: 'lines',
+    // Served outside the v1 tree; the payload's own `attribution` field is
+    // CC BY-NC-SA-mandated credit and is carried verbatim wherever shown.
+    url: '/api/cache/cables.json',
+    shape: 'square',
+    on: false,
+    size: 7,
+    lineWidth: 1.2,
+    lineOpacity: 0.7,
+    noun: 'submarine cables',
+    windowLabel: 'current',
+    how: 'reported',
+    format: (p) => String(p.label ?? p.props?.name ?? 'Submarine cable'),
+  },
+  {
+    id: 'portwatch_chokepoints',
+    label: 'Maritime chokepoints',
+    blurb: 'Transit calls at the maritime chokepoints world trade squeezes through, from IMF PortWatch satellite AIS.',
+    ...fam('portwatch_chokepoints'),
+    shape: 'diamond',
+    on: false,
+    size: 13,
+    noun: 'maritime chokepoints',
+    windowLabel: 'daily',
+    how: 'measured',
+    format: (p) => {
+      const name = p.props?.name ?? p.label
+      const n = typeof name === 'string' && name ? name : 'Chokepoint'
+      return p.value != null ? `${n} · ${p.value.toLocaleString()} transits` : n
+    },
+  },
+  {
+    id: 'who_don',
+    label: 'Disease outbreaks',
+    blurb: 'WHO Disease Outbreak News — outbreak events as officially reported.',
+    ...fam('who_don'),
+    shape: 'triangle',
+    on: false,
+    size: 13,
+    noun: 'outbreak reports',
+    windowLabel: 'current',
+    how: 'reported',
+    format: (p) => String(p.label ?? p.props?.disease ?? p.props?.title ?? 'Outbreak'),
   },
 ]
 
 export const DEFAULT_ON = LAYERS.filter((l) => l.on).map((l) => l.id)
+
+/** The one-click raw file: exactly what the client rendered. Slice layers
+ *  link the render slice actually shown, not a 15 MB full payload. */
+export function rawHref(def: LayerDef): string {
+  return def.url ?? `/api/cache/v1/${def.id}${def.slice ? '.render' : ''}.json`
+}

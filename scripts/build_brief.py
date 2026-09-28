@@ -38,7 +38,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-GENERATOR = "build_brief/1.0"
+GENERATOR = "build_brief/1.1"
 CACHE_DIR = Path(os.environ.get("WT_CACHE_DIR", "/data/cache/v1"))
 BRIEF_DIR = Path(os.environ.get("WT_BRIEF_DIR", "/home/opc/worldtwin/weather/brief"))
 SITE_BASE = "https://worldtwin.duckdns.org"
@@ -767,6 +767,13 @@ def build_brief(date_s: str):
     if lede is None:
         lede = "Nothing crossed a threshold today."
 
+    # Share card: brief_card.mjs (cron 06:20 UTC, before this script) may or
+    # may not have produced today's PNG. Stat it BEFORE emitting any
+    # reference — a dated brief may never reference an asset that did not
+    # exist at write time (MASTER_PLAN Stage 4).
+    card_file = BRIEF_DIR / "card" / f"{date_s}.png"
+    card = f"/worldtwin/brief/card/{date_s}.png" if card_file.is_file() else None
+
     man_counts = (manifest or {}).get("counts") or {}
     brief = {
         "date": date_s,
@@ -774,7 +781,7 @@ def build_brief(date_s: str):
         "window_start": iso(win_start),
         "window_end": iso(win_end),
         "generator": GENERATOR,
-        "card": None,
+        "card": card,
         "pipeline": pipeline,
         "sources_live": man_counts.get("live"),
         "sources_total": man_counts.get("total"),
@@ -842,6 +849,10 @@ footer a, .note a { color:var(--accent); }
 .idx .mono { color:var(--muted); font-size:11px; }
 .note { border:1px solid var(--rule); background:var(--card); padding:12px 14px;
   margin-top:20px; font-size:14px; }
+figure.cardimg { margin:18px 0 0; }
+figure.cardimg img { display:block; width:100%; height:auto; border:1px solid var(--rule); }
+.cardnote { font-family:ui-monospace,monospace; font-size:11px; color:var(--muted);
+  margin-top:14px; }
 """
 
 SECTION_TITLES = {
@@ -927,6 +938,39 @@ def render_brief_html(brief):
         src_line = (f'<span class="num">{brief["sources_live"]}</span> of '
                     f'<span class="num">{brief["sources_total"]}</span> sources reporting · ')
 
+    # Social metadata. og:title is the lede; og:description the first item
+    # headline. og:image only when the card actually exists on disk.
+    canonical = f"{BRIEF_BASE}{brief['date']}.html"
+    first_headline = next(
+        (it.get("headline") for it in brief["items"] if it.get("headline")),
+        None) or f"What the instruments said on {brief['date']}."
+    meta = [
+        f'<link rel="canonical" href="{esc(canonical)}">',
+        '<meta property="og:type" content="article">',
+        '<meta property="og:site_name" content="WorldTwin">',
+        f'<meta property="og:url" content="{esc(canonical)}">',
+        f'<meta property="og:title" content="{esc(brief["lede"])}">',
+        f'<meta property="og:description" content="{esc(first_headline)}">',
+    ]
+    if brief["card"]:
+        img_url = SITE_BASE + brief["card"]
+        meta += [
+            f'<meta property="og:image" content="{esc(img_url)}">',
+            '<meta property="og:image:width" content="1200">',
+            '<meta property="og:image:height" content="630">',
+            f'<meta property="og:image:alt" content="The globe on {esc(brief["date"])}">',
+            '<meta name="twitter:card" content="summary_large_image">',
+            f'<meta name="twitter:image" content="{esc(img_url)}">',
+        ]
+    meta_html = "\n".join(meta)
+
+    if brief["card"]:
+        card_html = (f'<figure class="cardimg"><img src="card/{esc(brief["date"])}.png" '
+                     f'width="1200" height="630" '
+                     f'alt="The globe on {esc(brief["date"])}"></figure>')
+    else:
+        card_html = '<div class="cardnote">Globe card not generated for this date.</div>'
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -934,6 +978,7 @@ def render_brief_html(brief):
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Daily Brief — {esc(brief['date'])} — WorldTwin</title>
 <meta name="description" content="What the instruments said on {esc(brief['date'])} — dated, sourced, never quietly fixed.">
+{meta_html}
 <style>{CSS}</style>
 </head>
 <body><div class="wrap">
@@ -946,6 +991,7 @@ def render_brief_html(brief):
     <span>{src_line}generated {esc(brief['generated_at'])}</span>
   </div>
 </header>
+{card_html}
 <div class="{pipe_cls}">{esc(pipe_txt)}</div>
 <p class="lede">{esc(brief['lede'])}</p>
 {items_html}
@@ -990,6 +1036,12 @@ def render_index_html(all_dates, today_s, ledes):
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Daily Brief — archive — WorldTwin</title>
 <meta name="description" content="Daily instrument briefs — dated, sourced, never quietly fixed. Record begins 2026-09-24.">
+<link rel="canonical" href="{esc(BRIEF_BASE)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="WorldTwin">
+<meta property="og:url" content="{esc(BRIEF_BASE)}">
+<meta property="og:title" content="The Daily Brief — WorldTwin">
+<meta property="og:description" content="Daily instrument briefs — dated, sourced, never quietly fixed. Record begins 2026-09-24.">
 <style>{CSS}</style>
 </head>
 <body><div class="wrap">
